@@ -1,0 +1,8 @@
+# Phase 1 prototype deps (free-first)
+groq>=0.11.0          # fast LLM, free tier
+python-dotenv>=1.0.0  # load .env
+
+# --- Voice loop (uncomment when starting P1-2 / P1-4 / P1-5) ---
+# pipecat-ai>=0.0.40
+# faster-whisper>=1.0.0   # local streaming STT
+# piper-tts>=1.2.0        # local streaming TTS

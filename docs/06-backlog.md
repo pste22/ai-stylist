@@ -10,12 +10,12 @@ Simple Kanban. Move cards between sections. Keep **Doing** to 1–2 items (solo 
 ## 📥 To Do
 
 ### Phase 1 — Latency spike
-- [ ] P1-1: Set up Pipecat project skeleton (Python)
+- [x] P1-1: Set up project skeleton (Python) — `prototype/`
 - [ ] P1-2: Wire streaming STT (faster-whisper or Deepgram free)
-- [ ] P1-3: Wire LLM (Groq free tier) with a basic stylist prompt
+- [x] P1-3: Wire LLM (Groq free tier) with a basic stylist prompt — `stylist.py`
 - [ ] P1-4: Wire streaming TTS (Kokoro/Piper)
 - [ ] P1-5: Connect LiveKit WebRTC audio (mic in / speaker out)
-- [ ] P1-6: Hardcoded product list of ~20 items the agent can recommend
+- [x] P1-6: Hardcoded product list of ~20 items — `data/products.json`
 - [ ] P1-7: Add barge-in / interruption handling
 - [ ] P1-8: Measure perceived latency; test on throttled 3G/4G
 - [ ] P1-9: **Decision gate:** is latency < ~1s acceptable?
@@ -32,7 +32,8 @@ Simple Kanban. Move cards between sections. Keep **Doing** to 1–2 items (solo 
 ---
 
 ## 🔨 Doing
-- [ ] (nothing yet — start with P1-1)
+- [ ] P1-2/P1-4/P1-5: Voice loop (scaffold in `prototype/voice_loop.py`)
+- [ ] Next: run `text_loop.py` to capture baseline LLM latency (P1-8)
 
 ---
 

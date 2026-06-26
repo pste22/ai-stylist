@@ -1,0 +1,22 @@
+[
+  { "id": "t01", "name": "Relaxed Linen Shirt",        "category": "tops",      "color": "sand",      "price": 49,  "style": ["casual", "summer", "minimal"],     "gender": "unisex" },
+  { "id": "t02", "name": "Oversized Cotton Tee",       "category": "tops",      "color": "white",     "price": 22,  "style": ["casual", "everyday", "minimal"],   "gender": "unisex" },
+  { "id": "t03", "name": "Ribbed Knit Turtleneck",     "category": "tops",      "color": "charcoal",  "price": 38,  "style": ["smart", "winter", "minimal"],      "gender": "women" },
+  { "id": "t04", "name": "Flannel Overshirt",          "category": "tops",      "color": "forest",    "price": 64,  "style": ["casual", "autumn", "rugged"],      "gender": "men" },
+  { "id": "b01", "name": "High-Waist Tailored Trouser","category": "bottoms",   "color": "black",     "price": 79,  "style": ["smart", "office", "minimal"],      "gender": "women" },
+  { "id": "b02", "name": "Relaxed Denim Jeans",        "category": "bottoms",   "color": "indigo",    "price": 69,  "style": ["casual", "everyday"],              "gender": "unisex" },
+  { "id": "b03", "name": "Pleated Midi Skirt",         "category": "bottoms",   "color": "cream",     "price": 55,  "style": ["smart", "feminine", "summer"],     "gender": "women" },
+  { "id": "b04", "name": "Drawstring Linen Shorts",    "category": "bottoms",   "color": "olive",     "price": 39,  "style": ["casual", "summer"],                "gender": "unisex" },
+  { "id": "d01", "name": "Wrap Midi Dress",            "category": "dresses",   "color": "burgundy",  "price": 89,  "style": ["smart", "evening", "feminine"],    "gender": "women" },
+  { "id": "d02", "name": "Cotton Slip Dress",          "category": "dresses",   "color": "sage",      "price": 59,  "style": ["casual", "summer", "minimal"],     "gender": "women" },
+  { "id": "o01", "name": "Wool-Blend Overcoat",        "category": "outerwear", "color": "camel",     "price": 159, "style": ["smart", "winter", "timeless"],     "gender": "unisex" },
+  { "id": "o02", "name": "Quilted Puffer Jacket",      "category": "outerwear", "color": "black",     "price": 119, "style": ["casual", "winter", "sporty"],      "gender": "unisex" },
+  { "id": "o03", "name": "Denim Trucker Jacket",       "category": "outerwear", "color": "washed blue","price": 79, "style": ["casual", "everyday", "timeless"],  "gender": "unisex" },
+  { "id": "s01", "name": "Leather Chelsea Boots",      "category": "shoes",     "color": "tan",       "price": 139, "style": ["smart", "timeless"],               "gender": "unisex" },
+  { "id": "s02", "name": "Canvas Low-Top Sneakers",    "category": "shoes",     "color": "off-white", "price": 65,  "style": ["casual", "everyday", "minimal"],   "gender": "unisex" },
+  { "id": "s03", "name": "Strappy Block Heels",        "category": "shoes",     "color": "nude",      "price": 85,  "style": ["smart", "evening", "feminine"],    "gender": "women" },
+  { "id": "a01", "name": "Structured Tote Bag",        "category": "accessories","color": "black",    "price": 95,  "style": ["smart", "office", "minimal"],      "gender": "unisex" },
+  { "id": "a02", "name": "Wool Beanie",                "category": "accessories","color": "rust",     "price": 24,  "style": ["casual", "winter"],                "gender": "unisex" },
+  { "id": "a03", "name": "Silk Scarf",                 "category": "accessories","color": "emerald",  "price": 45,  "style": ["smart", "feminine", "timeless"],   "gender": "women" },
+  { "id": "a04", "name": "Leather Belt",               "category": "accessories","color": "brown",    "price": 35,  "style": ["smart", "everyday", "timeless"],   "gender": "unisex" }
+]
