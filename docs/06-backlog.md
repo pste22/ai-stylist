@@ -30,7 +30,7 @@ Simple Kanban. Move cards between sections. Keep **Doing** to 1–2 items (solo 
 - [ ] P2-3: Build 2D avatar with idle/thinking/reacting states (Rive/Live2D)
 - [ ] P2-4: Latency-masking: thinking animations + backchannels ("mm-hmm")
 - [x] P2-5: Tune LLM for styling POV (asks questions, recommends ≤3 with reasons, gentle next step) — `stylist.py`: warmth + TASK-vs-SOCIAL mode sensing + mood/occasion-aware styling + STYLING POV structure; smoke-tested
-- [ ] P2-6: Graceful text fallback on poor network
+- [x] P2-6: Graceful text fallback on poor network — `stylist.py` `reply_stream` retries once on transient failure, then degrades to a warm in-character message; mid-stream drops close gracefully; history stays paired (never a stack trace mid-demo); smoke-tested (total/transient/mid-stream)
 - [ ] P2-7: Test with 5–10 real users; capture "would use again?"
 - [x] P2-8: "Would buy" signal logging primitive — `events.py` (`log_would_buy` → `data/events.jsonl`, anon session id); UI Buy button wires to this later
 - [x] P2-9: Price-aware recommendations — `stylist.py` `_parse_price_intent` ("under $X", "cheapest", "budget") filters/sorts by price; smoke-tested

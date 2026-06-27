@@ -21,6 +21,14 @@ from profile import UserProfile
 # Fast, capable model on Groq's free tier. Override via STYLIST_MODEL.
 _MODEL = os.environ.get("STYLIST_MODEL", "llama-3.3-70b-versatile")
 
+# Network resilience (P2-6): retry transient blips, then degrade gracefully in-character.
+_MAX_RETRIES = 1
+_FULL_FALLBACK = (
+    "Hmm, my connection just dropped for a sec — give me one moment and try that again? "
+    "I promise I'm worth the wait. 💛"
+)
+_MIDSTREAM_FALLBACK = " …oops, looks like my connection hiccuped there. Want me to pick back up?"
+
 # Everyday words -> catalog category, so the naive pre-filter doesn't miss obvious
 # matches like "sneakers" (shoes) or "jeans" (bottoms). Real semantic search is Phase 3.
 _CATEGORY_SYNONYMS: dict[str, tuple[str, ...]] = {
@@ -190,7 +198,12 @@ class Stylist:
         return self._source.render(products)
 
     def reply_stream(self, user_text: str) -> Iterator[str]:
-        """Yield response tokens as they arrive (low perceived latency)."""
+        """Yield response tokens as they arrive (low perceived latency).
+
+        Network-resilient (P2-6): if the LLM call fails, we retry once, then fall back
+        to a warm in-character message instead of crashing the conversation. A mid-stream
+        drop is closed off gracefully so the demo never shows a stack trace.
+        """
         grounding = self._grounding(user_text)
         self._history.append({"role": "user", "content": user_text})
 
@@ -207,26 +220,48 @@ class Stylist:
                             f"don't recite it back):\n{memory}"}
             )
 
-        stream = self._client.chat.completions.create(
-            model=_MODEL,
-            messages=messages,
-            temperature=0.7,
-            max_tokens=200,
-            stream=True,
-        )
-
-        full = []
-        for chunk in stream:
-            # The final chunk carries no choices; guard before indexing.
-            if chunk.choices:
-                delta = chunk.choices[0].delta.content or ""
-                if delta:
-                    full.append(delta)
-                    yield delta
-            # Groq reports token usage on the final chunk under x_groq.usage.
-            x_groq = getattr(chunk, "x_groq", None)
-            usage = getattr(x_groq, "usage", None) if x_groq else None
-            if usage:
-                self.cost.add_turn(usage.prompt_tokens, usage.completion_tokens)
-
-        self._history.append({"role": "assistant", "content": "".join(full)})
+        emitted: list[str] = []
+        for attempt in range(_MAX_RETRIES + 1):
+            try:
+                stream = self._client.chat.completions.create(
+                    model=_MODEL,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=200,
+                    stream=True,
+                )
+                for chunk in stream:
+                    # The final chunk carries no choices; guard before indexing.
+                    if chunk.choices:
+                        delta = chunk.choices[0].delta.content or ""
+                        if delta:
+                            emitted.append(delta)
+                            yield delta
+                    # Groq reports token usage on the final chunk under x_groq.usage.
+                    x_groq = getattr(chunk, "x_groq", None)
+                    usage = getattr(x_groq, "usage", None) if x_groq else None
+                    if usage:
+                        self.cost.add_turn(
+                            usage.prompt_tokens, usage.completion_tokens
+                        )
+                self._history.append(
+                    {"role": "assistant", "content": "".join(emitted)}
+                )
+                return
+            except Exception:  # noqa: BLE001 — any network/API error degrades gracefully
+                if emitted:
+                    # Mid-stream drop: we already said something. Close warmly.
+                    tail = _MIDSTREAM_FALLBACK
+                    yield tail
+                    self._history.append(
+                        {"role": "assistant", "content": "".join(emitted) + tail}
+                    )
+                    return
+                if attempt < _MAX_RETRIES:
+                    continue  # transient blip — try once more before giving up
+                # Total failure with nothing said yet: warm, in-character fallback.
+                yield _FULL_FALLBACK
+                self._history.append(
+                    {"role": "assistant", "content": _FULL_FALLBACK}
+                )
+                return
