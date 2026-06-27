@@ -26,8 +26,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import sys
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -36,16 +34,22 @@ load_dotenv()
 import websockets
 from websockets.asyncio.server import serve
 
-# Reuse the SAME persona + full-catalog grounding the spike validated.
-sys.path.insert(0, str(Path(__file__).resolve().parent / "spikes"))
-from common import full_grounding_prompt  # noqa: E402
-
 import events  # noqa: E402
-from catalog import load_catalog  # noqa: E402
+from stylist import SYSTEM_PROMPT  # noqa: E402  (the SAME persona + grounding rules)
+from product_source import get_source  # noqa: E402
 
-_CATALOG = load_catalog()
-# Index by id and by lowercased name so we can match Mira's spoken recommendations.
+# Ground the voice on the ACTIVE source (env PRODUCT_SOURCE: local / curated / amazon),
+# not just the bundled demo catalog — so curated SiteStripe / PA-API items Mira can
+# actually earn on flow straight into the spoken conversation. See docs/10-sourcing.
+_SOURCE = get_source()
+_CATALOG = _SOURCE.search(limit=50)
+# Index by id so we can match Mira's spoken recommendations.
 _BY_ID = {p["id"]: p for p in _CATALOG}
+
+
+def full_grounding_prompt() -> str:
+    """Persona + the active source's catalog as one grounding block."""
+    return f"{SYSTEM_PROMPT}\n\nPRODUCTS you may recommend:\n{_SOURCE.render(_CATALOG)}"
 
 # Affiliate handoff (Phase 3): we NEVER sell or ship — "Buy" deep-links to a retailer
 # who fulfils, and we earn a disclosed commission (docs/10-sourcing-strategy.md).
