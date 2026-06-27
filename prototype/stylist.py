@@ -8,6 +8,7 @@ Phase 1 focus is LATENCY, so we:
 from __future__ import annotations
 
 import os
+import random
 import re
 from collections.abc import Iterator
 
@@ -28,6 +29,20 @@ _FULL_FALLBACK = (
     "I promise I'm worth the wait. 💛"
 )
 _MIDSTREAM_FALLBACK = " …oops, looks like my connection hiccuped there. Want me to pick back up?"
+
+# Latency-masking backchannels (P2-4): a short, instant filler Mira can say WHILE the
+# real reply generates, so a pause never feels dead. Chosen by mood; skipped in TASK
+# mode (a hurried/specific shopper wants the answer, not chit-chat).
+_BACKCHANNEL_EXCITED = ("Ooh, fun one — ", "Oh, I love this — ", "Yes, okay — ")
+_BACKCHANNEL_EMPATHETIC = ("Aw, I hear you — ", "Got you — ", "Okay, let's sort this — ")
+_BACKCHANNEL_NEUTRAL = ("Mmm, let me think — ", "Okay, let's see — ", "Right, so — ")
+
+# Cheap signal words for the in-code mode/mood sniff (the LLM still does the real read).
+_TASK_WORDS = ("just ", "need ", "size ", "show me", "looking for", "asap", "quick")
+_EXCITED_WORDS = ("excited", "can't wait", "love", "yay", "party", "date", "wedding",
+                  "birthday", "celebrat")
+_LOW_WORDS = ("ugh", "tired", "stressed", "rough", "hard", "sad", "anxious", "overwhelmed",
+              "exhausted", "panic")
 
 # Everyday words -> catalog category, so the naive pre-filter doesn't miss obvious
 # matches like "sneakers" (shoes) or "jeans" (bottoms). Real semantic search is Phase 3.
@@ -196,6 +211,30 @@ class Stylist:
         if prefer_cheapest:
             products = sorted(products, key=lambda p: p["price"])
         return self._source.render(products)
+
+    def backchannel(self, user_text: str, rng: random.Random | None = None) -> str | None:
+        """A short instant filler to mask reply latency (P2-4), or None.
+
+        The voice loop can speak this immediately while `reply_stream` generates, so a
+        pause never feels dead. Returns None in TASK mode (a hurried/specific shopper
+        wants the answer, not chit-chat). Mood picks the flavor.
+        """
+        t = user_text.lower()
+        word_count = len(t.split())
+        is_excited = any(w in t for w in _EXCITED_WORDS)
+        is_low = any(w in t for w in _LOW_WORDS)
+        is_task = (
+            word_count <= 4
+            or any(w in t for w in _TASK_WORDS)
+        ) and not (is_excited or is_low)
+        if is_task:
+            return None  # stay efficient — no filler
+        r = rng or random
+        if is_excited:
+            return r.choice(_BACKCHANNEL_EXCITED)
+        if is_low:
+            return r.choice(_BACKCHANNEL_EMPATHETIC)
+        return r.choice(_BACKCHANNEL_NEUTRAL)
 
     def reply_stream(self, user_text: str) -> Iterator[str]:
         """Yield response tokens as they arrive (low perceived latency).

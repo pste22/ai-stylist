@@ -113,3 +113,42 @@ def test_midstream_drop_closes_gracefully(stylist):
     assert out.startswith("I love that")
     assert out.endswith(S._MIDSTREAM_FALLBACK)
     assert stylist._history[-1]["content"] == out       # partial + tail persisted
+
+
+# --- P2-4 latency-masking backchannels -----------------------------------
+
+import random as _random  # noqa: E402
+
+
+@pytest.mark.parametrize("text", [
+    "black boots, size 8",      # short + task word -> efficient
+    "just show me the dress",   # explicit task phrasing
+    "need jeans",               # short
+])
+def test_backchannel_none_in_task_mode(stylist, text):
+    assert stylist.backchannel(text) is None
+
+
+def test_backchannel_excited(stylist):
+    rng = _random.Random(0)
+    out = stylist.backchannel("I'm so excited for my first date!", rng=rng)
+    assert out in S._BACKCHANNEL_EXCITED
+
+
+def test_backchannel_empathetic(stylist):
+    rng = _random.Random(0)
+    out = stylist.backchannel("ugh, what a rough week, I'm exhausted", rng=rng)
+    assert out in S._BACKCHANNEL_EMPATHETIC
+
+
+def test_backchannel_neutral_for_chatty_neutral(stylist):
+    rng = _random.Random(0)
+    out = stylist.backchannel("I've been thinking about refreshing my wardrobe lately", rng=rng)
+    assert out in S._BACKCHANNEL_NEUTRAL
+
+
+def test_backchannel_is_deterministic_with_seeded_rng(stylist):
+    a = stylist.backchannel("I'm so excited about the wedding", rng=_random.Random(42))
+    b = stylist.backchannel("I'm so excited about the wedding", rng=_random.Random(42))
+    assert a == b
+
