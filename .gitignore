@@ -7,3 +7,6 @@ venv/
 *.log
 .DS_Store
 models/
+
+# Spike audio recordings (large binaries)
+prototype/spikes/_recordings/

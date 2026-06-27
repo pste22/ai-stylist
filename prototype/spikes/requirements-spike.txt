@@ -1,0 +1,11 @@
+# Extra deps for the S1 voice spike (throwaway — not for production).
+# Base brain deps come from ../requirements.txt (groq, python-dotenv).
+
+# --- Path A: hand-wired pipeline ---
+faster-whisper>=1.0.0     # local streaming STT
+piper-tts>=1.2.0          # local streaming TTS
+sounddevice>=0.4.6        # mic capture + speaker playback
+numpy>=1.26               # audio buffers
+
+# --- Path B: Gemini Live ---
+google-genai>=0.3.0       # Gemini Live realtime API

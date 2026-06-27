@@ -1,0 +1,98 @@
+# 10 — Product Sourcing Strategy
+
+**Status:** Decided (2026-06-27) · **Owner:** Founder/CTO · **Phase:** 3 (prep in Phase 1)
+
+The single most important infrastructure decision in the company: *how does Mira get
+real products with working, monetizable buy links?*
+
+---
+
+## 1. The decision in one line
+
+**Use affiliate product feeds (structured APIs), never scrape retail sites ourselves.**
+We are a *stylist that hands off to retailers*, not a retailer and not a data scraper.
+
+---
+
+## 2. Why NOT scrape "all shopping sites"
+
+The intuitive idea — crawl every store — is a trap:
+
+- **Legal exposure** — most retailer ToS forbid scraping. Pre-revenue litigation risk
+  directly contradicts our Legal/Trust & Safety stance (`docs/09-...`).
+- **Infinite maintenance** — every site redesign breaks the scraper; it becomes a
+  full-time team that produces no differentiation.
+- **No monetization** — scraping yields data but no commission. It bypasses the exact
+  affiliate links that pay us. We'd do all the work and capture none of the value.
+
+We don't need *all* products. We need **enough good products to style any request**,
+each with a **buy link that pays us**.
+
+---
+
+## 3. The chosen model: affiliate networks
+
+Affiliate networks already solved structured retail data. They provide product catalogs
+(name, price, image, category) **plus a trackable buy URL** — exactly our schema
+(`catalog.py` + the `affiliate_url` field in P3-2).
+
+```
+Affiliate feeds  ──normalize──▶  ProductSource adapter  ──▶  Unified catalog  ──▶  Mira
+(commission + buy URLs)          (one interface)              (our schema)          recommends
+                                                                                       │
+                                                            Buy tap + FTC disclosure ◀─┘
+                                                                       │
+                                              Retailer ships / handles payment & returns
+                                                       (NOT us — affiliate handoff)
+```
+
+---
+
+## 4. Source rollout (free-first, staged)
+
+| Stage | Source | Why this one |
+|---|---|---|
+| Now / demo | Local `products.json` (`LocalJsonSource`) | Zero cost; perfect persona without API risk |
+| First real source | **Amazon PA-API** | Easiest signup, broad catalog; proves the adapter end-to-end |
+| Fashion depth | **LTK / ShopStyle (Rakuten)** | Fashion-native, influencer-grade catalog — fits Mira's positioning |
+| Scale brands | **Impact / CJ** | Direct programs with specific retailers users love (Nordstrom, ASOS…) |
+
+---
+
+## 5. Architecture: one interface, many sources (P1-12 — DONE)
+
+The brain never knows where products come from. A single `ProductSource` interface lets
+us swap or blend sources without touching Mira's reasoning.
+
+```python
+class ProductSource(Protocol):
+    def search(self, *, category=None, style=None, gender=None,
+               max_price=None, limit=8) -> list[dict]: ...
+    def render(self, products) -> str: ...
+```
+
+- `LocalJsonSource` — Phase 1 default (implemented in `prototype/product_source.py`).
+- `AmazonSource`, `LTKSource`, … — Phase 3 adapters, same interface.
+- Keeps the **"stylist, not retailer"** boundary clean: we never hold inventory,
+  process payment, or ship.
+
+---
+
+## 6. Watch-outs (track before scaling spend)
+
+- **Catalog freshness** — feeds go stale (out-of-stock). Need a refresh/validation job
+  so a "Buy" tap never embarrasses us.
+- **Coverage gaps early** — one network won't have everything; Mira must gracefully say
+  "I don't carry that yet" (grounding rule already enforces this).
+- **Commission terms / cookie windows** vary per network — directly affects unit
+  economics; model before committing marketing spend.
+
+---
+
+## 7. Decision log
+
+| Date | Decision | Rationale |
+|---|---|---|
+| 2026-06-27 | Affiliate feeds, never self-scraping | Legal, maintenance, and monetization all favor feeds |
+| 2026-06-27 | Rollout: Local → Amazon → LTK/ShopStyle → Impact/CJ | Free-first; prove adapter cheaply, then add fashion depth |
+| 2026-06-27 | Build `ProductSource` adapter now (P1-12) | Makes Phase 3 a wiring task, not a rewrite |
