@@ -98,6 +98,7 @@ def _match_products(transcript: str) -> list[dict]:
                     "category": p["category"],
                     "color": p["color"],
                     "price": p["price"],
+                    "image_url": p.get("image_url"),
                     "affiliate_url": _affiliate_url(p),
                 }
             )

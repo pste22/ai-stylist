@@ -5,6 +5,10 @@ python-dotenv>=1.0.0  # load .env
 # --- Dev / tests ---
 pytest>=8.0           # repeatable tests: pytest -q (from prototype/)
 
+# --- Phase 3: real affiliate source (optional; only needed for PRODUCT_SOURCE=amazon) ---
+# amazon-paapi>=5.0.0   # Amazon Product Advertising API client
+#   env: AMAZON_ACCESS_KEY, AMAZON_SECRET_KEY, AMAZON_PARTNER_TAG, AMAZON_HOST, AMAZON_REGION
+
 # --- Voice loop (uncomment when starting P1-2 / P1-4 / P1-5) ---
 # pipecat-ai>=0.0.40
 # faster-whisper>=1.0.0   # local streaming STT

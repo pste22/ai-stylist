@@ -16,7 +16,7 @@ from groq import Groq
 
 import events
 from costs import SessionCost
-from product_source import LocalJsonSource, ProductSource
+from product_source import ProductSource, get_source
 from profile import UserProfile
 
 # Fast, capable model on Groq's free tier. Override via STYLIST_MODEL.
@@ -172,7 +172,7 @@ class Stylist:
         self._client = Groq(api_key=api_key)
         # Catalog comes through a swappable ProductSource (P1-12). Phase 3 replaces
         # LocalJsonSource with affiliate feeds without touching the brain.
-        self._source = source or LocalJsonSource()
+        self._source = source or get_source()
         # Per-session cost tracking (P2-10) so we have real unit economics for pricing.
         self.session_id = events.new_session_id()
         self.cost = SessionCost(session_id=self.session_id, model=_MODEL)

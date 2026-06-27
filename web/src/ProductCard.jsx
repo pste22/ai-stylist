@@ -6,7 +6,11 @@ export default function ProductCard({ product, loved, onLove, onBuy }) {
   return (
     <div className={`card ${loved ? "loved" : ""}`}>
       <div className="card-thumb" data-cat={product.category}>
-        <span className="card-swatch" style={{ background: swatch(product.color) }} />
+        {product.image_url ? (
+          <img className="card-img" src={product.image_url} alt={product.name} loading="lazy" />
+        ) : (
+          <span className="card-swatch" style={{ background: swatch(product.color) }} />
+        )}
       </div>
       <div className="card-body">
         <p className="card-name">{product.name}</p>
