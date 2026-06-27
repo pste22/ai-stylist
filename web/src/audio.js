@@ -66,12 +66,19 @@ export class PcmPlayer {
   constructor() {
     this.ctx = null;
     this.nextTime = 0;
+    this.analyser = null;
+    this._buf = null;
   }
 
   _ensure() {
     if (!this.ctx) {
       this.ctx = new AudioContext({ sampleRate: OUT_RATE });
       this.nextTime = this.ctx.currentTime;
+      // Tap the output for lip-sync amplitude.
+      this.analyser = this.ctx.createAnalyser();
+      this.analyser.fftSize = 256;
+      this.analyser.connect(this.ctx.destination);
+      this._buf = new Float32Array(this.analyser.fftSize);
     }
   }
 
@@ -84,10 +91,20 @@ export class PcmPlayer {
     for (let i = 0; i < pcm.length; i++) ch[i] = pcm[i] / 0x8000;
     const node = this.ctx.createBufferSource();
     node.buffer = buf;
-    node.connect(this.ctx.destination);
+    node.connect(this.analyser);
     const start = Math.max(this.nextTime, this.ctx.currentTime);
     node.start(start);
     this.nextTime = start + buf.duration;
+  }
+
+  // Current output loudness as RMS in ~0..1 — drives the avatar's mouth.
+  getLevel() {
+    if (!this.analyser) return 0;
+    this.analyser.getFloatTimeDomainData(this._buf);
+    let sum = 0;
+    for (let i = 0; i < this._buf.length; i++) sum += this._buf[i] * this._buf[i];
+    const rms = Math.sqrt(sum / this._buf.length);
+    return Math.min(1, rms * 3.5); // gain so normal speech swings the mouth fully
   }
 
   // Barge-in: drop everything queued so Mira stops instantly.
@@ -95,6 +112,7 @@ export class PcmPlayer {
     if (this.ctx) {
       this.ctx.close();
       this.ctx = null;
+      this.analyser = null;
     }
   }
 }

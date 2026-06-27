@@ -37,6 +37,8 @@ export function useMiraVoice() {
     setLoved((prev) => new Set(prev).add(product.id));
   }, []);
 
+  const getLevel = useCallback(() => playerRef.current?.getLevel?.() ?? 0, []);
+
   const start = useCallback(async () => {
     setError(null);
     try {
@@ -98,5 +100,5 @@ export function useMiraVoice() {
     }
   }, [stop]);
 
-  return { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy };
+  return { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy, getLevel };
 }

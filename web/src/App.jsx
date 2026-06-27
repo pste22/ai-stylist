@@ -6,7 +6,7 @@ import { useMiraVoice } from "./useMiraVoice.js";
 // Press "Talk to Mira" → mic streams to prototype/live_server.py → Gemini Live →
 // Mira's audio plays back and the avatar state/mood update from real events.
 export default function App() {
-  const { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy } =
+  const { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy, getLevel } =
     useMiraVoice();
 
   return (
@@ -16,7 +16,7 @@ export default function App() {
         <p className="tagline">your AI stylist — voice-first, character-driven</p>
       </header>
 
-      <Avatar state={state} mood={mood} />
+      <Avatar state={state} mood={mood} getLevel={getLevel} />
 
       <div className="captions">
         {captions.you && <p className="cap you">{captions.you}</p>}
