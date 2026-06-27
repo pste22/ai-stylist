@@ -38,8 +38,8 @@ Simple Kanban. Move cards between sections. Keep **Doing** to 1–2 items (solo 
 
 ### Phase 3 — Real products + buyable (sourcing & checkout handoff)
 - [ ] P3-1: Swap fake catalog for real items via 1 affiliate source (Amazon PA-API / LTK / Rakuten)
-- [ ] P3-2: Populate `affiliate_url` on real items; "Buy" taps deep-link to the retailer (they ship — we do NOT)
-- [ ] P3-3: FTC affiliate disclosure ("Mira earns a small commission") in the buy flow
+- [~] P3-2: Populate `affiliate_url` on real items; "Buy" taps deep-link to the retailer (they ship — we do NOT) — *buy flow built: `live_server.py` `_affiliate_url()` emits a handoff link per pick (honest Google Shopping search until a real feed lands in P3-1), "Buy →" opens it in a new tab (`rel="noopener nofollow sponsored"`) and logs a `buy_click` event*
+- [~] P3-3: FTC affiliate disclosure ("Mira earns a small commission") in the buy flow — *disclosure line shown under the picks shelf in the web UI; revisit copy/placement when real retailers are wired*
 - [ ] P3-4: Preference memory persisted (body, budget, vibe, past likes) on top of `UserProfile`
 
 ### Phase 4 — Retention (accounts, memory, comms)

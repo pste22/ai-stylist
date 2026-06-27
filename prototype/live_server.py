@@ -47,6 +47,19 @@ _CATALOG = load_catalog()
 # Index by id and by lowercased name so we can match Mira's spoken recommendations.
 _BY_ID = {p["id"]: p for p in _CATALOG}
 
+# Affiliate handoff (Phase 3): we NEVER sell or ship — "Buy" deep-links to a retailer
+# who fulfils, and we earn a disclosed commission (docs/10-sourcing-strategy.md).
+# Until a real affiliate feed is wired (P3-1), synthesize an honest search handoff so
+# the buy flow is real and clickable. A real per-item `affiliate_url` overrides this.
+from urllib.parse import quote_plus  # noqa: E402
+
+
+def _affiliate_url(p: dict) -> str:
+    if p.get("affiliate_url"):
+        return p["affiliate_url"]
+    query = quote_plus(f"{p['color']} {p['name']}")
+    return f"https://www.google.com/search?tbm=shop&q={query}"
+
 _MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
@@ -85,6 +98,7 @@ def _match_products(transcript: str) -> list[dict]:
                     "category": p["category"],
                     "color": p["color"],
                     "price": p["price"],
+                    "affiliate_url": _affiliate_url(p),
                 }
             )
     return hits
@@ -145,6 +159,14 @@ async def handle(ws) -> None:
                                 product_name=prod.get("name"),
                             )
                             print(f"  ♥ would-buy: {prod.get('name', pid)}")
+                        elif data.get("type") == "buy_click":
+                            pid = data.get("product_id", "")
+                            prod = _BY_ID.get(pid, {})
+                            events.log_event(
+                                "buy_click", session_id=session_id,
+                                product_id=pid, product_name=prod.get("name"),
+                            )
+                            print(f"  buy-click -> retailer: {prod.get('name', pid)}")
 
             async def pump_mira() -> None:
                 """Gemini audio + transcripts → browser, with avatar-state events."""

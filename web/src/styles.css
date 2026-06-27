@@ -151,12 +151,23 @@ button.primary.stop { background: #b08; filter: none; }
 .card-body { padding: 0.6rem 0.7rem 0.2rem; flex: 1; }
 .card-name { margin: 0; font-size: 0.9rem; font-weight: 600; }
 .card-meta { margin: 0.2rem 0 0; font-size: 0.78rem; opacity: 0.6; }
+.card-actions { display: flex; gap: 0.4rem; align-items: center; margin: 0.5rem; }
 .love {
-  margin: 0.5rem; border-radius: 999px; background: transparent;
+  flex: 1; border-radius: 999px; background: transparent;
   color: var(--accent); border: 1.5px solid var(--accent-soft);
   box-shadow: none; font-size: 0.82rem; padding: 0.4rem 0.6rem;
 }
 .love.is-loved { background: var(--accent); color: #fff; border-color: var(--accent); }
+.buy {
+  text-decoration: none; font: inherit; font-weight: 700; font-size: 0.82rem;
+  color: var(--ink); background: #ffd9a8; border-radius: 999px;
+  padding: 0.42rem 0.8rem; white-space: nowrap;
+}
+.buy:hover { filter: brightness(1.04); }
+.disclosure {
+  text-align: center; font-size: 0.72rem; opacity: 0.55;
+  max-width: 460px; margin: 0.9rem auto 0;
+}
 
 .controls-hint code,
 .app-footer code { background: rgba(0,0,0,0.05); padding: 0.1rem 0.35rem; border-radius: 6px; }

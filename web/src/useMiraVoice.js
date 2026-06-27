@@ -39,6 +39,13 @@ export function useMiraVoice() {
 
   const getLevel = useCallback(() => playerRef.current?.getLevel?.() ?? 0, []);
 
+  const buyClick = useCallback((product) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "buy_click", product_id: product.id }));
+    }
+  }, []);
+
   const start = useCallback(async () => {
     setError(null);
     try {
@@ -100,5 +107,5 @@ export function useMiraVoice() {
     }
   }, [stop]);
 
-  return { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy, getLevel };
+  return { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy, getLevel, buyClick };
 }

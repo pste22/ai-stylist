@@ -6,7 +6,7 @@ import { useMiraVoice } from "./useMiraVoice.js";
 // Press "Talk to Mira" → mic streams to prototype/live_server.py → Gemini Live →
 // Mira's audio plays back and the avatar state/mood update from real events.
 export default function App() {
-  const { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy, getLevel } =
+  const { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy, getLevel, buyClick } =
     useMiraVoice();
 
   return (
@@ -33,9 +33,14 @@ export default function App() {
                 product={p}
                 loved={loved.has(p.id)}
                 onLove={wouldBuy}
+                onBuy={buyClick}
               />
             ))}
           </div>
+          <p className="disclosure">
+            Mira earns a small commission when you buy through these links — it never
+            changes your price, and it keeps Mira free.
+          </p>
         </div>
       )}
 

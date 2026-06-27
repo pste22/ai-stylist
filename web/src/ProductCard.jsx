@@ -1,6 +1,8 @@
 // A product Mira recommended this turn. "Love it" sends a would-buy signal back to
 // the bridge (logged via events.py) — the seed of the commerce loop (P2-8 → Phase 3).
-export default function ProductCard({ product, loved, onLove }) {
+// "Buy" deep-links out to the retailer (affiliate handoff — we never sell or ship),
+// with an FTC commission disclosure (P3-3).
+export default function ProductCard({ product, loved, onLove, onBuy }) {
   return (
     <div className={`card ${loved ? "loved" : ""}`}>
       <div className="card-thumb" data-cat={product.category}>
@@ -12,13 +14,24 @@ export default function ProductCard({ product, loved, onLove }) {
           {product.color} · ${product.price}
         </p>
       </div>
-      <button
-        className={`love ${loved ? "is-loved" : ""}`}
-        onClick={() => onLove(product)}
-        aria-label={loved ? "Loved" : "Love it"}
-      >
-        {loved ? "♥ Loved" : "♡ Love it"}
-      </button>
+      <div className="card-actions">
+        <button
+          className={`love ${loved ? "is-loved" : ""}`}
+          onClick={() => onLove(product)}
+          aria-label={loved ? "Loved" : "Love it"}
+        >
+          {loved ? "♥ Loved" : "♡ Love it"}
+        </button>
+        <a
+          className="buy"
+          href={product.affiliate_url}
+          target="_blank"
+          rel="noopener noreferrer nofollow sponsored"
+          onClick={() => onBuy?.(product)}
+        >
+          Buy →
+        </a>
+      </div>
     </div>
   );
 }
