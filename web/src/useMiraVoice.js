@@ -11,6 +11,8 @@ export function useMiraVoice() {
   const [state, setState] = useState(AvatarState.IDLE);
   const [mood, setMood] = useState(Mood.NEUTRAL);
   const [captions, setCaptions] = useState({ you: "", mira: "" });
+  const [products, setProducts] = useState([]);
+  const [loved, setLoved] = useState(() => new Set());
   const [error, setError] = useState(null);
 
   const wsRef = useRef(null);
@@ -25,6 +27,14 @@ export function useMiraVoice() {
     setConnected(false);
     setState(AvatarState.IDLE);
     setMood(Mood.NEUTRAL);
+  }, []);
+
+  const wouldBuy = useCallback((product) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "would_buy", product_id: product.id }));
+    }
+    setLoved((prev) => new Set(prev).add(product.id));
   }, []);
 
   const start = useCallback(async () => {
@@ -65,6 +75,13 @@ export function useMiraVoice() {
           case "transcript":
             setCaptions((c) => ({ ...c, [msg.who]: msg.text }));
             break;
+          case "products":
+            // Merge new recommendations, keeping any already on screen.
+            setProducts((prev) => {
+              const seen = new Set(prev.map((p) => p.id));
+              return [...prev, ...msg.items.filter((p) => !seen.has(p.id))];
+            });
+            break;
           case "interrupted":
             player.flush();
             break;
@@ -81,5 +98,5 @@ export function useMiraVoice() {
     }
   }, [stop]);
 
-  return { connected, state, mood, captions, error, start, stop };
+  return { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy };
 }

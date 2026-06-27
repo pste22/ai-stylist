@@ -1,11 +1,13 @@
 import Avatar from "./Avatar.jsx";
+import ProductCard from "./ProductCard.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
 
 // Web shell (P2-3) wired to the live voice bridge (P2-2).
 // Press "Talk to Mira" → mic streams to prototype/live_server.py → Gemini Live →
 // Mira's audio plays back and the avatar state/mood update from real events.
 export default function App() {
-  const { connected, state, mood, captions, error, start, stop } = useMiraVoice();
+  const { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy } =
+    useMiraVoice();
 
   return (
     <div className="app">
@@ -20,6 +22,22 @@ export default function App() {
         {captions.you && <p className="cap you">{captions.you}</p>}
         {captions.mira && <p className="cap mira">{captions.mira}</p>}
       </div>
+
+      {products.length > 0 && (
+        <div className="shelf">
+          <p className="shelf-title">Mira's picks for you</p>
+          <div className="grid">
+            {products.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                loved={loved.has(p.id)}
+                onLove={wouldBuy}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="controls">
         {!connected ? (

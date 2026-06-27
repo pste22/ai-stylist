@@ -40,6 +40,13 @@ from websockets.asyncio.server import serve
 sys.path.insert(0, str(Path(__file__).resolve().parent / "spikes"))
 from common import full_grounding_prompt  # noqa: E402
 
+import events  # noqa: E402
+from catalog import load_catalog  # noqa: E402
+
+_CATALOG = load_catalog()
+# Index by id and by lowercased name so we can match Mira's spoken recommendations.
+_BY_ID = {p["id"]: p for p in _CATALOG}
+
 _MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
@@ -57,6 +64,30 @@ def _mood_of(text: str) -> str:
     if any(h in low for h in _LOW_HINTS):
         return "low"
     return "neutral"
+
+
+def _match_products(transcript: str) -> list[dict]:
+    """Find catalog items Mira named in this turn, so the UI can show cards.
+
+    Name-substring match keeps it honest: we only surface what she actually said,
+    in spoken order, de-duplicated. Phase 3 swaps this for structured tool calls.
+    """
+    low = transcript.lower()
+    hits: list[dict] = []
+    seen: set[str] = set()
+    for p in _CATALOG:
+        if p["name"].lower() in low and p["id"] not in seen:
+            seen.add(p["id"])
+            hits.append(
+                {
+                    "id": p["id"],
+                    "name": p["name"],
+                    "category": p["category"],
+                    "color": p["color"],
+                    "price": p["price"],
+                }
+            )
+    return hits
 
 
 def _build():
@@ -89,6 +120,7 @@ async def handle(ws) -> None:
     """One browser connection ⇆ one Gemini Live session."""
     print(f"  ▸ browser connected ({ws.remote_address})")
     client, config, types = _build()
+    session_id = events.new_session_id()
 
     try:
         async with client.aio.live.connect(model=_MODEL, config=config) as session:
@@ -105,6 +137,14 @@ async def handle(ws) -> None:
                         data = json.loads(msg)
                         if data.get("type") == "reset":
                             await session.send_client_content(turns=None, turn_complete=True)
+                        elif data.get("type") == "would_buy":
+                            pid = data.get("product_id", "")
+                            prod = _BY_ID.get(pid, {})
+                            events.log_would_buy(
+                                pid, session_id=session_id,
+                                product_name=prod.get("name"),
+                            )
+                            print(f"  ♥ would-buy: {prod.get('name', pid)}")
 
             async def pump_mira() -> None:
                 """Gemini audio + transcripts → browser, with avatar-state events."""
@@ -143,6 +183,10 @@ async def handle(ws) -> None:
                             await _send_json(ws, type="transcript", who="mira", text=chunk)
                         # turn done → brief react, then back to idle.
                         if sc and sc.turn_complete:
+                            full = "".join(said)
+                            products = _match_products(full)
+                            if products:
+                                await _send_json(ws, type="products", items=products)
                             await _send_json(ws, type="state", state="reacting", mood=mood)
                             await asyncio.sleep(0.9)
                             await _send_json(ws, type="state", state="idle", mood="neutral")
