@@ -202,6 +202,78 @@ def _to_dict(item) -> dict:
     return getattr(item, "__dict__", {})
 
 
+def amazon_affiliate_url(asin: str, partner_tag: str | None = None) -> str:
+    """Build a standard Amazon text affiliate link from an ASIN + partner tag.
+
+    The API-free path (Phase 1): no keys needed, works the day you're accepted into
+    Associates. Yields a monetizable buy link but NOT images/live price — those you seed
+    manually now, and they arrive automatically once PA-API unlocks (Phase 2).
+    """
+    tag = partner_tag or os.environ.get("AMAZON_PARTNER_TAG", "")
+    return f"https://www.amazon.com/dp/{asin}/?tag={tag}"
+
+
+class CuratedAmazonSource:
+    """Phase 1 (pre-API) real affiliate source — the manual-launch blueprint.
+
+    You can't get PA-API keys until 3 sales, so seed 10–20 hand-picked Amazon products
+    using SiteStripe links + manually saved images into `data/affiliate_products.json`
+    (same schema as the local catalog, plus `asin`). This source serves those real,
+    monetizable products today. When PA-API unlocks, flip PRODUCT_SOURCE=amazon — no
+    other change, because both speak the same schema.
+
+    Each item: id/asin, name, category, color, price, style[list], gender,
+    image_url (your saved image), affiliate_url (SiteStripe link — or auto-built from
+    the ASIN + AMAZON_PARTNER_TAG if omitted).
+    """
+
+    def __init__(self, path: str | None = None) -> None:
+        import json
+        from pathlib import Path
+
+        file = Path(path) if path else (
+            Path(__file__).parent / "data" / "affiliate_products.json"
+        )
+        if not file.exists():
+            raise RuntimeError(
+                f"Curated product file not found: {file}. Seed it with SiteStripe items."
+            )
+        items = json.loads(file.read_text(encoding="utf-8"))
+        # Drop template/comment rows so placeholders never reach the shopper.
+        items = [p for p in items if "_comment" not in p and p.get("affiliate_url") is not None]
+        if not items:
+            raise RuntimeError(
+                f"No real products in {file} yet — add SiteStripe items "
+                "(remove the template row)."
+            )
+        for p in items:  # fill a buy link from the ASIN if none was pasted in
+            if not p.get("affiliate_url"):
+                asin = p.get("asin") or p.get("id", "")
+                p["affiliate_url"] = amazon_affiliate_url(asin)
+        self._catalog = items
+
+    def search(
+        self,
+        *,
+        category: str | None = None,
+        style: str | None = None,
+        gender: str | None = None,
+        max_price: float | None = None,
+        limit: int = 8,
+    ) -> list[dict]:
+        return search(
+            self._catalog,
+            category=category,
+            style=style,
+            gender=gender,
+            max_price=max_price,
+            limit=limit,
+        )
+
+    def render(self, products: list[dict]) -> str:
+        return to_prompt_lines(products)
+
+
 def get_source(name: str | None = None) -> "ProductSource":
     """Pick a product source by name (or env PRODUCT_SOURCE), default 'local'.
 
@@ -214,5 +286,11 @@ def get_source(name: str | None = None) -> "ProductSource":
             return AmazonSource()
         except Exception as exc:  # noqa: BLE001 — log + degrade, never crash the brain
             print(f"  ! AmazonSource unavailable ({exc}); using local catalog")
+            return LocalJsonSource()
+    if name == "curated":
+        try:
+            return CuratedAmazonSource()
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ! CuratedAmazonSource unavailable ({exc}); using local catalog")
             return LocalJsonSource()
     return LocalJsonSource()

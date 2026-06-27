@@ -57,6 +57,25 @@ Affiliate feeds  ──normalize──▶  ProductSource adapter  ──▶  Uni
 | Fashion depth | **LTK / ShopStyle (Rakuten)** | Fashion-native, influencer-grade catalog — fits Mira's positioning |
 | Scale brands | **Impact / CJ** | Direct programs with specific retailers users love (Nordstrom, ASOS…) |
 
+### 4a. The PA-API chicken-and-egg (Amazon's 3-sale rule)
+
+Amazon won't issue PA-API keys until you've made **3 qualifying sales**. So Amazon
+ships in **two stages**, both already built behind the same `ProductSource` interface:
+
+| Stage | Source | Keys? | What it gives |
+|---|---|---|---|
+| **Pre-API (launch)** | `CuratedAmazonSource` (`PRODUCT_SOURCE=curated`) | No | 10–20 hand-picked products you seed via **SiteStripe** links + manually saved images, in `data/affiliate_products.json`. Real, monetizable buy links today. |
+| **Post-API (auto)** | `AmazonSource` (`PRODUCT_SOURCE=amazon`) | Yes | After 3 sales unlock keys, the API returns live catalog + images + price automatically. |
+
+The switch is **one env var** — both sources emit the identical schema, so Mira's
+reasoning, the buy flow, and the UI don't change. `amazon_affiliate_url(asin, tag)`
+builds standard text affiliate links from just your Partner Tag + ASIN (no keys, no
+images) as a fallback when a SiteStripe link isn't pasted in.
+
+**Seeding workflow (pre-API):** for each product → open it on amazon.com (logged into
+Associates) → SiteStripe → *Text* link → paste as `affiliate_url`, copy the 10-char
+ASIN, save the image, fill name/category/price → it appears in Mira's picks.
+
 ---
 
 ## 5. Architecture: one interface, many sources (P1-12 — DONE)

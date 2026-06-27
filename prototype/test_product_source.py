@@ -55,3 +55,46 @@ def test_get_source_amazon_falls_back_without_keys(monkeypatch):
     for k in ("AMAZON_ACCESS_KEY", "AMAZON_SECRET_KEY", "AMAZON_PARTNER_TAG"):
         monkeypatch.delenv(k, raising=False)
     assert isinstance(ps.get_source("amazon"), ps.LocalJsonSource)
+
+
+def test_amazon_affiliate_url_from_asin(monkeypatch):
+    monkeypatch.setenv("AMAZON_PARTNER_TAG", "mira-20")
+    url = ps.amazon_affiliate_url("B0EXAMPLE1")
+    assert url == "https://www.amazon.com/dp/B0EXAMPLE1/?tag=mira-20"
+    # explicit tag overrides env
+    assert ps.amazon_affiliate_url("B0ABC", "other-21").endswith("tag=other-21")
+
+
+def test_curated_source_reads_real_items(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setenv("AMAZON_PARTNER_TAG", "mira-20")
+    seed = tmp_path / "affiliate_products.json"
+    seed.write_text(json.dumps([
+        {"_comment": "template row — must be ignored", "asin": "B0XXXXXXXXX"},
+        {"asin": "B0REAL1", "id": "B0REAL1", "name": "Linen Shirt",
+         "category": "tops", "color": "sand", "price": 39.0,
+         "style": ["casual"], "gender": "unisex", "image_url": "x.jpg",
+         "affiliate_url": ""},  # empty → auto-built from ASIN
+    ]))
+    src = ps.CuratedAmazonSource(path=str(seed))
+    results = src.search(category="tops")
+    assert len(results) == 1  # template row dropped
+    assert results[0]["affiliate_url"] == "https://www.amazon.com/dp/B0REAL1/?tag=mira-20"
+
+
+def test_curated_source_template_only_raises(tmp_path):
+    import json
+
+    seed = tmp_path / "affiliate_products.json"
+    seed.write_text(json.dumps([{"_comment": "only a template here"}]))
+    try:
+        ps.CuratedAmazonSource(path=str(seed))
+        assert False, "expected RuntimeError for template-only file"
+    except RuntimeError:
+        pass
+
+
+def test_get_source_curated_falls_back_when_unseeded():
+    # The bundled data/affiliate_products.json has only the template row → fallback.
+    assert isinstance(ps.get_source("curated"), ps.LocalJsonSource)

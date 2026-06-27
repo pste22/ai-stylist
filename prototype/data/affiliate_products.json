@@ -1,0 +1,15 @@
+[
+  {
+    "_comment": "TEMPLATE — replace these with REAL products. For each Amazon item: open it on amazon.com (logged into your Associate account), use the SiteStripe bar → 'Text' to copy your affiliate link, paste it as affiliate_url, copy the 10-char ASIN from the URL, save the product image, and fill the fields below. Delete this _comment entry once you add real ones.",
+    "asin": "B0XXXXXXXXX",
+    "id": "B0XXXXXXXXX",
+    "name": "Example — Relaxed Linen Shirt",
+    "category": "tops",
+    "color": "sand",
+    "price": 42.99,
+    "style": ["casual", "summer", "minimal"],
+    "gender": "unisex",
+    "image_url": "",
+    "affiliate_url": ""
+  }
+]
