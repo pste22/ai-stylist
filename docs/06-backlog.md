@@ -27,7 +27,7 @@ Simple Kanban. Move cards between sections. Keep **Doing** to 1–2 items (solo 
 ### Phase 2 — Persona + taste (investor demo)
 - [x] P2-1: Design the original character (look, name, personality bible) — `docs/13-character-bible.md`
 - [ ] P2-2: Craft signature voice (XTTS clone or ElevenLabs)
-- [ ] P2-3: Build 2D avatar with idle/thinking/reacting states (Rive/Live2D)
+- [~] P2-3: Build 2D avatar with idle/thinking/reacting states (Rive/Live2D) — *in progress: `web/` Vite+React shell scaffolded with a CSS placeholder Mira driven by a single `avatarState` (idle/thinking/talking/reacting); Rive swap-in is the next visual upgrade*
 - [x] P2-4: Latency-masking backchannels — `stylist.py` `backchannel()` returns an instant mood-matched filler ("Ooh, fun one —", "Aw, I hear you —") to speak while the reply generates; None in TASK mode (stay efficient); voice loop plays it before `reply_stream`; tested
 - [x] P2-5: Tune LLM for styling POV (asks questions, recommends ≤3 with reasons, gentle next step) — `stylist.py`: warmth + TASK-vs-SOCIAL mode sensing + mood/occasion-aware styling + STYLING POV structure; smoke-tested
 - [x] P2-6: Graceful text fallback on poor network — `stylist.py` `reply_stream` retries once on transient failure, then degrades to a warm in-character message; mid-stream drops close gracefully; history stays paired (never a stack trace mid-demo); smoke-tested (total/transient/mid-stream)
