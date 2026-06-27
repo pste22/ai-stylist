@@ -39,6 +39,10 @@ export default function Avatar({ state, mood, getLevel }) {
   return (
     <div className="mira-stage">
       <div className={faceClass}>
+        <div className="mira-brows">
+          <span className="brow left" />
+          <span className="brow right" />
+        </div>
         <div className="mira-eyes">
           <span className="eye left" />
           <span className="eye right" />

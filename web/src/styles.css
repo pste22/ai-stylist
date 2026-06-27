@@ -56,9 +56,42 @@ body {
 
 /* idle: gentle breathing (default). */
 @keyframes breathe {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.03); }
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50% { transform: scale(1.03) rotate(0deg); }
 }
+
+/* Mood-driven life: a happy little bob vs a slower, softer sway. */
+@keyframes bob-excited {
+  0%, 100% { transform: scale(1.02) rotate(-2deg); }
+  50% { transform: scale(1.05) rotate(2deg); }
+}
+@keyframes sway-low {
+  0%, 100% { transform: scale(0.99) rotate(2deg); }
+  50% { transform: scale(1.0) rotate(1deg); }
+}
+.mood-excited { animation: bob-excited 2.6s ease-in-out infinite; }
+.mood-low { animation: sway-low 5.5s ease-in-out infinite; }
+
+/* Brows — tiny, but they carry most of the emotion. */
+.mira-brows {
+  position: absolute;
+  top: 52px;
+  display: flex;
+  gap: 2.6rem;
+}
+.brow {
+  width: 22px; height: 5px; border-radius: 4px;
+  background: var(--ink); opacity: 0.75;
+  transition: transform 0.3s ease;
+}
+/* excited: brows up + arched (open, delighted). */
+.mood-excited .brow.left { transform: translateY(-4px) rotate(-8deg); }
+.mood-excited .brow.right { transform: translateY(-4px) rotate(8deg); }
+/* low: brows angled inward + down (gentle concern). */
+.mood-low .brow.left { transform: translateY(2px) rotate(10deg); }
+.mood-low .brow.right { transform: translateY(2px) rotate(-10deg); }
+/* thinking: one brow raised (curious). */
+.state-thinking .brow.left { transform: translateY(-3px) rotate(-10deg); }
 
 .mira-eyes { display: flex; gap: 2.6rem; }
 .eye {
