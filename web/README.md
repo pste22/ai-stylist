@@ -11,20 +11,29 @@ The browser UI for Mira (P2-3). See `docs/14-ui-strategy.md` for the strategy.
   `avatarState` (idle / thinking / talking / reacting) — the seam where a **Rive**
   state machine drops in later.
 
-## Run
+## Run (two processes)
 ```bash
-cd web
-npm install
-npm run dev      # opens http://localhost:5173
+# 1) voice bridge (holds GEMINI_API_KEY, talks to Gemini Live)
+.venv/bin/python prototype/live_server.py     # ws://localhost:8765
+
+# 2) web UI
+cd web && npm install && npm run dev          # http://localhost:5173
 ```
+Click **Talk to Mira**, allow the mic, and speak. Mira's audio plays back and the
+avatar state/mood update from real events. Override the bridge URL with
+`VITE_MIRA_WS_URL`.
 
 ## What's here (v1)
 - `src/avatarState.js` — canonical avatar states + moods (the brain↔UI contract).
 - `src/Avatar.jsx` — placeholder face that renders the current state/mood.
-- `src/App.jsx` — demo harness to drive states by hand (real Gemini Live voice
-  events replace the buttons next).
+- `src/audio.js` — mic capture (→16kHz PCM16) + gapless 24kHz playback.
+- `src/useMiraVoice.js` — WebSocket client for the bridge; surfaces state/mood/captions.
+- `src/App.jsx` — Talk-to-Mira UI wired to the live voice bridge.
+- `public/mic-processor.js` — AudioWorklet that forwards mic frames.
+
+Bridge: `prototype/live_server.py` (Gemini Live ⇆ browser).
 
 ## Next steps
-1. Wire Gemini Live voice in-browser → set `state`/`mood` from real events.
-2. Swap placeholder for real character art (gated on the P2-1 "look").
-3. Upgrade placeholder → Rive state machine (same inputs).
+1. Swap placeholder for real character art (gated on the P2-1 "look").
+2. Upgrade placeholder → Rive state machine (same inputs).
+3. Lip-sync the avatar to Mira's audio amplitude.

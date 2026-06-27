@@ -1,22 +1,11 @@
-import { useState } from "react";
 import Avatar from "./Avatar.jsx";
-import { AvatarState, Mood } from "./avatarState.js";
+import { useMiraVoice } from "./useMiraVoice.js";
 
-// Web shell (P2-3). For now this is a DEMO harness that lets us drive the avatar
-// states by hand, proving the brain→avatar seam. Next step: replace the buttons with
-// real Gemini Live voice events that set `state`/`mood` automatically.
+// Web shell (P2-3) wired to the live voice bridge (P2-2).
+// Press "Talk to Mira" → mic streams to prototype/live_server.py → Gemini Live →
+// Mira's audio plays back and the avatar state/mood update from real events.
 export default function App() {
-  const [state, setState] = useState(AvatarState.IDLE);
-  const [mood, setMood] = useState(Mood.NEUTRAL);
-
-  // Simulate a full turn: thinking → talking → reacting → idle.
-  function simulateTurn(turnMood) {
-    setMood(turnMood);
-    setState(AvatarState.THINKING);
-    setTimeout(() => setState(AvatarState.TALKING), 700);
-    setTimeout(() => setState(AvatarState.REACTING), 2600);
-    setTimeout(() => setState(AvatarState.IDLE), 4200);
-  }
+  const { connected, state, mood, captions, error, start, stop } = useMiraVoice();
 
   return (
     <div className="app">
@@ -27,25 +16,31 @@ export default function App() {
 
       <Avatar state={state} mood={mood} />
 
+      <div className="captions">
+        {captions.you && <p className="cap you">{captions.you}</p>}
+        {captions.mira && <p className="cap mira">{captions.mira}</p>}
+      </div>
+
       <div className="controls">
+        {!connected ? (
+          <button className="primary" onClick={start}>
+            🎙️ Talk to Mira
+          </button>
+        ) : (
+          <button className="primary stop" onClick={stop}>
+            ⏹ End conversation
+          </button>
+        )}
+        {error && <p className="error">{error}</p>}
         <p className="controls-hint">
-          Demo harness — drive the avatar states (real voice wiring is next):
+          Needs the voice bridge running:{" "}
+          <code>.venv/bin/python prototype/live_server.py</code>
         </p>
-        <div className="btn-row">
-          <button onClick={() => simulateTurn(Mood.NEUTRAL)}>Ask Mira</button>
-          <button onClick={() => simulateTurn(Mood.EXCITED)}>Excited turn</button>
-          <button onClick={() => simulateTurn(Mood.LOW)}>Tough-day turn</button>
-        </div>
-        <div className="btn-row subtle">
-          <button onClick={() => setState(AvatarState.IDLE)}>idle</button>
-          <button onClick={() => setState(AvatarState.THINKING)}>thinking</button>
-          <button onClick={() => setState(AvatarState.TALKING)}>talking</button>
-          <button onClick={() => setState(AvatarState.REACTING)}>reacting</button>
-        </div>
       </div>
 
       <footer className="app-footer">
-        state: <code>{state}</code> · mood: <code>{mood}</code>
+        state: <code>{state}</code> · mood: <code>{mood}</code> ·{" "}
+        {connected ? "live" : "offline"}
       </footer>
     </div>
   );

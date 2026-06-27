@@ -109,6 +109,19 @@ body {
 .btn-row.subtle { margin-top: 0.6rem; }
 .btn-row.subtle button { font-size: 0.78rem; opacity: 0.7; padding: 0.35rem 0.7rem; }
 
+/* --- Captions + live controls --- */
+.captions { min-height: 3.2em; max-width: 420px; text-align: center; }
+.cap { margin: 0.15rem 0; font-size: 0.95rem; }
+.cap.you { opacity: 0.6; }
+.cap.mira { color: var(--accent); font-weight: 600; }
+
+button.primary { font-size: 1.05rem; padding: 0.75rem 1.6rem; }
+button.primary.stop { background: #b08; filter: none; }
+.error { color: #b04; font-size: 0.85rem; margin-top: 0.5rem; }
+.controls-hint code,
+.app-footer code { background: rgba(0,0,0,0.05); padding: 0.1rem 0.35rem; border-radius: 6px; }
+
+
 button {
   border: none;
   background: var(--accent);
