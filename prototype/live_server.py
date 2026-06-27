@@ -131,100 +131,139 @@ async def _send_json(ws, **payload) -> None:
 
 
 async def handle(ws) -> None:
-    """One browser connection ⇆ one Gemini Live session."""
+    """One browser connection ⇆ a Gemini Live session that auto-reconnects on drop.
+
+    Gemini Live closes the socket on its own session limits (e.g. code 1008). We keep
+    the SAME browser connection + session_id and transparently reopen a fresh Live
+    session, nudging the avatar to `thinking` while we do. (Note: Live context resets
+    on reconnect — the shopper just keeps talking; cross-turn memory lands in Phase 4.)
+    """
     print(f"  ▸ browser connected ({ws.remote_address})")
     client, config, types = _build()
     session_id = events.new_session_id()
+    current = {"session": None}  # the live session pump_mic forwards audio into
+    stop = asyncio.Event()       # set when the browser disconnects
+
+    async def pump_mic() -> None:
+        """Browser mic PCM → whatever Live session is currently open."""
+        try:
+            async for msg in ws:
+                if isinstance(msg, bytes):
+                    sess = current["session"]
+                    if sess is not None:
+                        try:
+                            await sess.send_realtime_input(
+                                audio=types.Blob(data=msg, mime_type="audio/pcm;rate=16000")
+                            )
+                        except Exception:
+                            pass  # mid-reconnect — drop this frame, mic keeps flowing
+                else:
+                    data = json.loads(msg)
+                    if data.get("type") == "reset":
+                        sess = current["session"]
+                        if sess is not None:
+                            await sess.send_client_content(turns=None, turn_complete=True)
+                    elif data.get("type") == "would_buy":
+                        pid = data.get("product_id", "")
+                        prod = _BY_ID.get(pid, {})
+                        events.log_would_buy(
+                            pid, session_id=session_id,
+                            product_name=prod.get("name"),
+                        )
+                        print(f"  ♥ would-buy: {prod.get('name', pid)}")
+                    elif data.get("type") == "buy_click":
+                        pid = data.get("product_id", "")
+                        prod = _BY_ID.get(pid, {})
+                        events.log_event(
+                            "buy_click", session_id=session_id,
+                            product_id=pid, product_name=prod.get("name"),
+                        )
+                        print(f"  buy-click -> retailer: {prod.get('name', pid)}")
+        finally:
+            stop.set()  # browser closed → tear the whole conversation down
+
+    async def pump_mira(session) -> None:
+        """Gemini audio + transcripts → browser. Returns/raises when the session ends."""
+        talking = False
+        mood = "neutral"
+        said: list[str] = []
+        async for resp in session.receive():
+            sc = resp.server_content
+            # barge-in: server VAD heard the user over Mira.
+            if sc and sc.interrupted:
+                talking = False
+                said.clear()
+                await _send_json(ws, type="interrupted")
+                await _send_json(ws, type="state", state="thinking", mood=mood)
+                continue
+            # user started speaking → Mira is listening/thinking.
+            if sc and sc.input_transcription and sc.input_transcription.text:
+                await _send_json(
+                    ws, type="transcript", who="you",
+                    text=sc.input_transcription.text,
+                )
+                if not talking:
+                    await _send_json(ws, type="state", state="thinking", mood=mood)
+            # first audio chunk of a reply → talking.
+            if resp.data:
+                if not talking:
+                    talking = True
+                    await _send_json(ws, type="state", state="talking", mood=mood)
+                await ws.send(resp.data)
+            # Mira's words → caption + mood read.
+            if sc and sc.output_transcription and sc.output_transcription.text:
+                chunk = sc.output_transcription.text
+                said.append(chunk)
+                mood = _mood_of("".join(said))
+                await _send_json(ws, type="transcript", who="mira", text=chunk)
+            # turn done → brief react, then back to idle.
+            if sc and sc.turn_complete:
+                full = "".join(said)
+                products = _match_products(full)
+                if products:
+                    await _send_json(ws, type="products", items=products)
+                await _send_json(ws, type="state", state="reacting", mood=mood)
+                await asyncio.sleep(0.9)
+                await _send_json(ws, type="state", state="idle", mood="neutral")
+                talking = False
+                said.clear()
+                mood = "neutral"
+
+    async def run_live() -> None:
+        """Open Live sessions, reconnecting with backoff until the browser leaves."""
+        backoff = 0.5
+        first = True
+        while not stop.is_set():
+            try:
+                async with client.aio.live.connect(model=_MODEL, config=config) as session:
+                    current["session"] = session
+                    backoff = 0.5
+                    if not first:
+                        print("  ↻ Live session reconnected")
+                    first = False
+                    await _send_json(ws, type="state", state="idle", mood="neutral")
+                    await pump_mira(session)  # runs until the session ends/drops
+            except websockets.ConnectionClosed:
+                break  # browser gone
+            except Exception as exc:
+                print(f"  ! Live session dropped ({exc}) — reconnecting")
+            finally:
+                current["session"] = None
+            if stop.is_set():
+                break
+            try:  # reassure the UI while we reopen
+                await _send_json(ws, type="state", state="thinking", mood="neutral")
+            except Exception:
+                break
+            await asyncio.sleep(backoff)
+            backoff = min(backoff * 2, 4.0)
 
     try:
-        async with client.aio.live.connect(model=_MODEL, config=config) as session:
-            await _send_json(ws, type="state", state="idle", mood="neutral")
-
-            async def pump_mic() -> None:
-                """Browser mic PCM → Gemini realtime input."""
-                async for msg in ws:
-                    if isinstance(msg, bytes):
-                        await session.send_realtime_input(
-                            audio=types.Blob(data=msg, mime_type="audio/pcm;rate=16000")
-                        )
-                    else:
-                        data = json.loads(msg)
-                        if data.get("type") == "reset":
-                            await session.send_client_content(turns=None, turn_complete=True)
-                        elif data.get("type") == "would_buy":
-                            pid = data.get("product_id", "")
-                            prod = _BY_ID.get(pid, {})
-                            events.log_would_buy(
-                                pid, session_id=session_id,
-                                product_name=prod.get("name"),
-                            )
-                            print(f"  ♥ would-buy: {prod.get('name', pid)}")
-                        elif data.get("type") == "buy_click":
-                            pid = data.get("product_id", "")
-                            prod = _BY_ID.get(pid, {})
-                            events.log_event(
-                                "buy_click", session_id=session_id,
-                                product_id=pid, product_name=prod.get("name"),
-                            )
-                            print(f"  buy-click -> retailer: {prod.get('name', pid)}")
-
-            async def pump_mira() -> None:
-                """Gemini audio + transcripts → browser, with avatar-state events."""
-                talking = False
-                mood = "neutral"
-                said: list[str] = []
-                while True:
-                    async for resp in session.receive():
-                        sc = resp.server_content
-                        # barge-in: server VAD heard the user over Mira.
-                        if sc and sc.interrupted:
-                            talking = False
-                            said.clear()
-                            await _send_json(ws, type="interrupted")
-                            await _send_json(ws, type="state", state="thinking", mood=mood)
-                            continue
-                        # user started speaking → Mira is listening/thinking.
-                        if sc and sc.input_transcription and sc.input_transcription.text:
-                            await _send_json(
-                                ws, type="transcript", who="you",
-                                text=sc.input_transcription.text,
-                            )
-                            if not talking:
-                                await _send_json(ws, type="state", state="thinking", mood=mood)
-                        # first audio chunk of a reply → talking.
-                        if resp.data:
-                            if not talking:
-                                talking = True
-                                await _send_json(ws, type="state", state="talking", mood=mood)
-                            await ws.send(resp.data)
-                        # Mira's words → caption + mood read.
-                        if sc and sc.output_transcription and sc.output_transcription.text:
-                            chunk = sc.output_transcription.text
-                            said.append(chunk)
-                            mood = _mood_of("".join(said))
-                            await _send_json(ws, type="transcript", who="mira", text=chunk)
-                        # turn done → brief react, then back to idle.
-                        if sc and sc.turn_complete:
-                            full = "".join(said)
-                            products = _match_products(full)
-                            if products:
-                                await _send_json(ws, type="products", items=products)
-                            await _send_json(ws, type="state", state="reacting", mood=mood)
-                            await asyncio.sleep(0.9)
-                            await _send_json(ws, type="state", state="idle", mood="neutral")
-                            talking = False
-                            said.clear()
-                            mood = "neutral"
-
-            await asyncio.gather(pump_mic(), pump_mira())
+        await asyncio.gather(pump_mic(), run_live())
     except websockets.ConnectionClosed:
+        pass
+    finally:
         print("  ▸ browser disconnected")
-    except Exception as exc:  # keep the server alive across session errors
-        print(f"  ! session error: {exc}")
-        try:
-            await _send_json(ws, type="error", message=str(exc))
-        except Exception:
-            pass
 
 
 async def main() -> None:
