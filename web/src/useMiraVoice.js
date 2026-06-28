@@ -2,7 +2,27 @@ import { useCallback, useRef, useState } from "react";
 import { MicCapture, PcmPlayer } from "./audio.js";
 import { AvatarState, Mood } from "./avatarState.js";
 
-const WS_URL = import.meta.env.VITE_MIRA_WS_URL || "ws://localhost:8765";
+// Resolve the voice-bridge WebSocket URL.
+//   1. Explicit override always wins:        VITE_MIRA_WS_URL
+//   2. GitHub Codespaces: the web app is served from https://<name>-5173.app.github.dev
+//      and the bridge is forwarded at        https://<name>-8765.app.github.dev
+//      so derive it by swapping the port segment and using wss:// (no Zscaler in the
+//      cloud → Gemini Live works; the office browser only talks to *.app.github.dev).
+//   3. Local dev fallback.
+function resolveWsUrl() {
+  const override = import.meta.env.VITE_MIRA_WS_URL;
+  if (override) return override;
+  if (typeof window !== "undefined") {
+    const { host, protocol } = window.location;
+    const m = host.match(/^(.*)-(\d+)\.app\.github\.dev$/);
+    if (m) return `wss://${m[1]}-8765.app.github.dev`;
+    // Same-origin reverse-proxy style (https → wss) if not localhost.
+    if (protocol === "https:") return `wss://${host.replace(/-\d+\./, "-8765.")}`;
+  }
+  return "ws://localhost:8765";
+}
+
+const WS_URL = resolveWsUrl();
 
 // Connects the browser to the Mira voice bridge (prototype/live_server.py):
 // streams mic up, plays Mira's audio down, and surfaces avatar state/mood + captions.

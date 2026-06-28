@@ -1,0 +1,19 @@
+{
+  "name": "ai-stylist (Mira)",
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "features": {
+    "ghcr.io/devcontainers/features/python:1": { "version": "3.12" },
+    "ghcr.io/devcontainers/features/node:1": { "version": "20" }
+  },
+  "forwardPorts": [5173, 8765],
+  "portsAttributes": {
+    "5173": { "label": "Mira web (UI)", "onAutoForward": "openPreview" },
+    "8765": { "label": "Mira voice bridge (wss)", "visibility": "public" }
+  },
+  "postCreateCommand": "python3 -m venv .venv && .venv/bin/pip install -r prototype/requirements.txt && (cd web && npm install)",
+  "customizations": {
+    "vscode": {
+      "extensions": ["ms-python.python", "dbaeumer.vscode-eslint"]
+    }
+  }
+}
