@@ -4,20 +4,18 @@ import { AvatarState, Mood } from "./avatarState.js";
 
 // Resolve the voice-bridge WebSocket URL.
 //   1. Explicit override always wins:        VITE_MIRA_WS_URL
-//   2. GitHub Codespaces: the web app is served from https://<name>-5173.app.github.dev
-//      and the bridge is forwarded at        https://<name>-8765.app.github.dev
-//      so derive it by swapping the port segment and using wss:// (no Zscaler in the
-//      cloud → Gemini Live works; the office browser only talks to *.app.github.dev).
-//   3. Local dev fallback.
+//   2. Otherwise connect SAME-ORIGIN at /mira-ws, which Vite proxies to the Python
+//      bridge (see vite.config.js). This is the only reliable path in GitHub
+//      Codespaces: a separate forwarded port lives on a different *.app.github.dev
+//      subdomain whose tunnel relay rejects cross-origin WS upgrades (HTTP 426).
+//      Same-origin avoids that and works identically in local dev.
 function resolveWsUrl() {
   const override = import.meta.env.VITE_MIRA_WS_URL;
   if (override) return override;
   if (typeof window !== "undefined") {
     const { host, protocol } = window.location;
-    const m = host.match(/^(.*)-(\d+)\.app\.github\.dev$/);
-    if (m) return `wss://${m[1]}-8765.app.github.dev`;
-    // Same-origin reverse-proxy style (https → wss) if not localhost.
-    if (protocol === "https:") return `wss://${host.replace(/-\d+\./, "-8765.")}`;
+    const wsProto = protocol === "https:" ? "wss:" : "ws:";
+    return `${wsProto}//${host}/mira-ws`;
   }
   return "ws://localhost:8765";
 }
@@ -34,6 +32,8 @@ export function useMiraVoice() {
   const [products, setProducts] = useState([]);
   const [loved, setLoved] = useState(() => new Set());
   const [error, setError] = useState(null);
+  // HeyGen voices Mira: each finished turn's full text is pushed here so the avatar speaks it.
+  const [miraText, setMiraText] = useState(null);
 
   const wsRef = useRef(null);
   const micRef = useRef(null);
@@ -92,8 +92,7 @@ export function useMiraVoice() {
 
       ws.onmessage = (e) => {
         if (e.data instanceof ArrayBuffer) {
-          player.push(e.data);
-          return;
+          return; // HeyGen voices Mira now — no Gemini PCM to play.
         }
         const msg = JSON.parse(e.data);
         switch (msg.type) {
@@ -104,6 +103,10 @@ export function useMiraVoice() {
           case "transcript":
             setCaptions((c) => ({ ...c, [msg.who]: msg.text }));
             break;
+          case "mira_text":
+            // Full turn text → HeyGen avatar speaks it.
+            setMiraText({ text: msg.text, at: Date.now() });
+            break;
           case "products":
             // Merge new recommendations, keeping any already on screen.
             setProducts((prev) => {
@@ -112,7 +115,6 @@ export function useMiraVoice() {
             });
             break;
           case "interrupted":
-            player.flush();
             break;
           case "error":
             setError(msg.message);
@@ -127,5 +129,5 @@ export function useMiraVoice() {
     }
   }, [stop]);
 
-  return { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy, getLevel, buyClick };
+  return { connected, state, mood, captions, products, loved, error, miraText, start, stop, wouldBuy, getLevel, buyClick };
 }

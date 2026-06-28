@@ -38,6 +38,20 @@ body {
   gap: 0.75rem;
 }
 
+.mira-rive {
+  width: 280px;
+  height: 280px;
+}
+
+.mira-video {
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  object-fit: cover;
+  box-shadow: var(--shadow);
+  background: var(--warm-card);
+}
+
 .mira-face {
   width: 200px;
   height: 200px;

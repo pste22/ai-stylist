@@ -26,6 +26,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 
 from dotenv import load_dotenv
 
@@ -50,6 +51,35 @@ _BY_ID = {p["id"]: p for p in _CATALOG}
 def full_grounding_prompt() -> str:
     """Persona + the active source's catalog as one grounding block."""
     return f"{SYSTEM_PROMPT}\n\nPRODUCTS you may recommend:\n{_SOURCE.render(_CATALOG)}"
+
+
+# Per-product "signature" tokens for spoken-name matching (see _match_products): the
+# words in a product's name/color that are UNIQUE to it across the catalog. Generic
+# fashion words shared by several items (e.g. "sneakers", "slip-on") are dropped so they
+# can't cause false matches; brand/model/color words (e.g. "reebok", "bruno") remain.
+def _build_distinctive() -> dict[str, set[str]]:
+    def toks(s: str) -> set[str]:
+        return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) > 2}
+
+    name_tokens = {p["id"]: toks(p["name"]) | toks(p.get("color", "")) for p in _CATALOG}
+    df: dict[str, int] = {}
+    for t in name_tokens.values():
+        for w in t:
+            df[w] = df.get(w, 0) + 1
+    return {pid: {w for w in t if df[w] == 1} for pid, t in name_tokens.items()}
+
+
+_DISTINCTIVE = _build_distinctive()
+
+# Generic descriptor words that can appear in product names but ALSO show up in ordinary
+# speech ("walking around", "casual day dress"). On their own they must NOT trigger a
+# product card — only a brand/model word, or two such descriptors together, counts.
+_GENERIC_TOKENS = {
+    "sneakers", "shoes", "shoe", "slip", "slipon", "casual", "walking", "running",
+    "lightweight", "comfort", "athletic", "sporty", "minimal", "everyday", "dress",
+    "top", "tops", "jacket", "coat", "jeans", "pants", "boots", "black", "white",
+    "gray", "grey", "navy", "blue", "red", "green", "brown", "tan", "beige",
+}
 
 # Affiliate handoff (Phase 3): we NEVER sell or ship — "Buy" deep-links to a retailer
 # who fulfils, and we earn a disclosed commission (docs/10-sourcing-strategy.md).
@@ -86,26 +116,43 @@ def _mood_of(text: str) -> str:
 def _match_products(transcript: str) -> list[dict]:
     """Find catalog items Mira named in this turn, so the UI can show cards.
 
-    Name-substring match keeps it honest: we only surface what she actually said,
-    in spoken order, de-duplicated. Phase 3 swaps this for structured tool calls.
+    In speech Mira paraphrases names ("the Reebok ones", "Bruno Marc slip-ons"), so a
+    full-name substring match misses almost everything. Instead we match on each
+    product's DISTINCTIVE words — tokens (brand/model/color) that appear in only that
+    product across the catalog — which keeps it honest (we only surface what she
+    actually referenced) without demanding she recite the exact catalog name. Hits are
+    returned in spoken order, de-duplicated. Phase 3 swaps this for structured tool calls.
     """
     low = transcript.lower()
     hits: list[dict] = []
     seen: set[str] = set()
+    # Order products by where Mira first mentions them in the transcript.
+    ordered = []
     for p in _CATALOG:
-        if p["name"].lower() in low and p["id"] not in seen:
-            seen.add(p["id"])
-            hits.append(
-                {
-                    "id": p["id"],
-                    "name": p["name"],
-                    "category": p["category"],
-                    "color": p["color"],
-                    "price": p["price"],
-                    "image_url": p.get("image_url"),
-                    "affiliate_url": _affiliate_url(p),
-                }
-            )
+        sig = _DISTINCTIVE.get(p["id"], set())
+        present = [w for w in sig if w in low]
+        strong = [w for w in present if w not in _GENERIC_TOKENS]
+        # A brand/model word is enough; generic-only names need two cues to avoid
+        # false positives from ordinary speech ("walking around", "casual dress").
+        if not (strong or len(present) >= 2):
+            continue
+        pos = min(low.find(w) for w in present)
+        ordered.append((pos, p))
+    for _, p in sorted(ordered, key=lambda t: t[0]):
+        if p["id"] in seen:
+            continue
+        seen.add(p["id"])
+        hits.append(
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "category": p["category"],
+                "color": p["color"],
+                "price": p["price"],
+                "image_url": p.get("image_url"),
+                "affiliate_url": _affiliate_url(p),
+            }
+        )
     return hits
 
 
@@ -114,14 +161,22 @@ def _build():
     from google.genai import types
 
     config = types.LiveConnectConfig(
-        response_modalities=["AUDIO"],
+        # HeyGen voices Mira now: Gemini returns TEXT only, the avatar speaks it
+        # (text → HeyGen TTS + lip-sync). We still feed the user's mic up + transcribe it.
+        response_modalities=["TEXT"],
         system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt())]),
         input_audio_transcription=types.AudioTranscriptionConfig(),
-        output_audio_transcription=types.AudioTranscriptionConfig(),
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=_VOICE)
-            )
+        # Ask the server to emit resumption handles so we can reopen a DROPPED Live
+        # session with its conversation context intact (Gemini closes sessions on its
+        # own limits, e.g. 1008). Without this, every reconnect = amnesia — Mira forgets
+        # what the shopper just said (e.g. "sneakers"). The handle is replayed in run_live.
+        session_resumption=types.SessionResumptionConfig(),
+        # Keep long voice chats alive. A continuous audio session fills the context
+        # window fast; once it's full Gemini aborts the socket (1008 "operation was
+        # aborted") — the frequent mid-conversation drops we saw. A sliding-window
+        # compression lets the session run indefinitely instead of being cut off.
+        context_window_compression=types.ContextWindowCompressionConfig(
+            sliding_window=types.SlidingWindow(),
         ),
     )
     api_key = os.environ.get("GEMINI_API_KEY")
@@ -147,6 +202,7 @@ async def handle(ws) -> None:
     client, config, types = _build()
     session_id = events.new_session_id()
     current = {"session": None}  # the live session pump_mic forwards audio into
+    resume = {"handle": None}    # latest Gemini resumption handle (preserves context)
     stop = asyncio.Event()       # set when the browser disconnects
 
     async def pump_mic() -> None:
@@ -188,51 +244,80 @@ async def handle(ws) -> None:
             stop.set()  # browser closed → tear the whole conversation down
 
     async def pump_mira(session) -> None:
-        """Gemini audio + transcripts → browser. Returns/raises when the session ends."""
-        talking = False
+        """Gemini audio + transcripts → browser, ACROSS many turns on ONE session.
+
+        Critical: `session.receive()` yields one turn's worth of messages and then ends.
+        We must loop and call it again on the SAME open session for the next turn — if
+        we let the session close after a turn and reopen a fresh one, Gemini loses all
+        context and the shopper has to repeat themselves. We only return (→ reconnect)
+        when receive() ends WITHOUT a turn_complete, i.e. the session genuinely closed.
+        """
         mood = "neutral"
-        said: list[str] = []
-        async for resp in session.receive():
-            sc = resp.server_content
-            # barge-in: server VAD heard the user over Mira.
-            if sc and sc.interrupted:
-                talking = False
-                said.clear()
-                await _send_json(ws, type="interrupted")
-                await _send_json(ws, type="state", state="thinking", mood=mood)
-                continue
-            # user started speaking → Mira is listening/thinking.
-            if sc and sc.input_transcription and sc.input_transcription.text:
-                await _send_json(
-                    ws, type="transcript", who="you",
-                    text=sc.input_transcription.text,
-                )
-                if not talking:
+        while not stop.is_set():
+            talking = False
+            said: list[str] = []
+            sent_ids: set[str] = set()  # product cards already pushed THIS turn
+            turn_ended = False
+            async for resp in session.receive():
+                # Stash the newest resumption handle so a reconnect keeps the conversation.
+                update = resp.session_resumption_update
+                if update and update.resumable and update.new_handle:
+                    resume["handle"] = update.new_handle
+                sc = resp.server_content
+                # barge-in: server VAD heard the user over Mira.
+                if sc and sc.interrupted:
+                    talking = False
+                    said.clear()
+                    sent_ids.clear()
+                    await _send_json(ws, type="interrupted")
                     await _send_json(ws, type="state", state="thinking", mood=mood)
-            # first audio chunk of a reply → talking.
-            if resp.data:
-                if not talking:
-                    talking = True
-                    await _send_json(ws, type="state", state="talking", mood=mood)
-                await ws.send(resp.data)
-            # Mira's words → caption + mood read.
-            if sc and sc.output_transcription and sc.output_transcription.text:
-                chunk = sc.output_transcription.text
-                said.append(chunk)
-                mood = _mood_of("".join(said))
-                await _send_json(ws, type="transcript", who="mira", text=chunk)
-            # turn done → brief react, then back to idle.
-            if sc and sc.turn_complete:
-                full = "".join(said)
-                products = _match_products(full)
-                if products:
-                    await _send_json(ws, type="products", items=products)
-                await _send_json(ws, type="state", state="reacting", mood=mood)
-                await asyncio.sleep(0.9)
-                await _send_json(ws, type="state", state="idle", mood="neutral")
-                talking = False
-                said.clear()
-                mood = "neutral"
+                    continue
+                # user started speaking → Mira is listening/thinking.
+                if sc and sc.input_transcription and sc.input_transcription.text:
+                    await _send_json(
+                        ws, type="transcript", who="you",
+                        text=sc.input_transcription.text,
+                    )
+                    if not talking:
+                        await _send_json(ws, type="state", state="thinking", mood=mood)
+                # Mira's words → caption + mood read (TEXT modality streams reply parts).
+                chunk = ""
+                if resp.text:
+                    chunk = resp.text
+                elif sc and sc.output_transcription and sc.output_transcription.text:
+                    chunk = sc.output_transcription.text
+                if chunk:
+                    if not talking:
+                        talking = True
+                        await _send_json(ws, type="state", state="talking", mood=mood)
+                    said.append(chunk)
+                    mood = _mood_of("".join(said))
+                    await _send_json(ws, type="transcript", who="mira", text=chunk)
+                    # Push each product card the MOMENT she names it, so the screen keeps
+                    # pace with her voice instead of all options appearing at the end.
+                    fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
+                    if fresh:
+                        for p in fresh:
+                            sent_ids.add(p["id"])
+                        await _send_json(ws, type="products", items=fresh)
+                # turn done → brief react, then back to idle. Break to await the NEXT
+                # turn on this same session (keeps context alive).
+                if sc and sc.turn_complete:
+                    fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
+                    if fresh:
+                        await _send_json(ws, type="products", items=fresh)
+                    # Full turn text → browser tells HeyGen to speak it.
+                    full = "".join(said).strip()
+                    if full:
+                        await _send_json(ws, type="mira_text", text=full)
+                    await _send_json(ws, type="state", state="reacting", mood=mood)
+                    await asyncio.sleep(0.9)
+                    await _send_json(ws, type="state", state="idle", mood="neutral")
+                    mood = "neutral"
+                    turn_ended = True
+                    break
+            if not turn_ended:
+                return  # receive() ended without a turn → session really closed; reconnect
 
     async def run_live() -> None:
         """Open Live sessions, reconnecting with backoff until the browser leaves."""
@@ -240,6 +325,11 @@ async def handle(ws) -> None:
         first = True
         while not stop.is_set():
             try:
+                # Replay the latest handle so the reopened session resumes context.
+                config.session_resumption = types.SessionResumptionConfig(
+                    handle=resume["handle"]
+                )
+                t0 = asyncio.get_event_loop().time()
                 async with client.aio.live.connect(model=_MODEL, config=config) as session:
                     current["session"] = session
                     backoff = 0.5
@@ -248,10 +338,13 @@ async def handle(ws) -> None:
                     first = False
                     await _send_json(ws, type="state", state="idle", mood="neutral")
                     await pump_mira(session)  # runs until the session ends/drops
+                # Clean end (no exception): the server closed the stream itself.
+                print(f"  · Live session ended cleanly after {asyncio.get_event_loop().time() - t0:.1f}s")
             except websockets.ConnectionClosed:
                 break  # browser gone
             except Exception as exc:
-                print(f"  ! Live session dropped ({exc}) — reconnecting")
+                dur = asyncio.get_event_loop().time() - t0
+                print(f"  ! Live session dropped after {dur:.1f}s ({exc}) — reconnecting")
             finally:
                 current["session"] = None
             if stop.is_set():
@@ -271,10 +364,42 @@ async def handle(ws) -> None:
         print("  ▸ browser disconnected")
 
 
+def _mint_heygen_token() -> str:
+    """Server-side mint a short-lived HeyGen streaming token so the API key never
+    reaches the browser. The browser fetches this via /heygen-token (Vite-proxied)."""
+    import urllib.request
+
+    key = os.environ.get("HEYGEN_API_KEY")
+    if not key:
+        raise RuntimeError("HEYGEN_API_KEY missing — add it to prototype/.env")
+    req = urllib.request.Request(
+        "https://api.heygen.com/v1/streaming.create_token",
+        method="POST",
+        headers={"x-api-key": key, "content-type": "application/json"},
+        data=b"{}",
+    )
+    with urllib.request.urlopen(req, timeout=10) as r:
+        return json.loads(r.read())["data"]["token"]
+
+
+async def process_request(connection, request):
+    """Serve the HeyGen token over plain HTTP; everything else upgrades to WS."""
+    if request.path.rstrip("/") == "/heygen-token":
+        try:
+            token = await asyncio.to_thread(_mint_heygen_token)
+            resp = connection.respond(200, json.dumps({"token": token}))
+            resp.headers["Content-Type"] = "application/json"
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            return resp
+        except Exception as exc:
+            return connection.respond(500, json.dumps({"error": str(exc)}))
+    return None
+
+
 async def main() -> None:
     print(f"  Mira voice bridge → ws://{_HOST}:{_PORT}")
-    print(f"  model={_MODEL}  voice={_VOICE}")
-    async with serve(handle, _HOST, _PORT, max_size=None):
+    print(f"  model={_MODEL}  (HeyGen voices Mira)")
+    async with serve(handle, _HOST, _PORT, max_size=None, process_request=process_request):
         await asyncio.Future()  # run forever
 
 

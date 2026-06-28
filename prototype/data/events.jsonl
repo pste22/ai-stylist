@@ -1,0 +1,5 @@
+{"ts": "2026-06-28T21:48:22.116016+00:00", "session_id": "62fd63c557fe4616b96f0ef67f6718f7", "event": "would_buy", "product_id": "B0G57B4YP4", "product_name": "Reebok Swiftstrike Running Shoes"}
+{"ts": "2026-06-28T21:50:02.724284+00:00", "session_id": "62fd63c557fe4616b96f0ef67f6718f7", "event": "buy_click", "product_id": "B0G57B4YP4", "product_name": "Reebok Swiftstrike Running Shoes"}
+{"ts": "2026-06-28T22:25:56.955367+00:00", "session_id": "587b9ee5345b46449637dd5044a9c599", "event": "would_buy", "product_id": "B0983R63Z8", "product_name": "Slip-On Lightweight Walking Sneakers"}
+{"ts": "2026-06-28T22:25:57.905499+00:00", "session_id": "587b9ee5345b46449637dd5044a9c599", "event": "would_buy", "product_id": "B0DPWQDRJT", "product_name": "Bruno Marc Slip-On Casual Sneakers"}
+{"ts": "2026-06-28T22:25:58.770368+00:00", "session_id": "587b9ee5345b46449637dd5044a9c599", "event": "would_buy", "product_id": "B0G57B4YP4", "product_name": "Reebok Swiftstrike Running Shoes"}

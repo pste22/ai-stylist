@@ -12,5 +12,22 @@ export default defineConfig({
     host: true,
     open: !process.env.CODESPACES,
     allowedHosts: [".app.github.dev"],
+    // Proxy the voice bridge so the browser connects SAME-ORIGIN (wss://<5173 host>/mira-ws).
+    // In Codespaces a separate forwarded port lives on a different *.app.github.dev
+    // subdomain whose tunnel relay rejects cross-origin WS upgrades (HTTP 426 + auth
+    // cookie). Same-origin proxying sidesteps that entirely; works locally too.
+    proxy: {
+      "/mira-ws": {
+        target: process.env.VITE_MIRA_WS_TARGET || "ws://localhost:8765",
+        ws: true,
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/mira-ws/, ""),
+      },
+      // HeyGen session token is minted server-side (key never hits the browser).
+      "/heygen-token": {
+        target: process.env.VITE_MIRA_WS_TARGET?.replace(/^ws/, "http") || "http://localhost:8765",
+        changeOrigin: true,
+      },
+    },
   },
 });
