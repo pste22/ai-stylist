@@ -30,7 +30,9 @@ import re
 
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load THIS package's .env (prototype/.env) regardless of the process CWD, so keys are
+# found whether the bridge is launched from the repo root or from prototype/.
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
 
 import websockets
 from websockets.asyncio.server import serve
@@ -161,11 +163,19 @@ def _build():
     from google.genai import types
 
     config = types.LiveConnectConfig(
-        # HeyGen voices Mira now: Gemini returns TEXT only, the avatar speaks it
-        # (text → HeyGen TTS + lip-sync). We still feed the user's mic up + transcribe it.
-        response_modalities=["TEXT"],
+        # This model is audio-only (TEXT modality → 1007). We keep AUDIO out but DON'T
+        # play it — instead we read Mira's words off output_transcription and forward the
+        # full turn text to the browser, which tells LiveAvatar to speak it (LITE mode,
+        # session.repeat(text)). LiveAvatar's avatar voice does the TTS + lip-sync.
+        response_modalities=["AUDIO"],
         system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt())]),
         input_audio_transcription=types.AudioTranscriptionConfig(),
+        output_audio_transcription=types.AudioTranscriptionConfig(),
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=_VOICE)
+            )
+        ),
         # Ask the server to emit resumption handles so we can reopen a DROPPED Live
         # session with its conversation context intact (Gemini closes sessions on its
         # own limits, e.g. 1008). Without this, every reconnect = amnesia — Mira forgets
@@ -280,7 +290,7 @@ async def handle(ws) -> None:
                     )
                     if not talking:
                         await _send_json(ws, type="state", state="thinking", mood=mood)
-                # Mira's words → caption + mood read (TEXT modality streams reply parts).
+                # Mira's words → caption + mood read (read off output transcription).
                 chunk = ""
                 if resp.text:
                     chunk = resp.text
@@ -306,7 +316,7 @@ async def handle(ws) -> None:
                     fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
                     if fresh:
                         await _send_json(ws, type="products", items=fresh)
-                    # Full turn text → browser tells HeyGen to speak it.
+                    # Full turn text → browser tells LiveAvatar to speak it.
                     full = "".join(said).strip()
                     if full:
                         await _send_json(ws, type="mira_text", text=full)
@@ -364,30 +374,47 @@ async def handle(ws) -> None:
         print("  ▸ browser disconnected")
 
 
-def _mint_heygen_token() -> str:
-    """Server-side mint a short-lived HeyGen streaming token so the API key never
-    reaches the browser. The browser fetches this via /heygen-token (Vite-proxied)."""
+def _mint_avatar_token() -> dict:
+    """Server-side mint a LiveAvatar LITE session token so the API key never reaches
+    the browser. LITE mode = we bring the brain (Gemini) and just tell the avatar what
+    to say (session.repeat(text)); LiveAvatar renders the synchronized video.
+    The browser fetches this via /avatar-token (Vite-proxied)."""
     import urllib.request
 
-    key = os.environ.get("HEYGEN_API_KEY")
+    key = os.environ.get("HEYGEN_API_KEY") or os.environ.get("LIVEAVATAR_API_KEY")
     if not key:
-        raise RuntimeError("HEYGEN_API_KEY missing — add it to prototype/.env")
-    req = urllib.request.Request(
-        "https://api.heygen.com/v1/streaming.create_token",
-        method="POST",
-        headers={"x-api-key": key, "content-type": "application/json"},
-        data=b"{}",
+        raise RuntimeError("LiveAvatar API key missing — add HEYGEN_API_KEY to prototype/.env")
+    # Sandbox lets you test the full pipeline WITHOUT consuming credits (sessions auto-end
+    # after ~1 min). Only the Wayne avatar is allowed in sandbox. Set LIVEAVATAR_SANDBOX=1.
+    sandbox = os.environ.get("LIVEAVATAR_SANDBOX", "").lower() in ("1", "true", "yes")
+    avatar_id = os.environ.get(
+        "LIVEAVATAR_AVATAR_ID",
+        "dd73ea75-1218-4ef3-92ce-606d5f7fbc0a" if sandbox else "513fd1b7-7ef9-466d-9af2-344e51eeb833",
     )
-    with urllib.request.urlopen(req, timeout=10) as r:
-        return json.loads(r.read())["data"]["token"]
+    body = json.dumps({"mode": "LITE", "avatar_id": avatar_id, "is_sandbox": sandbox}).encode()
+    req = urllib.request.Request(
+        "https://api.liveavatar.com/v1/sessions/token",
+        method="POST",
+        headers={
+            "X-API-KEY": key,
+            "content-type": "application/json",
+            # Some edges (Cloudflare) 403 the default python-urllib UA.
+            "User-Agent": "mira-bridge/1.0",
+            "Accept": "application/json",
+        },
+        data=body,
+    )
+    with urllib.request.urlopen(req, timeout=15) as r:
+        data = json.loads(r.read()).get("data", {})
+    return {"token": data.get("session_token"), "session_id": data.get("session_id")}
 
 
 async def process_request(connection, request):
-    """Serve the HeyGen token over plain HTTP; everything else upgrades to WS."""
-    if request.path.rstrip("/") == "/heygen-token":
+    """Serve the LiveAvatar session token over plain HTTP; everything else upgrades to WS."""
+    if request.path.rstrip("/") == "/avatar-token":
         try:
-            token = await asyncio.to_thread(_mint_heygen_token)
-            resp = connection.respond(200, json.dumps({"token": token}))
+            payload = await asyncio.to_thread(_mint_avatar_token)
+            resp = connection.respond(200, json.dumps(payload))
             resp.headers["Content-Type"] = "application/json"
             resp.headers["Access-Control-Allow-Origin"] = "*"
             return resp
@@ -398,7 +425,7 @@ async def process_request(connection, request):
 
 async def main() -> None:
     print(f"  Mira voice bridge → ws://{_HOST}:{_PORT}")
-    print(f"  model={_MODEL}  (HeyGen voices Mira)")
+    print(f"  model={_MODEL}  (LiveAvatar renders Mira)")
     async with serve(handle, _HOST, _PORT, max_size=None, process_request=process_request):
         await asyncio.Future()  # run forever
 

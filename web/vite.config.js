@@ -23,8 +23,8 @@ export default defineConfig({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/mira-ws/, ""),
       },
-      // HeyGen session token is minted server-side (key never hits the browser).
-      "/heygen-token": {
+      // LiveAvatar session token is minted server-side (key never hits the browser).
+      "/avatar-token": {
         target: process.env.VITE_MIRA_WS_TARGET?.replace(/^ws/, "http") || "http://localhost:8765",
         changeOrigin: true,
       },

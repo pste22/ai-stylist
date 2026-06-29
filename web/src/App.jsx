@@ -1,4 +1,4 @@
-import HeyGenAvatar from "./HeyGenAvatar.jsx";
+import LiveAvatarFace from "./LiveAvatarFace.jsx";
 import ProductCard from "./ProductCard.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
 
@@ -16,7 +16,7 @@ export default function App() {
         <p className="tagline">your AI stylist — voice-first, character-driven</p>
       </header>
 
-      <HeyGenAvatar state={state} mood={mood} getLevel={getLevel} connected={connected} miraText={miraText} />
+      <LiveAvatarFace state={state} mood={mood} getLevel={getLevel} connected={connected} miraText={miraText} />
 
       <div className="captions">
         {captions.you && <p className="cap you">{captions.you}</p>}
