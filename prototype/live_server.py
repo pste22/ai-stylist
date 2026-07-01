@@ -290,6 +290,13 @@ async def handle(ws) -> None:
                     )
                     if not talking:
                         await _send_json(ws, type="state", state="thinking", mood=mood)
+                # Forward Gemini audio bytes directly to the browser so PcmPlayer
+                # can play them without needing HeyGen credentials.
+                if resp.data:
+                    try:
+                        await ws.send(bytes(resp.data))
+                    except Exception:
+                        pass
                 # Mira's words → caption + mood read (read off output transcription).
                 chunk = ""
                 if resp.text:

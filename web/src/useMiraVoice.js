@@ -92,7 +92,9 @@ export function useMiraVoice() {
 
       ws.onmessage = (e) => {
         if (e.data instanceof ArrayBuffer) {
-          return; // HeyGen voices Mira now — no Gemini PCM to play.
+          // Direct Gemini PCM audio — play it via PcmPlayer for lip-sync.
+          playerRef.current?.push(e.data);
+          return;
         }
         const msg = JSON.parse(e.data);
         switch (msg.type) {

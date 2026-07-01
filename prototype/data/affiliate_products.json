@@ -1,5 +1,77 @@
 [
   {
+    "asin": "B0DY89R56G",
+    "id": "B0DY89R56G",
+    "name": "Women's Casual Midi Dress",
+    "category": "dresses",
+    "color": "black",
+    "price": 39.99,
+    "style": ["casual", "everyday", "chic"],
+    "gender": "women",
+    "image_url": null,
+    "affiliate_url": "https://a.co/d/0gNfHTRE"
+  },
+  {
+    "asin": "B0GQ75JGJT",
+    "id": "B0GQ75JGJT",
+    "name": "AVAMO Women's High-Waist Stretch Jeans",
+    "category": "bottoms",
+    "color": "blue",
+    "price": 34.99,
+    "style": ["casual", "everyday", "comfort"],
+    "gender": "women",
+    "image_url": null,
+    "affiliate_url": "https://amzn.to/4avFktZ"
+  },
+  {
+    "asin": "B0FG3DP8YD",
+    "id": "B0FG3DP8YD",
+    "name": "Women's Flowy Chiffon Blouse",
+    "category": "tops",
+    "color": "black",
+    "price": 27.99,
+    "style": ["casual", "chic", "workwear"],
+    "gender": "women",
+    "image_url": "https://m.media-amazon.com/images/I/5122uRa0LPL._AC_.jpg",
+    "affiliate_url": "https://amzn.to/4492fYj"
+  },
+  {
+    "asin": "B07756DPFY",
+    "id": "B07756DPFY",
+    "name": "Amazon Essentials Men's Slim-Fit Flat-Front Chino Pants",
+    "category": "bottoms",
+    "color": "khaki",
+    "price": 35.90,
+    "style": ["smart casual", "classic", "workwear"],
+    "gender": "men",
+    "image_url": "https://m.media-amazon.com/images/P/B07756DPFY.01._SX500_.jpg",
+    "affiliate_url": "https://amzn.to/4vCcQqJ"
+  },
+  {
+    "asin": "B0CGQQNHXM",
+    "id": "B0CGQQNHXM",
+    "name": "CREATMO US Women's Double-Breasted Trench Coat",
+    "category": "outerwear",
+    "color": "beige",
+    "price": 59.99,
+    "style": ["classic", "chic", "smart casual"],
+    "gender": "women",
+    "image_url": "https://m.media-amazon.com/images/I/31deK0zAm3L._AC_.jpg",
+    "affiliate_url": "https://amzn.to/3SuJiwR"
+  },
+  {
+    "asin": "B08KTZQRC7",
+    "id": "B08KTZQRC7",
+    "name": "Cotton Canvas Tote Bag",
+    "category": "accessories",
+    "color": "natural",
+    "price": 17.99,
+    "style": ["casual", "everyday", "minimal"],
+    "gender": "unisex",
+    "image_url": "https://m.media-amazon.com/images/I/31sSMOIhQwL._AC_.jpg",
+    "affiliate_url": "https://amzn.to/44CvXoO"
+  },
+  {
     "asin": "B0DPWQDRJT",
     "id": "B0DPWQDRJT",
     "name": "Bruno Marc Slip-On Casual Sneakers",
