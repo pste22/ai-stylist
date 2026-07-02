@@ -1,20 +1,52 @@
+import { useState } from "react";
 import RiveAvatar from "./RiveAvatar.jsx";
 import ProductCard from "./ProductCard.jsx";
+import NamePrompt from "./NamePrompt.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
+import { useUserIdentity } from "./useUserIdentity.js";
 
-// Web shell (P2-3) wired to the live voice bridge (P2-2).
-// Press "Talk to Mira" → mic streams to prototype/live_server.py → Gemini Live →
-// Mira's audio plays back and the avatar state/mood update from real events.
 export default function App() {
-  const { connected, state, mood, captions, products, loved, error, start, stop, wouldBuy, getLevel, buyClick } =
-    useMiraVoice();
+  const { userId, userName, setUserName, isNewUser } = useUserIdentity();
+  const { connected, state, mood, captions, products, savedProducts, loved, highlightedId, error, start, stop, wouldBuy, getLevel, buyClick } =
+    useMiraVoice({ userId, userName });
+
+  const [showSaved, setShowSaved] = useState(false);
+
+  if (isNewUser) {
+    return <NamePrompt onSubmit={setUserName} />;
+  }
 
   return (
     <div className="app">
       <header className="app-header">
         <h1>Mira</h1>
-        <p className="tagline">your AI stylist — voice-first, character-driven</p>
+        <p className="tagline">Hi {userName} 👋 — your personal AI stylist</p>
+        {savedProducts.length > 0 && (
+          <button
+            className="saved-toggle"
+            onClick={() => setShowSaved((v) => !v)}
+          >
+            {showSaved ? "Hide saves" : `💜 Saved (${savedProducts.length})`}
+          </button>
+        )}
       </header>
+
+      {showSaved && savedProducts.length > 0 && (
+        <div className="shelf saved-shelf">
+          <p className="shelf-title">💜 Your saved items</p>
+          <div className="grid">
+            {savedProducts.map((p) => (
+              <ProductCard
+                key={p.id}
+                product={p}
+                loved={true}
+                onLove={wouldBuy}
+                onBuy={buyClick}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <RiveAvatar state={state} mood={mood} getLevel={getLevel} />
 
@@ -32,6 +64,7 @@ export default function App() {
                 key={p.id}
                 product={p}
                 loved={loved.has(p.id)}
+                highlighted={p.id === highlightedId}
                 onLove={wouldBuy}
                 onBuy={buyClick}
               />

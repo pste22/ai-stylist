@@ -38,6 +38,7 @@ import websockets
 from websockets.asyncio.server import serve
 
 import events  # noqa: E402
+import user_store  # noqa: E402
 from stylist import SYSTEM_PROMPT  # noqa: E402  (the SAME persona + grounding rules)
 from product_source import get_source  # noqa: E402
 
@@ -50,9 +51,13 @@ _CATALOG = _SOURCE.search(limit=50)
 _BY_ID = {p["id"]: p for p in _CATALOG}
 
 
-def full_grounding_prompt() -> str:
-    """Persona + the active source's catalog as one grounding block."""
-    return f"{SYSTEM_PROMPT}\n\nPRODUCTS you may recommend:\n{_SOURCE.render(_CATALOG)}"
+def full_grounding_prompt(memory: str = "") -> str:
+    """Persona + optional user memory + active catalog as one grounding block."""
+    parts = [SYSTEM_PROMPT]
+    if memory:
+        parts.append(f"SHOPPER CONTEXT (use naturally, never recite as a list):\n{memory}")
+    parts.append(f"PRODUCTS you may recommend:\n{_SOURCE.render(_CATALOG)}")
+    return "\n\n".join(parts)
 
 
 # Per-product "signature" tokens for spoken-name matching (see _match_products): the
@@ -158,7 +163,7 @@ def _match_products(transcript: str) -> list[dict]:
     return hits
 
 
-def _build():
+def _build(memory: str = ""):
     from google import genai
     from google.genai import types
 
@@ -168,7 +173,7 @@ def _build():
         # full turn text to the browser, which tells LiveAvatar to speak it (LITE mode,
         # session.repeat(text)). LiveAvatar's avatar voice does the TTS + lip-sync.
         response_modalities=["AUDIO"],
-        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt())]),
+        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory))]),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         speech_config=types.SpeechConfig(
@@ -205,15 +210,63 @@ async def handle(ws) -> None:
 
     Gemini Live closes the socket on its own session limits (e.g. code 1008). We keep
     the SAME browser connection + session_id and transparently reopen a fresh Live
-    session, nudging the avatar to `thinking` while we do. (Note: Live context resets
-    on reconnect — the shopper just keeps talking; cross-turn memory lands in Phase 4.)
+    session, nudging the avatar to `thinking` while we do.
     """
     print(f"  ▸ browser connected ({ws.remote_address})")
-    client, config, types = _build()
+
+    # Wait for the browser's {type:"init", user_id, name} before opening Gemini so the
+    # system prompt can be personalised for this shopper.
+    user_id: str | None = None
+    user_name = "there"
+    memory = ""
+    try:
+        raw = await asyncio.wait_for(ws.recv(), timeout=10.0)
+        if isinstance(raw, str):
+            data = json.loads(raw)
+            if data.get("type") == "init":
+                user_id = data.get("user_id")
+                user_name = data.get("name") or "there"
+                if user_id:
+                    try:
+                        memory, is_returning = await asyncio.to_thread(
+                            user_store.load_user, user_id, user_name
+                        )
+                        label = "↩ returning" if is_returning else "✦ new"
+                        print(f"  {label} user: {user_name}")
+                        if is_returning:
+                            loved_ids = await asyncio.to_thread(
+                                user_store.get_loved_ids, user_id
+                            )
+                            if loved_ids:
+                                loved_products = [
+                                    {
+                                        "id": pid,
+                                        "name": p["name"],
+                                        "category": p.get("category"),
+                                        "color": p.get("color"),
+                                        "price": p.get("price"),
+                                        "image_url": p.get("image_url"),
+                                        "affiliate_url": _affiliate_url(p),
+                                    }
+                                    for pid in loved_ids
+                                    if (p := _BY_ID.get(pid))
+                                ]
+                                await _send_json(
+                                    ws, type="restore_loved",
+                                    ids=loved_ids, products=loved_products,
+                                )
+                    except Exception as exc:
+                        print(f"  ! user_store.load_user failed: {exc}")
+    except (asyncio.TimeoutError, Exception):
+        pass  # anonymous session — Mira still works fine
+
+    client, config, types = _build(memory)
     session_id = events.new_session_id()
     current = {"session": None}  # the live session pump_mic forwards audio into
     resume = {"handle": None}    # latest Gemini resumption handle (preserves context)
     stop = asyncio.Event()       # set when the browser disconnects
+    # Suppress the echo of the kick-off message from appearing in the "you:" caption.
+    suppress_input_transcript = {"once": False}
 
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
@@ -241,7 +294,20 @@ async def handle(ws) -> None:
                             pid, session_id=session_id,
                             product_name=prod.get("name"),
                         )
+                        if user_id and prod:
+                            await asyncio.to_thread(
+                                user_store.log_product_event,
+                                user_id, pid, prod.get("name", ""), "would_buy",
+                            )
                         print(f"  ♥ would-buy: {prod.get('name', pid)}")
+                    elif data.get("type") == "unlike":
+                        pid = data.get("product_id", "")
+                        prod = _BY_ID.get(pid, {})
+                        if user_id:
+                            await asyncio.to_thread(
+                                user_store.unlike_product, user_id, pid,
+                            )
+                        print(f"  ♡ unlike: {prod.get('name', pid)}")
                     elif data.get("type") == "buy_click":
                         pid = data.get("product_id", "")
                         prod = _BY_ID.get(pid, {})
@@ -249,6 +315,11 @@ async def handle(ws) -> None:
                             "buy_click", session_id=session_id,
                             product_id=pid, product_name=prod.get("name"),
                         )
+                        if user_id and prod:
+                            await asyncio.to_thread(
+                                user_store.log_product_event,
+                                user_id, pid, prod.get("name", ""), "buy_click",
+                            )
                         print(f"  buy-click -> retailer: {prod.get('name', pid)}")
         finally:
             stop.set()  # browser closed → tear the whole conversation down
@@ -284,10 +355,13 @@ async def handle(ws) -> None:
                     continue
                 # user started speaking → Mira is listening/thinking.
                 if sc and sc.input_transcription and sc.input_transcription.text:
-                    await _send_json(
-                        ws, type="transcript", who="you",
-                        text=sc.input_transcription.text,
-                    )
+                    if suppress_input_transcript["once"]:
+                        suppress_input_transcript["once"] = False  # eat the kick-off echo
+                    else:
+                        await _send_json(
+                            ws, type="transcript", who="you",
+                            text=sc.input_transcription.text,
+                        )
                     if not talking:
                         await _send_json(ws, type="state", state="thinking", mood=mood)
                 # Forward Gemini audio bytes directly to the browser so PcmPlayer
@@ -316,6 +390,11 @@ async def handle(ws) -> None:
                     if fresh:
                         for p in fresh:
                             sent_ids.add(p["id"])
+                            if user_id:
+                                await asyncio.to_thread(
+                                    user_store.log_product_event,
+                                    user_id, p["id"], p["name"], "shown",
+                                )
                         await _send_json(ws, type="products", items=fresh)
                 # turn done → brief react, then back to idle. Break to await the NEXT
                 # turn on this same session (keeps context alive).
@@ -352,6 +431,18 @@ async def handle(ws) -> None:
                     backoff = 0.5
                     if not first:
                         print("  ↻ Live session reconnected")
+                    else:
+                        # Kick off Mira's opening greeting on first connect.
+                        # We suppress the input transcription echo so "hi" doesn't
+                        # appear in the "you:" caption.
+                        suppress_input_transcript["once"] = True
+                        await session.send_client_content(
+                            turns=[types.Content(
+                                role="user",
+                                parts=[types.Part(text="hi")],
+                            )],
+                            turn_complete=True,
+                        )
                     first = False
                     await _send_json(ws, type="state", state="idle", mood="neutral")
                     await pump_mira(session)  # runs until the session ends/drops

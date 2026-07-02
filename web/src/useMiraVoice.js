@@ -24,13 +24,15 @@ const WS_URL = resolveWsUrl();
 
 // Connects the browser to the Mira voice bridge (prototype/live_server.py):
 // streams mic up, plays Mira's audio down, and surfaces avatar state/mood + captions.
-export function useMiraVoice() {
+export function useMiraVoice({ userId, userName } = {}) {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(AvatarState.IDLE);
   const [mood, setMood] = useState(Mood.NEUTRAL);
   const [captions, setCaptions] = useState({ you: "", mira: "" });
   const [products, setProducts] = useState([]);
   const [loved, setLoved] = useState(() => new Set());
+  const [savedProducts, setSavedProducts] = useState([]);
+  const [highlightedId, setHighlightedId] = useState(null);
   const [error, setError] = useState(null);
   // HeyGen voices Mira: each finished turn's full text is pushed here so the avatar speaks it.
   const [miraText, setMiraText] = useState(null);
@@ -50,11 +52,28 @@ export function useMiraVoice() {
   }, []);
 
   const wouldBuy = useCallback((product) => {
-    const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ type: "would_buy", product_id: product.id }));
-    }
-    setLoved((prev) => new Set(prev).add(product.id));
+    // Read current loved state inside the setter to avoid stale closure.
+    setLoved((prev) => {
+      const isLoved = prev.has(product.id);
+      const ws = wsRef.current;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: isLoved ? "unlike" : "would_buy",
+          product_id: product.id,
+        }));
+      }
+      if (isLoved) {
+        setSavedProducts((sp) => sp.filter((p) => p.id !== product.id));
+        const next = new Set(prev);
+        next.delete(product.id);
+        return next;
+      } else {
+        setSavedProducts((sp) =>
+          sp.find((p) => p.id === product.id) ? sp : [...sp, product]
+        );
+        return new Set(prev).add(product.id);
+      }
+    });
   }, []);
 
   const getLevel = useCallback(() => playerRef.current?.getLevel?.() ?? 0, []);
@@ -77,6 +96,10 @@ export function useMiraVoice() {
       playerRef.current = player;
 
       ws.onopen = async () => {
+        // Send user identity first so the server can personalise the Gemini session.
+        if (userId) {
+          ws.send(JSON.stringify({ type: "init", user_id: userId, name: userName || "there" }));
+        }
         setConnected(true);
         const mic = new MicCapture((bytes) => {
           if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
@@ -101,6 +124,9 @@ export function useMiraVoice() {
           case "state":
             setState(msg.state);
             setMood(msg.mood || Mood.NEUTRAL);
+            if (msg.state === "idle" || msg.state === "reacting") {
+              setHighlightedId(null);
+            }
             break;
           case "transcript":
             setCaptions((c) => ({ ...c, [msg.who]: msg.text }));
@@ -115,6 +141,18 @@ export function useMiraVoice() {
               const seen = new Set(prev.map((p) => p.id));
               return [...prev, ...msg.items.filter((p) => !seen.has(p.id))];
             });
+            // Highlight the most recently mentioned product (last in spoken order).
+            if (msg.items?.length) setHighlightedId(msg.items[msg.items.length - 1].id);
+            break;
+          case "restore_loved":
+            setLoved((prev) => {
+              const next = new Set(prev);
+              msg.ids.forEach((id) => next.add(id));
+              return next;
+            });
+            if (msg.products?.length) {
+              setSavedProducts(msg.products);
+            }
             break;
           case "interrupted":
             break;
@@ -131,5 +169,5 @@ export function useMiraVoice() {
     }
   }, [stop]);
 
-  return { connected, state, mood, captions, products, loved, error, miraText, start, stop, wouldBuy, getLevel, buyClick };
+  return { connected, state, mood, captions, products, savedProducts, loved, highlightedId, error, miraText, start, stop, wouldBuy, getLevel, buyClick };
 }

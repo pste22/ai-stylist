@@ -2,9 +2,9 @@
 // the bridge (logged via events.py) — the seed of the commerce loop (P2-8 → Phase 3).
 // "Buy" deep-links out to the retailer (affiliate handoff — we never sell or ship),
 // with an FTC commission disclosure (P3-3).
-export default function ProductCard({ product, loved, onLove, onBuy }) {
+export default function ProductCard({ product, loved, highlighted, onLove, onBuy }) {
   return (
-    <div className={`card ${loved ? "loved" : ""}`}>
+    <div className={`card ${loved ? "loved" : ""} ${highlighted ? "highlighted" : ""}`}>
       <div className="card-thumb" data-cat={product.category}>
         {product.image_url ? (
           <img className="card-img" src={product.image_url} alt={product.name} loading="lazy" />
@@ -22,9 +22,10 @@ export default function ProductCard({ product, loved, onLove, onBuy }) {
         <button
           className={`love ${loved ? "is-loved" : ""}`}
           onClick={() => onLove(product)}
-          aria-label={loved ? "Loved" : "Love it"}
+          aria-label={loved ? "Remove from saved" : "Save item"}
+          title={loved ? "Click to unlike" : "Save for later"}
         >
-          {loved ? "♥ Loved" : "♡ Love it"}
+          {loved ? "♥ Saved" : "♡ Save"}
         </button>
         <a
           className="buy"
