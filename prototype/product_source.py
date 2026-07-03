@@ -277,14 +277,30 @@ class CuratedAmazonSource:
 def get_source(name: str | None = None) -> "ProductSource":
     """Pick a product source by name (or env PRODUCT_SOURCE), default 'local'.
 
-    Falls back to LocalJsonSource if a real source can't initialize (e.g. missing
-    Amazon keys), so a misconfigured env never takes Mira offline.
+    Priority order:
+      supabase  → SupabaseProductSource (Supabase catalog + in-memory cache)
+      amazon    → AmazonSource (live PA-API, requires keys)
+      curated   → CuratedAmazonSource (local affiliate_products.json)
+      local     → LocalJsonSource (demo products.json, offline)
+
+    Falls back to LocalJsonSource if a real source can't initialize, so a
+    misconfigured env never takes Mira offline.
     """
     name = (name or os.environ.get("PRODUCT_SOURCE", "local")).lower()
+    if name == "supabase":
+        try:
+            from product_store import SupabaseProductSource
+            return SupabaseProductSource()
+        except Exception as exc:  # noqa: BLE001
+            print(f"  ! SupabaseProductSource unavailable ({exc}); falling back to curated")
+            try:
+                return CuratedAmazonSource()
+            except Exception:
+                return LocalJsonSource()
     if name == "amazon":
         try:
             return AmazonSource()
-        except Exception as exc:  # noqa: BLE001 — log + degrade, never crash the brain
+        except Exception as exc:  # noqa: BLE001
             print(f"  ! AmazonSource unavailable ({exc}); using local catalog")
             return LocalJsonSource()
     if name == "curated":

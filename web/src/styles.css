@@ -246,6 +246,458 @@ button:active { transform: translateY(0); }
 .app-footer { font-size: 0.8rem; opacity: 0.5; }
 .app-footer code { background: rgba(0,0,0,0.05); padding: 0.1rem 0.35rem; border-radius: 6px; }
 
+/* ═══════════════════════════════════════════════════════════
+   MODE TOGGLE PILL (Voice / Silent)
+══════════════════════════════════════════════════════════════ */
+.mode-toggle {
+  display: inline-flex;
+  background: rgba(217, 138, 106, 0.1);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+  margin-bottom: 0.75rem;
+}
+.mode-btn {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+  border-radius: 999px;
+  padding: 0.35rem 1rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  opacity: 0.5;
+  transition: background 0.15s, opacity 0.15s;
+}
+.mode-btn:hover { filter: none; transform: none; opacity: 0.75; }
+.mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+  opacity: 1;
+  box-shadow: 0 2px 8px rgba(217, 138, 106, 0.35);
+}
+.mode-btn.active:hover { filter: brightness(1.05); transform: none; }
+
+/* ═══════════════════════════════════════════════════════════
+   FULL-SCREEN CHAT LAYOUT
+   Activated when textMode=true and connected.
+══════════════════════════════════════════════════════════════ */
+.chat-layout {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--warm-bg);
+  font-family: inherit;
+}
+
+/* ── Chat header ── */
+.chat-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 1rem;
+  background: var(--warm-card);
+  border-bottom: 1px solid var(--accent-soft);
+  box-shadow: 0 1px 12px rgba(120, 90, 70, 0.08);
+  z-index: 2;
+}
+.chat-header-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.chat-name { font-weight: 700; font-size: 1rem; }
+.chat-status {
+  font-size: 0.78rem;
+  opacity: 0.55;
+  transition: color 0.3s;
+}
+.chat-status.status-thinking,
+.chat-status.status-talking { color: var(--accent); opacity: 1; }
+
+.chat-header-actions { display: flex; align-items: center; gap: 0.6rem; }
+.chat-saved-badge {
+  font-size: 0.82rem;
+  background: rgba(217, 138, 106, 0.15);
+  padding: 0.25rem 0.6rem;
+  border-radius: 999px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.chat-end-btn {
+  background: transparent;
+  color: var(--ink);
+  box-shadow: none;
+  border: 1.5px solid rgba(58, 50, 44, 0.2);
+  font-size: 0.82rem;
+  padding: 0.3rem 0.75rem;
+  opacity: 0.65;
+}
+.chat-end-btn:hover { opacity: 1; background: rgba(180,0,80,0.06); transform: none; filter: none; }
+
+/* ── Mini avatar in chat header ── */
+.mini-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: linear-gradient(160deg, var(--warm-card), var(--accent-soft));
+  box-shadow: 0 2px 8px rgba(217, 138, 106, 0.25);
+  flex-shrink: 0;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  animation: breathe 4s ease-in-out infinite;
+  transition: box-shadow 0.3s;
+}
+.mini-avatar.state-talking { box-shadow: 0 0 0 3px rgba(217,138,106,0.35); animation: none; }
+.mini-avatar.state-thinking { animation: breathe 1.8s ease-in-out infinite; }
+.mini-brows { display: flex; gap: 7px; position: absolute; top: 10px; }
+.mini-brow {
+  width: 8px; height: 2px; border-radius: 2px;
+  background: var(--ink); opacity: 0.7;
+  transition: transform 0.3s;
+}
+.mood-excited .mini-brow.left  { transform: translateY(-1.5px) rotate(-8deg); }
+.mood-excited .mini-brow.right { transform: translateY(-1.5px) rotate(8deg); }
+.mood-low .mini-brow.left  { transform: rotate(10deg); }
+.mood-low .mini-brow.right { transform: rotate(-10deg); }
+.mini-eyes { display: flex; gap: 7px; }
+.mini-eye {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--ink);
+  animation: blink 5s infinite;
+}
+.mini-mouth {
+  width: 16px; height: 5px;
+  border-radius: 0 0 10px 10px;
+  background: var(--accent);
+  transition: height 0.08s, border-radius 0.08s;
+}
+.mini-mouth.talking { height: 7px; border-radius: 4px; }
+
+/* ── Scrollable thread ── */
+.chat-thread {
+  flex: 1;
+  overflow-y: auto;
+  /* Subtle warm dot pattern to separate thread from header/input */
+  background:
+    radial-gradient(circle, rgba(217,138,106,0.07) 1px, transparent 1px),
+    var(--warm-bg);
+  background-size: 24px 24px;
+  padding: 1.5rem 1.25rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.9rem;
+  scroll-behavior: smooth;
+}
+.chat-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.3;
+  font-size: 0.88rem;
+  font-style: italic;
+}
+
+/* ── Message rows ──
+   Rows are always full-width; the COLUMN inside them carries the max-width.
+   This lets product strips be properly padded without being clipped.          */
+.bubble-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  width: 100%;
+  animation: msg-in 0.2s ease;
+}
+.row-you  { flex-direction: row-reverse; }
+.row-mira { flex-direction: row; }
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Column that wraps bubble text + optional product cards */
+.bubble-col {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: min(72%, 480px);   /* Mira: constrained so text never wall-to-walls */
+}
+.row-you .bubble-col {
+  max-width: min(62%, 400px);
+  align-items: flex-end;
+}
+
+/* Small accent dot on Mira's side */
+.bubble-avatar-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  flex-shrink: 0;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+/* ── Bubbles ── */
+.bubble {
+  padding: 0.85rem 1.1rem;
+  border-radius: 20px;
+  font-size: 0.96rem;
+  line-height: 1.65;
+  letter-spacing: 0.01em;
+  word-break: break-word;
+}
+.bubble-you {
+  background: var(--accent);
+  color: #fff;
+  border-bottom-right-radius: 5px;
+  box-shadow: 0 3px 12px rgba(217,138,106,0.32);
+  align-self: flex-end;
+  white-space: pre-wrap;       /* user's typed text: preserve line breaks */
+}
+.bubble-mira {
+  background: var(--warm-card);
+  color: var(--ink);
+  border-bottom-left-radius: 5px;
+  box-shadow: 0 2px 12px rgba(120, 90, 70, 0.12);
+  /* no pre-wrap — MiraBubbleText renders paragraphs + lists as proper HTML */
+}
+
+/* Paragraphs inside Mira's bubble */
+.bubble-mira p {
+  margin: 0 0 0.45rem;
+}
+.bubble-mira p:last-child { margin-bottom: 0; }
+
+/* Bullet list inside Mira's bubble */
+.bubble-list {
+  margin: 0.3rem 0 0.45rem;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  list-style: none;            /* custom bullet via ::before */
+}
+.bubble-list li {
+  position: relative;
+  padding-left: 0.85rem;
+  line-height: 1.5;
+}
+.bubble-list li::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--accent);
+  font-weight: 700;
+}
+.bubble-list:last-child { margin-bottom: 0; }
+
+/* ── Product list (vertical stack below the text bubble) ──
+   Each product gets its own full-width card, stacked one-by-one.
+   This matches what a stylist friend would do: present each pick clearly,
+   not dump them all in a tiny horizontal strip.                              */
+.bubble-products {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+  width: 100%;
+}
+
+/* ── Inline product-line: image LEFT, name+reason+actions RIGHT ─────────────
+   Rendered inside Mira's bubble for each bullet that matches a product.
+   Image and description are truly side-by-side in a single unified row.      */
+.product-line {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(217, 138, 106, 0.15);
+  border-radius: 14px;
+  padding: 0.6rem;
+  margin: 0.35rem 0;
+}
+.product-line-img-wrap {
+  width: 88px;
+  min-width: 88px;
+  height: 88px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: linear-gradient(160deg, #fff, var(--warm-bg));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.product-line-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.product-line-swatch {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 2px rgba(0,0,0,0.06);
+  display: block;
+}
+.product-line-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+.product-line-name {
+  margin: 0;
+  font-size: 0.87rem;
+  font-weight: 700;
+  line-height: 1.3;
+  color: var(--ink);
+}
+.product-line-reason {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  opacity: 0.72;
+}
+.product-line-meta {
+  margin: 0.1rem 0 0.35rem;
+  font-size: 0.78rem;
+  opacity: 0.5;
+}
+.product-line-actions {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.product-line-actions .love,
+.product-line-actions .buy {
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
+}
+
+/* Chat product card — full width, image left, details right (landscape) */
+.card.compact {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  flex-direction: row;        /* image LEFT, content RIGHT */
+  border-radius: 16px;
+  overflow: hidden;
+}
+.card.compact .card-thumb {
+  width: 110px;
+  min-width: 110px;
+  height: 110px;
+  border-radius: 0;           /* flush with card corners (card has radius) */
+  flex-shrink: 0;
+}
+.card.compact .card-body {
+  flex: 1;
+  padding: 0.7rem 0.8rem 0.4rem;
+  min-width: 0;               /* allow text to shrink + wrap */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+.card.compact .card-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0 0 0.2rem;
+  /* clamp to 3 lines max so very long names don't take over */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.card.compact .card-meta {
+  font-size: 0.8rem;
+  opacity: 0.6;
+  margin: 0;
+}
+.card.compact .card-actions {
+  margin: 0.6rem 0 0;   /* top margin only — inside card-body now */
+  gap: 0.5rem;
+}
+.card.compact .love { font-size: 0.8rem; padding: 0.38rem 0.65rem; }
+.card.compact .buy  { font-size: 0.8rem; padding: 0.38rem 0.7rem; }
+
+/* ── Input area ── */
+.chat-input-area {
+  flex-shrink: 0;
+  padding: 0.75rem 1rem;
+  background: var(--warm-card);
+  border-top: 1px solid var(--accent-soft);
+}
+.chat-error {
+  color: #b04;
+  font-size: 0.82rem;
+  margin: 0 0 0.4rem;
+  text-align: center;
+}
+.chat-input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  background: var(--warm-bg);
+  border: 2px solid var(--accent-soft);
+  border-radius: 22px;
+  padding: 0.55rem 0.55rem 0.55rem 1.1rem;
+  transition: border-color 0.15s;
+}
+.chat-input-bar:focus-within { border-color: var(--accent); }
+.chat-input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: 0.97rem;
+  color: var(--ink);
+  resize: none;
+  outline: none;
+  line-height: 1.5;
+  max-height: 130px;
+  overflow-y: auto;
+  padding: 0;
+}
+.chat-input::placeholder { opacity: 0.4; }
+.chat-send-btn {
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 8px rgba(217,138,106,0.3);
+  transition: background 0.12s, opacity 0.12s, transform 0.1s;
+}
+.chat-send-btn:disabled {
+  background: var(--accent-soft);
+  opacity: 0.45;
+  cursor: default;
+  transform: none;
+  box-shadow: none;
+}
+.chat-hint {
+  text-align: center;
+  font-size: 0.72rem;
+  opacity: 0.38;
+  margin: 0.4rem 0 0;
+}
+
 /* Saved items shelf */
 .saved-shelf { background: rgba(217, 138, 106, 0.06); border-radius: 16px; padding: 1rem; }
 

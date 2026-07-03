@@ -2,13 +2,6 @@ import { useCallback, useRef, useState } from "react";
 import { MicCapture, PcmPlayer } from "./audio.js";
 import { AvatarState, Mood } from "./avatarState.js";
 
-// Resolve the voice-bridge WebSocket URL.
-//   1. Explicit override always wins:        VITE_MIRA_WS_URL
-//   2. Otherwise connect SAME-ORIGIN at /mira-ws, which Vite proxies to the Python
-//      bridge (see vite.config.js). This is the only reliable path in GitHub
-//      Codespaces: a separate forwarded port lives on a different *.app.github.dev
-//      subdomain whose tunnel relay rejects cross-origin WS upgrades (HTTP 426).
-//      Same-origin avoids that and works identically in local dev.
 function resolveWsUrl() {
   const override = import.meta.env.VITE_MIRA_WS_URL;
   if (override) return override;
@@ -22,9 +15,11 @@ function resolveWsUrl() {
 
 const WS_URL = resolveWsUrl();
 
-// Connects the browser to the Mira voice bridge (prototype/live_server.py):
-// streams mic up, plays Mira's audio down, and surfaces avatar state/mood + captions.
-export function useMiraVoice({ userId, userName } = {}) {
+// message shape: { id, role: 'you'|'mira', text, products?: [], ts }
+let _msgId = 0;
+const mkId = () => ++_msgId;
+
+export function useMiraVoice({ userId, userName, textMode = false } = {}) {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(AvatarState.IDLE);
   const [mood, setMood] = useState(Mood.NEUTRAL);
@@ -34,8 +29,12 @@ export function useMiraVoice({ userId, userName } = {}) {
   const [savedProducts, setSavedProducts] = useState([]);
   const [highlightedId, setHighlightedId] = useState(null);
   const [error, setError] = useState(null);
-  // HeyGen voices Mira: each finished turn's full text is pushed here so the avatar speaks it.
   const [miraText, setMiraText] = useState(null);
+
+  // Text mode: full chat history (persists across turns so user can scroll up)
+  const [messages, setMessages] = useState([]);
+  // ref to the id of the bubble Mira is currently streaming into
+  const miraBubbleId = useRef(null);
 
   const wsRef = useRef(null);
   const micRef = useRef(null);
@@ -49,28 +48,59 @@ export function useMiraVoice({ userId, userName } = {}) {
     setConnected(false);
     setState(AvatarState.IDLE);
     setMood(Mood.NEUTRAL);
+    miraBubbleId.current = null;
+  }, []);
+
+  // Add a message to the chat thread (text mode only)
+  const _addMsg = (role, text) => {
+    const id = mkId();
+    setMessages((prev) => [...prev, { id, role, text, products: [], ts: new Date() }]);
+    return id;
+  };
+
+  // Append text to an existing bubble (streaming)
+  const _appendMsg = (id, chunk) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, text: m.text + chunk } : m))
+    );
+  };
+
+  // Attach product cards to the bubble they were mentioned in
+  const _attachProducts = (id, items) => {
+    setMessages((prev) =>
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        const seen = new Set(m.products.map((p) => p.id));
+        const fresh = items.filter((p) => !seen.has(p.id));
+        return fresh.length ? { ...m, products: [...m.products, ...fresh] } : m;
+      })
+    );
+  };
+
+  // Send a typed message
+  const sendText = useCallback((text) => {
+    const ws = wsRef.current;
+    const trimmed = (text || "").trim();
+    if (!ws || ws.readyState !== WebSocket.OPEN || !trimmed) return;
+    // Optimistically add the user bubble immediately
+    _addMsg("you", trimmed);
+    ws.send(JSON.stringify({ type: "text_input", text: trimmed }));
+    setState(AvatarState.THINKING);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const wouldBuy = useCallback((product) => {
-    // Read current loved state inside the setter to avoid stale closure.
     setLoved((prev) => {
       const isLoved = prev.has(product.id);
       const ws = wsRef.current;
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: isLoved ? "unlike" : "would_buy",
-          product_id: product.id,
-        }));
+        ws.send(JSON.stringify({ type: isLoved ? "unlike" : "would_buy", product_id: product.id }));
       }
       if (isLoved) {
         setSavedProducts((sp) => sp.filter((p) => p.id !== product.id));
-        const next = new Set(prev);
-        next.delete(product.id);
-        return next;
+        const next = new Set(prev); next.delete(product.id); return next;
       } else {
-        setSavedProducts((sp) =>
-          sp.find((p) => p.id === product.id) ? sp : [...sp, product]
-        );
+        setSavedProducts((sp) => sp.find((p) => p.id === product.id) ? sp : [...sp, product]);
         return new Set(prev).add(product.id);
       }
     });
@@ -80,43 +110,38 @@ export function useMiraVoice({ userId, userName } = {}) {
 
   const buyClick = useCallback((product) => {
     const ws = wsRef.current;
-    if (ws && ws.readyState === WebSocket.OPEN) {
+    if (ws && ws.readyState === WebSocket.OPEN)
       ws.send(JSON.stringify({ type: "buy_click", product_id: product.id }));
-    }
   }, []);
 
   const start = useCallback(async () => {
     setError(null);
+    setMessages([]);
+    miraBubbleId.current = null;
     try {
       const ws = new WebSocket(WS_URL);
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
-      const player = new PcmPlayer();
-      playerRef.current = player;
+      if (!textMode) playerRef.current = new PcmPlayer();
 
       ws.onopen = async () => {
-        // Send user identity first so the server can personalise the Gemini session.
-        if (userId) {
+        if (userId)
           ws.send(JSON.stringify({ type: "init", user_id: userId, name: userName || "there" }));
-        }
         setConnected(true);
-        const mic = new MicCapture((bytes) => {
-          if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
-        });
-        micRef.current = mic;
-        try {
-          await mic.start();
-        } catch (e) {
-          setError("Mic permission denied");
-          stop();
+        if (!textMode) {
+          const mic = new MicCapture((bytes) => {
+            if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
+          });
+          micRef.current = mic;
+          try { await mic.start(); }
+          catch { setError("Mic permission denied"); stop(); }
         }
       };
 
       ws.onmessage = (e) => {
         if (e.data instanceof ArrayBuffer) {
-          // Direct Gemini PCM audio — play it via PcmPlayer for lip-sync.
-          playerRef.current?.push(e.data);
+          if (!textMode) playerRef.current?.push(e.data);
           return;
         }
         const msg = JSON.parse(e.data);
@@ -124,35 +149,57 @@ export function useMiraVoice({ userId, userName } = {}) {
           case "state":
             setState(msg.state);
             setMood(msg.mood || Mood.NEUTRAL);
-            if (msg.state === "idle" || msg.state === "reacting") {
+            if (msg.state === AvatarState.IDLE || msg.state === AvatarState.REACTING) {
               setHighlightedId(null);
+              // Seal the current Mira bubble so the next turn starts fresh
+              miraBubbleId.current = null;
             }
             break;
+
           case "transcript":
-            setCaptions((c) => ({ ...c, [msg.who]: msg.text }));
+            if (!textMode) {
+              // Voice mode: overwrite caption (latest chunk only)
+              setCaptions((c) => ({ ...c, [msg.who]: msg.text }));
+            } else if (msg.who === "mira") {
+              // Text mode: stream chunks into the current Mira bubble
+              if (!miraBubbleId.current) {
+                miraBubbleId.current = _addMsg("mira", msg.text);
+              } else {
+                _appendMsg(miraBubbleId.current, msg.text);
+              }
+            }
+            // Skip 'you' echo in text mode — already added optimistically in sendText
             break;
+
           case "mira_text":
-            // Full turn text → HeyGen avatar speaks it.
             setMiraText({ text: msg.text, at: Date.now() });
             break;
-          case "products":
-            // Merge new recommendations, keeping any already on screen.
-            setProducts((prev) => {
-              const seen = new Set(prev.map((p) => p.id));
-              return [...prev, ...msg.items.filter((p) => !seen.has(p.id))];
-            });
-            // Highlight the most recently mentioned product (last in spoken order).
-            if (msg.items?.length) setHighlightedId(msg.items[msg.items.length - 1].id);
-            break;
-          case "restore_loved":
-            setLoved((prev) => {
-              const next = new Set(prev);
-              msg.ids.forEach((id) => next.add(id));
-              return next;
-            });
-            if (msg.products?.length) {
-              setSavedProducts(msg.products);
+
+          case "products": {
+            // Voice mode: update the product shelf
+            if (!textMode) {
+              setProducts((prev) => {
+                const seen = new Set(prev.map((p) => p.id));
+                return [...prev, ...msg.items.filter((p) => !seen.has(p.id))];
+              });
+              if (msg.items?.length) setHighlightedId(msg.items[msg.items.length - 1].id);
+            } else {
+              // Text mode: attach cards to the bubble they came from
+              const bubId = miraBubbleId.current;
+              if (bubId) _attachProducts(bubId, msg.items);
+              // Also keep the top-level products list for the saved shelf
+              setProducts((prev) => {
+                const seen = new Set(prev.map((p) => p.id));
+                return [...prev, ...msg.items.filter((p) => !seen.has(p.id))];
+              });
+              if (msg.items?.length) setHighlightedId(msg.items[msg.items.length - 1].id);
             }
+            break;
+          }
+
+          case "restore_loved":
+            setLoved((prev) => { const n = new Set(prev); msg.ids.forEach((id) => n.add(id)); return n; });
+            if (msg.products?.length) setSavedProducts(msg.products);
             break;
           case "interrupted":
             break;
@@ -167,7 +214,11 @@ export function useMiraVoice({ userId, userName } = {}) {
     } catch (e) {
       setError(String(e));
     }
-  }, [stop]);
+  }, [stop, textMode, userId, userName]);
 
-  return { connected, state, mood, captions, products, savedProducts, loved, highlightedId, error, miraText, start, stop, wouldBuy, getLevel, buyClick };
+  return {
+    connected, state, mood, captions, messages,
+    products, savedProducts, loved, highlightedId, error, miraText,
+    start, stop, sendText, wouldBuy, getLevel, buyClick,
+  };
 }

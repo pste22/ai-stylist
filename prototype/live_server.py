@@ -251,6 +251,10 @@ async def handle(ws) -> None:
                                     for pid in loved_ids
                                     if (p := _BY_ID.get(pid))
                                 ]
+                                # Pre-populate so Mira knows saved items from first message
+                                for pid in loved_ids:
+                                    if (p := _BY_ID.get(pid)):
+                                        session_saved[pid] = p["name"]
                                 await _send_json(
                                     ws, type="restore_loved",
                                     ids=loved_ids, products=loved_products,
@@ -265,6 +269,8 @@ async def handle(ws) -> None:
     current = {"session": None}  # the live session pump_mic forwards audio into
     resume = {"handle": None}    # latest Gemini resumption handle (preserves context)
     stop = asyncio.Event()       # set when the browser disconnects
+    # Tracks products saved this session (id → name) so Mira can reference them.
+    session_saved: dict[str, str] = {}
     # Suppress the echo of the kick-off message from appearing in the "you:" caption.
     suppress_input_transcript = {"once": False}
 
@@ -299,6 +305,25 @@ async def handle(ws) -> None:
                                 user_store.log_product_event,
                                 user_id, pid, prod.get("name", ""), "would_buy",
                             )
+                        # Update session memory so Mira knows which items are saved
+                        session_saved[pid] = prod.get("name", pid)
+                        # Inject silent context into the Gemini session for voice mode
+                        # (turn_complete=False queues it without triggering a response)
+                        sess = current["session"]
+                        if sess is not None and session_saved:
+                            names = ", ".join(f'"{n}"' for n in session_saved.values())
+                            try:
+                                await sess.send_client_content(
+                                    turns=[types.Content(
+                                        role="user",
+                                        parts=[types.Part(
+                                            text=f"[CONTEXT: User's saved/wishlist items: {names}]"
+                                        )],
+                                    )],
+                                    turn_complete=False,
+                                )
+                            except Exception:
+                                pass
                         print(f"  ♥ would-buy: {prod.get('name', pid)}")
                     elif data.get("type") == "unlike":
                         pid = data.get("product_id", "")
@@ -307,7 +332,33 @@ async def handle(ws) -> None:
                             await asyncio.to_thread(
                                 user_store.unlike_product, user_id, pid,
                             )
+                        session_saved.pop(pid, None)
                         print(f"  ♡ unlike: {prod.get('name', pid)}")
+                    elif data.get("type") == "text_input":
+                        text = (data.get("text") or "").strip()
+                        if text:
+                            sess = current["session"]
+                            if sess is not None:
+                                # Always prepend saved items context so Mira knows
+                                # which products the user has saved this session
+                                if session_saved:
+                                    names = ", ".join(
+                                        f'"{n}"' for n in session_saved.values()
+                                    )
+                                    ctx_prefix = (
+                                        f"[CONTEXT: User's saved/wishlist items: {names}]\n"
+                                    )
+                                else:
+                                    ctx_prefix = ""
+                                await sess.send_client_content(
+                                    turns=[types.Content(
+                                        role="user",
+                                        parts=[types.Part(text=f"{ctx_prefix}{text}")],
+                                    )],
+                                    turn_complete=True,
+                                )
+                            # Echo back as a transcript so the caption shows what was typed
+                            await _send_json(ws, type="transcript", who="you", text=text)
                     elif data.get("type") == "buy_click":
                         pid = data.get("product_id", "")
                         prod = _BY_ID.get(pid, {})
