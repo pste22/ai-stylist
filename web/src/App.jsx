@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import RiveAvatar from "./RiveAvatar.jsx";
 import ProductCard from "./ProductCard.jsx";
-import NamePrompt from "./NamePrompt.jsx";
+import LoginScreen from "./LoginScreen.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
-import { useUserIdentity } from "./useUserIdentity.js";
+import { useAuth } from "./useAuth.js";
 
 // ─── Inline rendering helper ──────────────────────────────────────────────────
 function renderInline(str) {
@@ -164,7 +164,7 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
 
 // ─── Full-screen chat view (text mode while connected) ────────────────────────
 function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
-                    onStop, onSend, error, userName }) {
+                    onStop, onSend, error, userName, userAvatar, onSignOut }) {
   const [draft, setDraft] = useState("");
   const threadRef = useRef(null);
   const inputRef = useRef(null);
@@ -205,6 +205,11 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
             <span className="chat-saved-badge">💜 {savedProducts.length}</span>
           )}
           <button className="chat-end-btn" onClick={onStop}>⏹ End</button>
+          <button className="user-pill user-pill-sm" onClick={onSignOut} title="Sign out">
+            {userAvatar
+              ? <img className="user-avatar" src={userAvatar} alt={userName} referrerPolicy="no-referrer" />
+              : <span className="user-initials">{userName[0]?.toUpperCase()}</span>}
+          </button>
         </div>
       </div>
 
@@ -266,7 +271,12 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
 
 // ─── Main App ────────────────────────────────────────────────────────────────
 export default function App() {
-  const { userId, userName, setUserName, isNewUser } = useUserIdentity();
+  const {
+    user, loading,
+    userId, userName, userAvatar,
+    signInWithGoogle, signInWithFacebook, signOut,
+  } = useAuth();
+
   const [textMode, setTextMode] = useState(false);
   const [showSaved, setShowSaved] = useState(false);
 
@@ -276,7 +286,18 @@ export default function App() {
     start, stop, sendText, wouldBuy, getLevel, buyClick,
   } = useMiraVoice({ userId, userName, textMode });
 
-  if (isNewUser) return <NamePrompt onSubmit={setUserName} />;
+  // Splash while checking for existing session
+  if (loading) return <div className="auth-loading"><span>✦</span></div>;
+
+  // Not signed in → show login screen
+  if (!user) {
+    return (
+      <LoginScreen
+        onGoogle={signInWithGoogle}
+        onFacebook={signInWithFacebook}
+      />
+    );
+  }
 
   // Text mode while connected → full-screen chat UI
   if (textMode && connected) {
@@ -293,6 +314,8 @@ export default function App() {
         onSend={sendText}
         error={error}
         userName={userName}
+        userAvatar={userAvatar}
+        onSignOut={signOut}
       />
     );
   }
@@ -301,8 +324,16 @@ export default function App() {
   return (
     <div className="app">
       <header className="app-header">
-        <h1>Mira</h1>
-        <p className="tagline">Hi {userName} 👋 — your personal AI stylist</p>
+        <div className="app-header-top">
+          <h1>Mira</h1>
+          <button className="user-pill" onClick={signOut} title="Sign out">
+            {userAvatar
+              ? <img className="user-avatar" src={userAvatar} alt={userName} referrerPolicy="no-referrer" />
+              : <span className="user-initials">{userName[0]?.toUpperCase()}</span>}
+            <span className="user-name">{userName}</span>
+          </button>
+        </div>
+        <p className="tagline">Your personal AI stylist</p>
         {savedProducts.length > 0 && (
           <button className="saved-toggle" onClick={() => setShowSaved((v) => !v)}>
             {showSaved ? "Hide saves" : `💜 Saved (${savedProducts.length})`}
