@@ -40,11 +40,13 @@ function MiraBubbleContent({ text, products = [], loved, onLove, onBuy }) {
     const bullet = line.match(/^[•\-\*]\s+(.*)/);
     if (bullet) {
       const content = bullet[1];
-      // Mira is instructed to write "• [Exact Product Name] — [reason]"
       const dashIdx = content.indexOf("—");
-      const namePart = dashIdx > -1 ? content.slice(0, dashIdx).trim() : content.trim();
-      const reason   = dashIdx > -1 ? content.slice(dashIdx + 1).trim() : "";
-      const product  = byName[namePart.toLowerCase()];
+      const reason  = dashIdx > -1 ? content.slice(dashIdx + 1).trim() : "";
+
+      // Robust match: find any product whose name appears anywhere in the bullet.
+      // Strips **bold** markers first so formatting never breaks the match.
+      const cleaned = content.toLowerCase().replace(/\*\*/g, "").replace(/\*/g, "");
+      const product = products.find(p => cleaned.includes(p.name.toLowerCase()));
 
       if (product) {
         flushUnmatched();
@@ -84,16 +86,16 @@ function MiraBubbleContent({ text, products = [], loved, onLove, onBuy }) {
   });
   flushUnmatched();
 
-  // Any products not mentioned in text bullets (e.g. still streaming) appear at bottom
+  // Products not matched to any bullet (e.g. still streaming, or mentioned conversationally)
+  // fall through as compact cards. Use same robust matching as above.
   const inlinedIds = new Set(
     lines
       .filter(l => l.match(/^[•\-\*]\s+/))
-      .map(l => {
-        const content = l.replace(/^[•\-\*]\s+/, "");
-        const name = content.split("—")[0].trim().toLowerCase();
-        return byName[name]?.id;
+      .flatMap(l => {
+        const content = l.replace(/^[•\-\*]\s+/, "").toLowerCase().replace(/\*\*/g, "").replace(/\*/g, "");
+        const match = products.find(p => content.includes(p.name.toLowerCase()));
+        return match ? [match.id] : [];
       })
-      .filter(Boolean)
   );
   const overflow = products.filter(p => !inlinedIds.has(p.id));
   if (overflow.length) {

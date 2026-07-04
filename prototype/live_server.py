@@ -219,6 +219,9 @@ async def handle(ws) -> None:
     user_id: str | None = None
     user_name = "there"
     memory = ""
+    # Declared here (before the init block) so restore_loved can populate it,
+    # and pump_mic can read/write it without an UnboundLocalError.
+    session_saved: dict[str, str] = {}
     try:
         raw = await asyncio.wait_for(ws.recv(), timeout=10.0)
         if isinstance(raw, str):
@@ -269,8 +272,6 @@ async def handle(ws) -> None:
     current = {"session": None}  # the live session pump_mic forwards audio into
     resume = {"handle": None}    # latest Gemini resumption handle (preserves context)
     stop = asyncio.Event()       # set when the browser disconnects
-    # Tracks products saved this session (id → name) so Mira can reference them.
-    session_saved: dict[str, str] = {}
     # Suppress the echo of the kick-off message from appearing in the "you:" caption.
     suppress_input_transcript = {"once": False}
 
@@ -300,7 +301,7 @@ async def handle(ws) -> None:
                             pid, session_id=session_id,
                             product_name=prod.get("name"),
                         )
-                        if user_id and prod:
+                        if user_id:
                             await asyncio.to_thread(
                                 user_store.log_product_event,
                                 user_id, pid, prod.get("name", ""), "would_buy",
@@ -490,7 +491,13 @@ async def handle(ws) -> None:
                         await session.send_client_content(
                             turns=[types.Content(
                                 role="user",
-                                parts=[types.Part(text="hi")],
+                                parts=[types.Part(
+                                    text=f"[START SESSION] Greet {user_name} warmly by name "
+                                         f"— say hi, ask how they're doing today, "
+                                         f"and invite them to tell you what they're shopping for. "
+                                         f"Keep it to 2 sentences max. Do NOT say 'I'm great' "
+                                         f"or respond as if they greeted you — YOU are greeting THEM."
+                                )],
                             )],
                             turn_complete=True,
                         )

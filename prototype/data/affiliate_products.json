@@ -8,7 +8,7 @@
     "price": 39.99,
     "style": ["casual", "everyday", "chic"],
     "gender": "women",
-    "image_url": null,
+    "image_url": "https://m.media-amazon.com/images/I/41t44+pNYfL._AC_SL1500_.jpg",
     "affiliate_url": "https://a.co/d/0gNfHTRE"
   },
   {
@@ -20,7 +20,7 @@
     "price": 34.99,
     "style": ["casual", "everyday", "comfort"],
     "gender": "women",
-    "image_url": null,
+    "image_url": "https://m.media-amazon.com/images/I/31cj02ZyWzL._AC_SL1500_.jpg",
     "affiliate_url": "https://amzn.to/4avFktZ"
   },
   {
