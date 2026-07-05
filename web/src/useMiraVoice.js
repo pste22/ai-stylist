@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from "react";
 import { MicCapture, PcmPlayer } from "./audio.js";
 import { AvatarState, Mood } from "./avatarState.js";
+import { supabase } from "./supabaseClient.js";
 
 function resolveWsUrl() {
   const override = import.meta.env.VITE_MIRA_WS_URL;
@@ -19,7 +20,7 @@ const WS_URL = resolveWsUrl();
 let _msgId = 0;
 const mkId = () => ++_msgId;
 
-export function useMiraVoice({ userId, userName, textMode = false } = {}) {
+export function useMiraVoice({ userId, userName, userPrefs = null, textMode = false } = {}) {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(AvatarState.IDLE);
   const [mood, setMood] = useState(Mood.NEUTRAL);
@@ -93,9 +94,28 @@ export function useMiraVoice({ userId, userName, textMode = false } = {}) {
     setLoved((prev) => {
       const isLoved = prev.has(product.id);
       const ws = wsRef.current;
+
+      // Always persist directly to Supabase so unlike survives after session ends
+      if (userId) {
+        if (isLoved) {
+          supabase.from("user_history")
+            .delete()
+            .eq("user_id", userId)
+            .eq("product_id", product.id)
+            .in("action", ["would_buy", "wishlist"])
+            .then(({ error }) => { if (error) console.error("unlike:", error); });
+        } else {
+          supabase.from("user_history")
+            .insert({ user_id: userId, product_id: product.id, action: "would_buy", created_at: new Date().toISOString() })
+            .then(({ error }) => { if (error) console.error("save:", error); });
+        }
+      }
+
+      // Also notify server (for in-session context injection)
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: isLoved ? "unlike" : "would_buy", product_id: product.id }));
       }
+
       if (isLoved) {
         setSavedProducts((sp) => sp.filter((p) => p.id !== product.id));
         const next = new Set(prev); next.delete(product.id); return next;
@@ -104,7 +124,7 @@ export function useMiraVoice({ userId, userName, textMode = false } = {}) {
         return new Set(prev).add(product.id);
       }
     });
-  }, []);
+  }, [userId]);
 
   const getLevel = useCallback(() => playerRef.current?.getLevel?.() ?? 0, []);
 
@@ -127,7 +147,16 @@ export function useMiraVoice({ userId, userName, textMode = false } = {}) {
 
       ws.onopen = async () => {
         if (userId)
-          ws.send(JSON.stringify({ type: "init", user_id: userId, name: userName || "there" }));
+          ws.send(JSON.stringify({
+            type:           "init",
+            user_id:        userId,
+            name:           userName || "there",
+            style_vibe:     userPrefs?.style_vibe     ?? null,
+            shopping_focus: userPrefs?.shopping_focus ?? null,
+            top_size:       userPrefs?.top_size       ?? null,
+            bottom_size:    userPrefs?.bottom_size    ?? null,
+            budget:         userPrefs?.budget         ?? null,
+          }));
         setConnected(true);
         if (!textMode) {
           const mic = new MicCapture((bytes) => {

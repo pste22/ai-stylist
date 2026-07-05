@@ -2,8 +2,69 @@ import { useEffect, useRef, useState } from "react";
 import RiveAvatar from "./RiveAvatar.jsx";
 import ProductCard from "./ProductCard.jsx";
 import LoginScreen from "./LoginScreen.jsx";
+import OnboardingFlow from "./OnboardingFlow.jsx";
+import ChatHistory from "./ChatHistory.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
 import { useAuth } from "./useAuth.js";
+import { useOnboarding } from "./useOnboarding.js";
+import { useIdleTimeout } from "./useIdleTimeout.js";
+import { useChatHistory } from "./useChatHistory.js";
+
+// ─── User avatar menu (dropdown) ─────────────────────────────────────────────
+function UserMenu({ userName, userEmail, userAvatar, onSignOut }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, []);
+
+  return (
+    <div className="user-menu-wrap" ref={ref}>
+      <button className="user-pill" onClick={() => setOpen(v => !v)} title="Account">
+        {userAvatar
+          ? <img className="user-avatar" src={userAvatar} alt={userName} referrerPolicy="no-referrer" />
+          : <span className="user-initials">{userName[0]?.toUpperCase()}</span>}
+        <span className="user-name">{userName}</span>
+        <span className="user-chevron">{open ? "▴" : "▾"}</span>
+      </button>
+      {open && (
+        <div className="user-dropdown">
+          <div className="user-dropdown-info">
+            <p className="user-dropdown-name">{userName}</p>
+            {userEmail && <p className="user-dropdown-email">{userEmail}</p>}
+          </div>
+          <hr className="user-dropdown-divider" />
+          <button className="user-dropdown-signout" onClick={() => { setOpen(false); onSignOut(); }}>
+            Sign out
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Session expiry warning modal ────────────────────────────────────────────
+function SessionWarning({ countdown, onStay, onLeave }) {
+  return (
+    <div className="session-overlay">
+      <div className="session-modal">
+        <div className="session-icon">⏱</div>
+        <h3 className="session-title">Still there?</h3>
+        <p className="session-body">
+          You've been away for a while. For your security, we'll sign you out in
+        </p>
+        <p className="session-countdown">{countdown}s</p>
+        <div className="session-actions">
+          <button className="session-btn-stay" onClick={onStay}>Keep me signed in</button>
+          <button className="session-btn-leave" onClick={onLeave}>Sign out now</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── Inline rendering helper ──────────────────────────────────────────────────
 function renderInline(str) {
@@ -164,7 +225,7 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
 
 // ─── Full-screen chat view (text mode while connected) ────────────────────────
 function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
-                    onStop, onSend, error, userName, userAvatar, onSignOut }) {
+                    onStop, onSend, error, userName, userEmail, userAvatar, onSignOut }) {
   const [draft, setDraft] = useState("");
   const threadRef = useRef(null);
   const inputRef = useRef(null);
@@ -205,11 +266,7 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
             <span className="chat-saved-badge">💜 {savedProducts.length}</span>
           )}
           <button className="chat-end-btn" onClick={onStop}>⏹ End</button>
-          <button className="user-pill user-pill-sm" onClick={onSignOut} title="Sign out">
-            {userAvatar
-              ? <img className="user-avatar" src={userAvatar} alt={userName} referrerPolicy="no-referrer" />
-              : <span className="user-initials">{userName[0]?.toUpperCase()}</span>}
-          </button>
+          <UserMenu userName={userName} userEmail={userEmail} userAvatar={userAvatar} onSignOut={onSignOut} />
         </div>
       </div>
 
@@ -274,20 +331,27 @@ export default function App() {
   const {
     user, loading,
     userId, userName, userAvatar,
-    signInWithGoogle, signInWithFacebook, signOut,
+    signInWithGoogle, signInWithFacebook, signInWithGithub, signOut,
   } = useAuth();
 
-  const [textMode, setTextMode] = useState(false);
-  const [showSaved, setShowSaved] = useState(false);
+  const { needsOnboarding, prefs, completeOnboarding, updatePrefs } = useOnboarding(userId);
+  const { showWarning, countdown, staySignedIn } = useIdleTimeout({ onSignOut: signOut, enabled: !!user });
+  const history = useChatHistory(userId);
+
+  const [textMode, setTextMode]     = useState(false);
+  const [showSaved, setShowSaved]   = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const {
     connected, state, mood, captions, messages,
     products, savedProducts, loved, highlightedId, error,
     start, stop, sendText, wouldBuy, getLevel, buyClick,
-  } = useMiraVoice({ userId, userName, textMode });
+  } = useMiraVoice({ userId, userName, userPrefs: prefs, textMode });
 
-  // Splash while checking for existing session
-  if (loading) return <div className="auth-loading"><span>✦</span></div>;
+  // Splash while checking for existing session or onboarding status
+  if (loading || (user && needsOnboarding === null)) {
+    return <div className="auth-loading"><span>✦</span></div>;
+  }
 
   // Not signed in → show login screen
   if (!user) {
@@ -295,43 +359,67 @@ export default function App() {
       <LoginScreen
         onGoogle={signInWithGoogle}
         onFacebook={signInWithFacebook}
+        onGithub={signInWithGithub}
       />
     );
+  }
+
+  // New user → show onboarding
+  if (needsOnboarding) {
+    return <OnboardingFlow userName={userName} onComplete={completeOnboarding} />;
   }
 
   // Text mode while connected → full-screen chat UI
   if (textMode && connected) {
     return (
-      <ChatView
-        state={state}
-        mood={mood}
-        messages={messages}
-        loved={loved}
-        savedProducts={savedProducts}
-        onLove={wouldBuy}
-        onBuy={buyClick}
-        onStop={stop}
-        onSend={sendText}
-        error={error}
-        userName={userName}
-        userAvatar={userAvatar}
-        onSignOut={signOut}
-      />
+      <>
+        {showWarning && (
+          <SessionWarning countdown={countdown} onStay={staySignedIn} onLeave={signOut} />
+        )}
+        <ChatView
+          state={state}
+          mood={mood}
+          messages={messages}
+          loved={loved}
+          savedProducts={savedProducts}
+          onLove={wouldBuy}
+          onBuy={buyClick}
+          onStop={stop}
+          onSend={sendText}
+          error={error}
+          userName={userName}
+          userEmail={user?.email}
+          userAvatar={userAvatar}
+          onSignOut={signOut}
+        />
+      </>
     );
   }
 
   // ── Default layout (voice mode, or text mode before connecting) ──
   return (
     <div className="app">
+      {showWarning && (
+        <SessionWarning countdown={countdown} onStay={staySignedIn} onLeave={signOut} />
+      )}
+      {showHistory && (
+        <ChatHistory
+          {...history}
+          onClose={() => setShowHistory(false)}
+        />
+      )}
       <header className="app-header">
         <div className="app-header-top">
           <h1>Mira</h1>
-          <button className="user-pill" onClick={signOut} title="Sign out">
-            {userAvatar
-              ? <img className="user-avatar" src={userAvatar} alt={userName} referrerPolicy="no-referrer" />
-              : <span className="user-initials">{userName[0]?.toUpperCase()}</span>}
-            <span className="user-name">{userName}</span>
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
+            <button className="ch-history-btn" onClick={() => setShowHistory(true)} title="Chat history">
+              🕐
+            </button>
+            <UserMenu
+              userName={userName} userEmail={user?.email}
+              userAvatar={userAvatar} onSignOut={signOut}
+            />
+          </div>
         </div>
         <p className="tagline">Your personal AI stylist</p>
         {savedProducts.length > 0 && (

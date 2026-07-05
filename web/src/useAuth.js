@@ -20,15 +20,12 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Restore any existing session on mount
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    // Listen for login / logout events
+    // onAuthStateChange fires with INITIAL_SESSION on mount (covers PKCE code exchange too)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => setUser(session?.user ?? null)
+      (_event, session) => {
+        setUser(session?.user ?? null);
+        setLoading(false);
+      }
     );
     return () => subscription.unsubscribe();
   }, []);
@@ -44,6 +41,12 @@ export function useAuth() {
   const signInWithFacebook = () =>
     supabase.auth.signInWithOAuth({
       provider: "facebook",
+      options: { redirectTo },
+    });
+
+  const signInWithGithub = () =>
+    supabase.auth.signInWithOAuth({
+      provider: "github",
       options: { redirectTo },
     });
 
@@ -63,6 +66,7 @@ export function useAuth() {
     userAvatar: meta.avatar_url ?? meta.picture ?? null,
     signInWithGoogle,
     signInWithFacebook,
+    signInWithGithub,
     signOut,
   };
 }

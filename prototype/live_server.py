@@ -39,6 +39,7 @@ from websockets.asyncio.server import serve
 
 import events  # noqa: E402
 import user_store  # noqa: E402
+import chat_store  # noqa: E402
 from stylist import SYSTEM_PROMPT  # noqa: E402  (the SAME persona + grounding rules)
 from product_source import get_source  # noqa: E402
 
@@ -218,7 +219,14 @@ async def handle(ws) -> None:
     # system prompt can be personalised for this shopper.
     user_id: str | None = None
     user_name = "there"
+    style_vibe: str | None = None
+    shopping_focus: str | None = None
+    top_size: str | None = None
+    bottom_size: str | None = None
+    budget: str | None = None
     memory = ""
+    chat_session_id: str | None = None
+    chat_title: str | None = None  # first user message — set once
     # Declared here (before the init block) so restore_loved can populate it,
     # and pump_mic can read/write it without an UnboundLocalError.
     session_saved: dict[str, str] = {}
@@ -229,6 +237,11 @@ async def handle(ws) -> None:
             if data.get("type") == "init":
                 user_id = data.get("user_id")
                 user_name = data.get("name") or "there"
+                style_vibe     = data.get("style_vibe")
+                shopping_focus = data.get("shopping_focus")
+                top_size       = data.get("top_size")
+                bottom_size    = data.get("bottom_size")
+                budget         = data.get("budget")
                 if user_id:
                     try:
                         memory, is_returning = await asyncio.to_thread(
@@ -264,6 +277,11 @@ async def handle(ws) -> None:
                                 )
                     except Exception as exc:
                         print(f"  ! user_store.load_user failed: {exc}")
+                # Create a chat session row for history tracking
+                if user_id:
+                    chat_session_id = await asyncio.to_thread(
+                        chat_store.create_session, user_id
+                    )
     except (asyncio.TimeoutError, Exception):
         pass  # anonymous session — Mira still works fine
 
@@ -360,6 +378,14 @@ async def handle(ws) -> None:
                                 )
                             # Echo back as a transcript so the caption shows what was typed
                             await _send_json(ws, type="transcript", who="you", text=text)
+                            # Persist to chat history
+                            if user_id and chat_session_id:
+                                if not chat_title:
+                                    chat_title = text[:120]
+                                await asyncio.to_thread(
+                                    chat_store.save_message,
+                                    chat_session_id, user_id, "user", text,
+                                )
                     elif data.get("type") == "buy_click":
                         pid = data.get("product_id", "")
                         prod = _BY_ID.get(pid, {})
@@ -375,6 +401,10 @@ async def handle(ws) -> None:
                         print(f"  buy-click -> retailer: {prod.get('name', pid)}")
         finally:
             stop.set()  # browser closed → tear the whole conversation down
+            if user_id and chat_session_id:
+                await asyncio.to_thread(
+                    chat_store.end_session, chat_session_id, chat_title
+                )
 
     async def pump_mira(session) -> None:
         """Gemini audio + transcripts → browser, ACROSS many turns on ONE session.
@@ -458,6 +488,12 @@ async def handle(ws) -> None:
                     full = "".join(said).strip()
                     if full:
                         await _send_json(ws, type="mira_text", text=full)
+                        # Persist Mira's complete turn to chat history
+                        if user_id and chat_session_id:
+                            await asyncio.to_thread(
+                                chat_store.save_message,
+                                chat_session_id, user_id, "mira", full,
+                            )
                     await _send_json(ws, type="state", state="reacting", mood=mood)
                     await asyncio.sleep(0.9)
                     await _send_json(ws, type="state", state="idle", mood="neutral")
@@ -488,16 +524,39 @@ async def handle(ws) -> None:
                         # We suppress the input transcription echo so "hi" doesn't
                         # appear in the "you:" caption.
                         suppress_input_transcript["once"] = True
+                        # Build a rich profile summary for Mira's context
+                        has_prefs = any([style_vibe, shopping_focus, top_size, budget])
+                        profile_parts = []
+                        if style_vibe:     profile_parts.append(f"style: {style_vibe}")
+                        if shopping_focus: profile_parts.append(f"shops for: {shopping_focus}")
+                        if top_size:       profile_parts.append(f"top size: {top_size}")
+                        if bottom_size:    profile_parts.append(f"bottom size: {bottom_size}")
+                        if budget:         profile_parts.append(f"budget: {budget}")
+                        profile_str = ", ".join(profile_parts)
+
+                        if has_prefs:
+                            greeting_instruction = (
+                                f"[START SESSION] Greet {user_name} warmly by name. "
+                                f"Their saved style profile is: {profile_str}. "
+                                f"In your greeting: say hi, briefly confirm their profile in a natural "
+                                f"way (e.g. 'Still going for that minimal everyday look?'), "
+                                f"and ask if they want to keep it or try something different today. "
+                                f"Keep it to 2–3 sentences. Sound like a friend, not a form. "
+                                f"Do NOT say 'I'm great' or respond as if they greeted you."
+                            )
+                        else:
+                            greeting_instruction = (
+                                f"[START SESSION] Greet {user_name} warmly by name. "
+                                f"You don't know their style preferences yet. "
+                                f"Say hi, then ask ONE natural question to understand what they're "
+                                f"looking for — their style, an occasion, or what they need. "
+                                f"Keep it to 2 sentences max. Sound curious and friendly. "
+                                f"Do NOT say 'I'm great' or respond as if they greeted you."
+                            )
                         await session.send_client_content(
                             turns=[types.Content(
                                 role="user",
-                                parts=[types.Part(
-                                    text=f"[START SESSION] Greet {user_name} warmly by name "
-                                         f"— say hi, ask how they're doing today, "
-                                         f"and invite them to tell you what they're shopping for. "
-                                         f"Keep it to 2 sentences max. Do NOT say 'I'm great' "
-                                         f"or respond as if they greeted you — YOU are greeting THEM."
-                                )],
+                                parts=[types.Part(text=greeting_instruction)],
                             )],
                             turn_complete=True,
                         )

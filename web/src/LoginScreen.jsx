@@ -1,4 +1,4 @@
-export default function LoginScreen({ onGoogle, onFacebook }) {
+export default function LoginScreen({ onGoogle, onFacebook, onGithub }) {
   return (
     <div className="login-screen">
       <div className="login-card">
@@ -19,6 +19,10 @@ export default function LoginScreen({ onGoogle, onFacebook }) {
 
         {/* ── OAuth buttons ── */}
         <div className="login-actions">
+          <button className="oauth-btn oauth-github" onClick={onGithub}>
+            <GithubIcon />
+            Continue with GitHub
+          </button>
           <button className="oauth-btn oauth-google" onClick={onGoogle}>
             <GoogleIcon />
             Continue with Google
@@ -54,6 +58,14 @@ function FacebookIcon() {
   return (
     <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
       <path fill="#1877F2" d="M24 12.07C24 5.41 18.63 0 12 0S0 5.41 0 12.07C0 18.1 4.39 23.1 10.13 24v-8.44H7.08v-3.49h3.04V9.41c0-3.02 1.8-4.7 4.54-4.7 1.31 0 2.68.24 2.68.24v2.97h-1.51c-1.49 0-1.95.93-1.95 1.88v2.27h3.32l-.53 3.49h-2.79V24C19.61 23.1 24 18.1 24 12.07z"/>
+    </svg>
+  );
+}
+
+function GithubIcon() {
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="currentColor" d="M12 0C5.37 0 0 5.37 0 12c0 5.3 3.44 9.8 8.21 11.39.6.11.82-.26.82-.58v-2.03c-3.34.73-4.04-1.61-4.04-1.61-.55-1.39-1.34-1.76-1.34-1.76-1.09-.74.08-.73.08-.73 1.2.08 1.84 1.24 1.84 1.24 1.07 1.83 2.81 1.3 3.5.99.11-.78.42-1.3.76-1.6-2.67-.3-5.47-1.33-5.47-5.93 0-1.31.47-2.38 1.24-3.22-.13-.3-.54-1.52.12-3.18 0 0 1.01-.32 3.3 1.23a11.5 11.5 0 0 1 3-.4c1.02 0 2.04.13 3 .4 2.28-1.55 3.29-1.23 3.29-1.23.66 1.66.25 2.88.12 3.18.77.84 1.24 1.91 1.24 3.22 0 4.61-2.81 5.63-5.48 5.92.43.37.81 1.1.81 2.22v3.29c0 .32.21.7.82.58C20.56 21.8 24 17.3 24 12c0-6.63-5.37-12-12-12z"/>
     </svg>
   );
 }
