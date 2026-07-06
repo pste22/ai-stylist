@@ -115,8 +115,14 @@ function MiraBubbleContent({ text, products = [], loved, onLove, onBuy }) {
         blocks.push(
           <div key={key++} className="product-line">
             <div className="product-line-img-wrap">
-              {product.image_url
-                ? <img className="product-line-img" src={product.image_url} alt={product.name} loading="lazy" />
+              {product.image_url && product.image_url.includes("m.media-amazon.com")
+                ? <img
+                    className="product-line-img"
+                    src={product.image_url}
+                    alt={product.name}
+                    loading="lazy"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
                 : <span className="product-line-swatch" style={{ background: swatchColor(product.color) }} />}
             </div>
             <div className="product-line-content">
