@@ -1120,3 +1120,162 @@ button:active { transform: translateY(0); }
   transition: border-color 0.15s;
 }
 .name-input:focus { border-color: var(--accent); }
+
+
+/* ═══════════════════════════════════════════════════════════
+   MOBILE RESPONSIVE
+   640px  — large phones, small tablets (landscape phone)
+   480px  — standard phones
+   360px  — small phones
+══════════════════════════════════════════════════════════════ */
+
+/* Shared: make sure the app never overflows horizontally */
+html, body { overflow-x: hidden; }
+
+@media (max-width: 640px) {
+  /* ── Outer app shell ── */
+  .app {
+    padding: 1.25rem 1rem;
+    gap: 1.1rem;
+  }
+  .app-header h1 { font-size: 1.9rem; }
+  .tagline       { font-size: 0.85rem; }
+
+  /* ── Header row: Mira + user pill ── */
+  .app-header-top { gap: 0.6rem; }
+  /* Truncate long display names in the pill */
+  .user-name {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* ── Mira avatar ── */
+  .mira-face  { width: 160px; height: 160px; gap: 1rem; }
+  .mira-brows { top: 42px; gap: 2rem; }
+  .brow       { width: 18px; }
+  .mira-eyes  { gap: 2rem; }
+  .eye        { width: 14px; height: 14px; }
+  .mira-mouth { width: 36px; }
+  .mira-rive, .mira-video { width: 220px; height: 220px; }
+
+  /* ── Product grid ── */
+  .grid {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 0.7rem;
+  }
+
+  /* ── Card thumb slightly shorter on mobile ── */
+  .card-thumb { height: 80px; }
+
+  /* ── Captions ── */
+  .captions { max-width: 100%; }
+  .cap      { font-size: 0.88rem; }
+
+  /* ── Controls ── */
+  button.primary { font-size: 0.97rem; padding: 0.7rem 1.4rem; }
+  .controls-hint { font-size: 0.78rem; }
+
+  /* ── Chat layout header ── */
+  .chat-header { padding: 0.6rem 0.75rem; gap: 0.5rem; }
+  .mini-avatar { width: 38px; height: 38px; }
+  .chat-name   { font-size: 0.9rem; }
+  .chat-status { font-size: 0.72rem; }
+  .chat-end-btn { font-size: 0.76rem; padding: 0.25rem 0.6rem; }
+  .chat-saved-badge { font-size: 0.75rem; padding: 0.2rem 0.5rem; }
+
+  /* ── Chat thread ── */
+  .chat-thread { padding: 1rem 0.75rem 0.75rem; }
+  .bubble      { padding: 0.7rem 0.9rem; font-size: 0.9rem; }
+  .bubble-col  { max-width: min(82%, 480px); }
+  .row-you .bubble-col { max-width: min(75%, 400px); }
+
+  /* ── Inline product line ── */
+  .product-line { padding: 0.5rem; gap: 0.55rem; }
+  .product-line-img-wrap { width: 72px; min-width: 72px; height: 72px; }
+  .product-line-name   { font-size: 0.82rem; }
+  .product-line-reason { font-size: 0.76rem; }
+
+  /* ── Compact card (chat product) ── */
+  .card.compact .card-thumb { width: 88px; min-width: 88px; height: 88px; }
+  .card.compact .card-name  { font-size: 0.82rem; }
+
+  /* ── Chat input ── */
+  .chat-input-area  { padding: 0.6rem 0.75rem; }
+  .chat-input-bar   { padding: 0.45rem 0.45rem 0.45rem 0.9rem; border-radius: 18px; }
+  .chat-input       { font-size: 0.9rem; }
+  .chat-send-btn    { width: 34px; height: 34px; font-size: 1rem; }
+  .chat-hint        { font-size: 0.66rem; }
+
+  /* ── Chat history panel ── */
+  .ch-panel { width: 100vw; }
+
+  /* ── Onboarding ── */
+  .ob-card { padding: 1.75rem 1.25rem 1.5rem; border-radius: 1.5rem; }
+  .ob-welcome-title { font-size: 1.5rem; }
+  .ob-q    { font-size: 1.05rem; }
+  .ob-tile { padding: 0.9rem 0.5rem 0.75rem; }
+  .ob-tile-emoji { font-size: 1.6rem; }
+  .ob-tile-label { font-size: 0.8rem; }
+  .ob-tile-desc  { font-size: 0.67rem; }
+
+  /* ── Session warning modal ── */
+  .session-modal  { padding: 1.5rem 1.25rem; }
+  .session-title  { font-size: 1.1rem; }
+  .session-countdown { font-size: 2rem; }
+
+  /* ── User dropdown ── */
+  .user-dropdown { min-width: 170px; }
+}
+
+@media (max-width: 480px) {
+  /* ── Avatar smaller on very small phones ── */
+  .mira-face { width: 140px; height: 140px; gap: 0.85rem; }
+  .mira-brows { top: 34px; gap: 1.7rem; }
+  .mira-eyes { gap: 1.7rem; }
+  .mira-rive, .mira-video { width: 190px; height: 190px; }
+
+  /* ── Tighter app padding ── */
+  .app { padding: 1rem 0.85rem; gap: 0.9rem; }
+  .app-header h1 { font-size: 1.7rem; }
+
+  /* ── Single-column product grid on very narrow screens ── */
+  .grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); }
+
+  /* ── Shelf: full width ── */
+  .shelf { max-width: 100%; }
+
+  /* ── Login card tighter ── */
+  .login-card { padding: 2rem 1.5rem; border-radius: 22px; }
+
+  /* ── Onboarding: allow vertical scroll if viewport is short ── */
+  .ob-screen { align-items: flex-start; padding-top: 1.25rem; }
+  .ob-card   { max-height: calc(100dvh - 2.5rem); overflow-y: auto; }
+  .ob-tiles  { gap: 0.5rem; }
+}
+
+@media (max-width: 360px) {
+  /* ── Absolute minimum: hide user name, show avatar only ── */
+  .user-name    { display: none; }
+  .user-chevron { display: none; }
+  .user-pill    { padding: 0.3rem; }
+
+  .app-header h1 { font-size: 1.55rem; }
+  .mira-face     { width: 120px; height: 120px; }
+
+  /* Shrink product line image on tiny screens */
+  .product-line-img-wrap { width: 60px; min-width: 60px; height: 60px; }
+  .ob-tiles { grid-template-columns: 1fr 1fr; gap: 0.4rem; }
+}
+
+/* ── Landscape phone: short viewport fix ── */
+@media (max-height: 600px) and (max-width: 900px) {
+  .ob-screen  { align-items: flex-start; padding: 0.75rem; }
+  .ob-card    { max-height: calc(100dvh - 1.5rem); overflow-y: auto; }
+  .ob-avatar  { width: 56px; height: 56px; }
+  .ob-card--welcome { padding-top: 1.5rem; }
+  .mira-face  { width: 130px; height: 130px; }
+  .mira-rive, .mira-video { width: 160px; height: 160px; }
+  .app        { gap: 0.75rem; padding: 0.75rem; }
+}
