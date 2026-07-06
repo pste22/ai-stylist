@@ -230,6 +230,8 @@ async def handle(ws) -> None:
     # Declared here (before the init block) so restore_loved can populate it,
     # and pump_mic can read/write it without an UnboundLocalError.
     session_saved: dict[str, str] = {}
+    # Tracks every product card sent this session so show_more can page forward.
+    session_shown_ids: set[str] = set()
     try:
         raw = await asyncio.wait_for(ws.recv(), timeout=10.0)
         if isinstance(raw, str):
@@ -295,6 +297,7 @@ async def handle(ws) -> None:
 
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
+        nonlocal chat_title, session_shown_ids
         try:
             async for msg in ws:
                 if isinstance(msg, bytes):
@@ -399,6 +402,38 @@ async def handle(ws) -> None:
                                 user_id, pid, prod.get("name", ""), "buy_click",
                             )
                         print(f"  buy-click -> retailer: {prod.get('name', pid)}")
+                    elif data.get("type") == "show_more":
+                        # Silent page-forward: push next 10 unseen products without
+                        # Mira having to speak all their names (prevents speech flood).
+                        cat_filter = data.get("category")  # optional category hint
+                        batch = []
+                        for p in _CATALOG:
+                            if p["id"] in session_shown_ids:
+                                continue
+                            if cat_filter and p.get("category") != cat_filter:
+                                continue
+                            batch.append({
+                                "id": p["id"],
+                                "name": p["name"],
+                                "category": p["category"],
+                                "color": p["color"],
+                                "price": p["price"],
+                                "image_url": p.get("image_url"),
+                                "affiliate_url": _affiliate_url(p),
+                            })
+                            if len(batch) >= 10:
+                                break
+                        if batch:
+                            for p in batch:
+                                session_shown_ids.add(p["id"])
+                            has_more = any(
+                                p["id"] not in session_shown_ids
+                                for p in _CATALOG
+                                if not cat_filter or p.get("category") == cat_filter
+                            )
+                            await _send_json(ws, type="products", items=batch,
+                                             show_more=has_more)
+                            print(f"  show_more → pushed {len(batch)} products")
         finally:
             stop.set()  # browser closed → tear the whole conversation down
             if user_id and chat_session_id:
@@ -472,6 +507,7 @@ async def handle(ws) -> None:
                     if fresh:
                         for p in fresh:
                             sent_ids.add(p["id"])
+                            session_shown_ids.add(p["id"])
                             if user_id:
                                 await asyncio.to_thread(
                                     user_store.log_product_event,
@@ -483,6 +519,8 @@ async def handle(ws) -> None:
                 if sc and sc.turn_complete:
                     fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
                     if fresh:
+                        for p in fresh:
+                            session_shown_ids.add(p["id"])
                         await _send_json(ws, type="products", items=fresh)
                     # Full turn text → browser tells LiveAvatar to speak it.
                     full = "".join(said).strip()

@@ -31,6 +31,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
   const [highlightedId, setHighlightedId] = useState(null);
   const [error, setError] = useState(null);
   const [miraText, setMiraText] = useState(null);
+  const [canShowMore, setCanShowMore] = useState(false);
 
   // Text mode: full chat history (persists across turns so user can scroll up)
   const [messages, setMessages] = useState([]);
@@ -134,6 +135,14 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
       ws.send(JSON.stringify({ type: "buy_click", product_id: product.id }));
   }, []);
 
+  const showMore = useCallback(() => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      setCanShowMore(false);
+      ws.send(JSON.stringify({ type: "show_more" }));
+    }
+  }, []);
+
   const start = useCallback(async () => {
     setError(null);
     setMessages([]);
@@ -205,23 +214,28 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
             break;
 
           case "products": {
+            const items = msg.items || [];
+            // show_more flag from server OR a large batch (≥8) suggests more exist
+            const serverSaysMore = msg.show_more === true;
+            const largeBatch = items.length >= 8;
+            if (serverSaysMore || largeBatch) setCanShowMore(true);
             // Voice mode: update the product shelf
             if (!textMode) {
               setProducts((prev) => {
                 const seen = new Set(prev.map((p) => p.id));
-                return [...prev, ...msg.items.filter((p) => !seen.has(p.id))];
+                return [...prev, ...items.filter((p) => !seen.has(p.id))];
               });
-              if (msg.items?.length) setHighlightedId(msg.items[msg.items.length - 1].id);
+              if (items.length) setHighlightedId(items[items.length - 1].id);
             } else {
               // Text mode: attach cards to the bubble they came from
               const bubId = miraBubbleId.current;
-              if (bubId) _attachProducts(bubId, msg.items);
+              if (bubId) _attachProducts(bubId, items);
               // Also keep the top-level products list for the saved shelf
               setProducts((prev) => {
                 const seen = new Set(prev.map((p) => p.id));
-                return [...prev, ...msg.items.filter((p) => !seen.has(p.id))];
+                return [...prev, ...items.filter((p) => !seen.has(p.id))];
               });
-              if (msg.items?.length) setHighlightedId(msg.items[msg.items.length - 1].id);
+              if (items.length) setHighlightedId(items[items.length - 1].id);
             }
             break;
           }
@@ -248,6 +262,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
   return {
     connected, state, mood, captions, messages,
     products, savedProducts, loved, highlightedId, error, miraText,
-    start, stop, sendText, wouldBuy, getLevel, buyClick,
+    canShowMore, setCanShowMore,
+    start, stop, sendText, wouldBuy, getLevel, buyClick, showMore,
   };
 }

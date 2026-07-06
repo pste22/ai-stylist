@@ -115,7 +115,7 @@ function MiraBubbleContent({ text, products = [], loved, onLove, onBuy }) {
         blocks.push(
           <div key={key++} className="product-line">
             <div className="product-line-img-wrap">
-              {product.image_url && product.image_url.includes("m.media-amazon.com")
+              {product.image_url && (product.image_url.includes("m.media-amazon.com") || product.image_url.includes("images.pexels.com"))
                 ? <img
                     className="product-line-img"
                     src={product.image_url}
@@ -231,7 +231,8 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
 
 // ─── Full-screen chat view (text mode while connected) ────────────────────────
 function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
-                    onStop, onSend, error, userName, userEmail, userAvatar, onSignOut }) {
+                    onStop, onSend, error, userName, userEmail, userAvatar, onSignOut,
+                    canShowMore, onShowMore }) {
   const [draft, setDraft] = useState("");
   const threadRef = useRef(null);
   const inputRef = useRef(null);
@@ -303,6 +304,15 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
         ))}
       </div>
 
+      {/* ── Show more ── */}
+      {canShowMore && (
+        <div className="show-more-bar">
+          <button className="show-more-btn" onClick={onShowMore}>
+            Show 10 more →
+          </button>
+        </div>
+      )}
+
       {/* ── Input ── */}
       <div className="chat-input-area">
         {error && <p className="chat-error">{error}</p>}
@@ -351,7 +361,8 @@ export default function App() {
   const {
     connected, state, mood, captions, messages,
     products, savedProducts, loved, highlightedId, error,
-    start, stop, sendText, wouldBuy, getLevel, buyClick,
+    canShowMore, setCanShowMore,
+    start, stop, sendText, wouldBuy, getLevel, buyClick, showMore,
   } = useMiraVoice({ userId, userName, userPrefs: prefs, textMode });
 
   // Splash while checking for existing session or onboarding status
@@ -397,6 +408,8 @@ export default function App() {
           userEmail={user?.email}
           userAvatar={userAvatar}
           onSignOut={signOut}
+          canShowMore={canShowMore}
+          onShowMore={showMore}
         />
       </>
     );

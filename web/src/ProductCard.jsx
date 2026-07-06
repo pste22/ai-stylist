@@ -24,11 +24,11 @@ function swatchHex(color) {
   return SWATCH_COLORS[color?.toLowerCase()] || "#cbb9a8";
 }
 
-// Only trust real Amazon CDN URLs as actual product photos.
-// Unsplash random IDs are mismatched (a shoe photo on a pants card, etc.)
-// so we fall back to the styled category tile for all non-Amazon images.
 function isRealProductPhoto(url) {
-  return url && url.includes("m.media-amazon.com");
+  return url && (
+    url.includes("m.media-amazon.com") ||
+    url.includes("images.pexels.com")
+  );
 }
 
 function CategoryThumbnail({ category, color }) {

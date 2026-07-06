@@ -1019,6 +1019,29 @@ button:active { transform: translateY(0); }
 .card.compact .buy  { font-size: 0.8rem; padding: 0.38rem 0.7rem; }
 
 /* ── Input area ── */
+.show-more-bar {
+  flex-shrink: 0;
+  padding: 0.5rem 1rem;
+  display: flex;
+  justify-content: center;
+}
+.show-more-btn {
+  background: none;
+  border: 1.5px solid var(--accent);
+  border-radius: 2rem;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-family: inherit;
+  padding: 0.35rem 1.1rem;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s;
+}
+.show-more-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
 .chat-input-area {
   flex-shrink: 0;
   padding: 0.75rem 1rem;
