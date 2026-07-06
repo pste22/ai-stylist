@@ -22,3 +22,14 @@
 {"ts": "2026-07-03T23:08:08.410018+00:00", "session_id": "d2c2aff13d8c40308219b89f027bfc26", "event": "would_buy", "product_id": "B0GQ75JGJT", "product_name": "AVAMO Women's High-Waist Stretch Jeans"}
 {"ts": "2026-07-03T23:08:09.776652+00:00", "session_id": "d2c2aff13d8c40308219b89f027bfc26", "event": "would_buy", "product_id": "B07756DPFY", "product_name": "Amazon Essentials Men's Slim-Fit Flat-Front Chino Pants"}
 {"ts": "2026-07-03T23:08:15.037953+00:00", "session_id": "d2c2aff13d8c40308219b89f027bfc26", "event": "would_buy", "product_id": "B0FG3DP8YD", "product_name": "Women's Flowy Chiffon Blouse"}
+{"ts": "2026-07-03T23:48:33.557464+00:00", "session_id": "bca29ffb23584846aa89d54827d6b936", "event": "would_buy", "product_id": "B0G57B4YP4", "product_name": "Reebok Swiftstrike Running Shoes"}
+{"ts": "2026-07-03T23:48:34.551604+00:00", "session_id": "bca29ffb23584846aa89d54827d6b936", "event": "would_buy", "product_id": "B0DPWQDRJT", "product_name": "Bruno Marc Slip-On Casual Sneakers"}
+{"ts": "2026-07-03T23:48:57.159347+00:00", "session_id": "bca29ffb23584846aa89d54827d6b936", "event": "would_buy", "product_id": "B0CGQQNHXM", "product_name": "CREATMO US Women's Double-Breasted Trench Coat"}
+{"ts": "2026-07-03T23:48:58.245591+00:00", "session_id": "bca29ffb23584846aa89d54827d6b936", "event": "would_buy", "product_id": "B0DY89R56G", "product_name": "Women's Casual Midi Dress"}
+{"ts": "2026-07-03T23:49:46.991813+00:00", "session_id": "bca29ffb23584846aa89d54827d6b936", "event": "would_buy", "product_id": "B07756DPFY", "product_name": "Amazon Essentials Men's Slim-Fit Flat-Front Chino Pants"}
+{"ts": "2026-07-05T22:51:55.321038+00:00", "session_id": "0083ce103fb54ddbb3953909032151f8", "event": "would_buy", "product_id": "B0GQ75JGJT", "product_name": "AVAMO Women's High-Waist Stretch Jeans"}
+{"ts": "2026-07-05T22:52:08.999507+00:00", "session_id": "0083ce103fb54ddbb3953909032151f8", "event": "would_buy", "product_id": "B07756DPFY", "product_name": "Amazon Essentials Men's Slim-Fit Flat-Front Chino Pants"}
+{"ts": "2026-07-05T22:57:39.600532+00:00", "session_id": "4295c5f9e06849cfb18ce69d14f91e2e", "event": "would_buy", "product_id": "B0DY89R56G", "product_name": "Women's Casual Midi Dress"}
+{"ts": "2026-07-05T22:57:40.473256+00:00", "session_id": "4295c5f9e06849cfb18ce69d14f91e2e", "event": "would_buy", "product_id": "B07756DPFY", "product_name": "Amazon Essentials Men's Slim-Fit Flat-Front Chino Pants"}
+{"ts": "2026-07-05T22:58:16.986621+00:00", "session_id": "4295c5f9e06849cfb18ce69d14f91e2e", "event": "would_buy", "product_id": "B0DPWQDRJT", "product_name": "Bruno Marc Slip-On Casual Sneakers"}
+{"ts": "2026-07-05T22:58:27.324981+00:00", "session_id": "4295c5f9e06849cfb18ce69d14f91e2e", "event": "would_buy", "product_id": "B08KTZQRC7", "product_name": "Cotton Canvas Tote Bag"}

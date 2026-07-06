@@ -6,7 +6,11 @@
     "category": "dresses",
     "color": "black",
     "price": 39.99,
-    "style": ["casual", "everyday", "chic"],
+    "style": [
+      "casual",
+      "everyday",
+      "chic"
+    ],
     "gender": "women",
     "image_url": "https://m.media-amazon.com/images/I/41t44+pNYfL._AC_SL1500_.jpg",
     "affiliate_url": "https://a.co/d/0gNfHTRE"
@@ -18,7 +22,11 @@
     "category": "bottoms",
     "color": "blue",
     "price": 34.99,
-    "style": ["casual", "everyday", "comfort"],
+    "style": [
+      "casual",
+      "everyday",
+      "comfort"
+    ],
     "gender": "women",
     "image_url": "https://m.media-amazon.com/images/I/31cj02ZyWzL._AC_SL1500_.jpg",
     "affiliate_url": "https://amzn.to/4avFktZ"
@@ -30,7 +38,11 @@
     "category": "tops",
     "color": "black",
     "price": 27.99,
-    "style": ["casual", "chic", "workwear"],
+    "style": [
+      "casual",
+      "chic",
+      "workwear"
+    ],
     "gender": "women",
     "image_url": "https://m.media-amazon.com/images/I/5122uRa0LPL._AC_.jpg",
     "affiliate_url": "https://amzn.to/4492fYj"
@@ -41,8 +53,12 @@
     "name": "Amazon Essentials Men's Slim-Fit Flat-Front Chino Pants",
     "category": "bottoms",
     "color": "khaki",
-    "price": 35.90,
-    "style": ["smart casual", "classic", "workwear"],
+    "price": 35.9,
+    "style": [
+      "smart casual",
+      "classic",
+      "workwear"
+    ],
     "gender": "men",
     "image_url": "https://m.media-amazon.com/images/P/B07756DPFY.01._SX500_.jpg",
     "affiliate_url": "https://amzn.to/4vCcQqJ"
@@ -54,7 +70,11 @@
     "category": "outerwear",
     "color": "beige",
     "price": 59.99,
-    "style": ["classic", "chic", "smart casual"],
+    "style": [
+      "classic",
+      "chic",
+      "smart casual"
+    ],
     "gender": "women",
     "image_url": "https://m.media-amazon.com/images/I/31deK0zAm3L._AC_.jpg",
     "affiliate_url": "https://amzn.to/3SuJiwR"
@@ -66,7 +86,11 @@
     "category": "accessories",
     "color": "natural",
     "price": 17.99,
-    "style": ["casual", "everyday", "minimal"],
+    "style": [
+      "casual",
+      "everyday",
+      "minimal"
+    ],
     "gender": "unisex",
     "image_url": "https://m.media-amazon.com/images/I/31sSMOIhQwL._AC_.jpg",
     "affiliate_url": "https://amzn.to/44CvXoO"
@@ -78,7 +102,11 @@
     "category": "shoes",
     "color": "black",
     "price": 16.66,
-    "style": ["casual", "everyday", "minimal"],
+    "style": [
+      "casual",
+      "everyday",
+      "minimal"
+    ],
     "gender": "men",
     "image_url": "https://m.media-amazon.com/images/I/61RMffezl5L._AC_SL1500_.jpg",
     "affiliate_url": "https://amzn.to/4427VmU"
@@ -90,7 +118,11 @@
     "category": "shoes",
     "color": "gray",
     "price": 22.72,
-    "style": ["casual", "athletic", "comfort"],
+    "style": [
+      "casual",
+      "athletic",
+      "comfort"
+    ],
     "gender": "men",
     "image_url": "https://m.media-amazon.com/images/I/61n3jSOQFgL._AC_SL1200_.jpg",
     "affiliate_url": "https://amzn.to/4xYNG7y"
@@ -102,9 +134,2045 @@
     "category": "shoes",
     "color": "white",
     "price": 49.21,
-    "style": ["athletic", "running", "sporty"],
+    "style": [
+      "athletic",
+      "running",
+      "sporty"
+    ],
     "gender": "men",
     "image_url": "https://m.media-amazon.com/images/I/71rnvrrEOoL._AC_SL1500_.jpg",
     "affiliate_url": "https://amzn.to/44FL40B"
+  },
+  {
+    "id": "GEN59DA259D",
+    "asin": "GEN59DA259D",
+    "name": "Women's Floral Wrap Midi Dress",
+    "category": "dresses",
+    "color": "dusty pink",
+    "price": 42.99,
+    "style": [
+      "casual",
+      "feminine",
+      "boho"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-KMn4VEeEPR8?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Floral+Wrap+Midi+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN19F172F1",
+    "asin": "GEN19F172F1",
+    "name": "Women's Sleeveless Bodycon Mini Dress",
+    "category": "dresses",
+    "color": "black",
+    "price": 34.99,
+    "style": [
+      "trendy",
+      "night out",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-BmWWRRFZLHI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Sleeveless+Bodycon+Mini+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN61DC4B00",
+    "asin": "GEN61DC4B00",
+    "name": "Women's Linen Shirt Dress Pockets",
+    "category": "dresses",
+    "color": "beige",
+    "price": 49.99,
+    "style": [
+      "casual",
+      "everyday",
+      "minimal"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-rDLBArZUl1c?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Linen+Shirt+Dress+Pockets&tag=mira0f-20"
+  },
+  {
+    "id": "GEN13667504",
+    "asin": "GEN13667504",
+    "name": "Women's Ruffle Hem Maxi Dress",
+    "category": "dresses",
+    "color": "white",
+    "price": 55.99,
+    "style": [
+      "boho",
+      "feminine",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-LrlyZzX6Sc0?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Ruffle+Hem+Maxi+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN74FBA86D",
+    "asin": "GEN74FBA86D",
+    "name": "Women's V Neck Satin Slip Dress",
+    "category": "dresses",
+    "color": "navy",
+    "price": 38.99,
+    "style": [
+      "chic",
+      "elegant",
+      "night out"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-lxSKpAHJV4g?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+V+Neck+Satin+Slip+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN21BEDB47",
+    "asin": "GEN21BEDB47",
+    "name": "Women's Tiered Smocked Sundress",
+    "category": "dresses",
+    "color": "terracotta",
+    "price": 36.99,
+    "style": [
+      "boho",
+      "casual",
+      "summer"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-vYcH7pI6v1Q?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Tiered+Smocked+Sundress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN428D8DF2",
+    "asin": "GEN428D8DF2",
+    "name": "Women's Belted Trench Shirt Dress",
+    "category": "dresses",
+    "color": "camel",
+    "price": 68.99,
+    "style": [
+      "work",
+      "classic",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-RqAMQEzIp8k?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Belted+Trench+Shirt+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN113266D5",
+    "asin": "GEN113266D5",
+    "name": "Women's Ribbed Knit Midi Dress",
+    "category": "dresses",
+    "color": "cream",
+    "price": 44.99,
+    "style": [
+      "minimal",
+      "casual",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-l0oM5JmBMiI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Ribbed+Knit+Midi+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6B0D7D79",
+    "asin": "GEN6B0D7D79",
+    "name": "Women's Floral Print Wrap Maxi Dress",
+    "category": "dresses",
+    "color": "sage",
+    "price": 52.99,
+    "style": [
+      "boho",
+      "feminine",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-EB2T2XKOHKQ?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Floral+Print+Wrap+Maxi+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN59921C49",
+    "asin": "GEN59921C49",
+    "name": "Women's Mesh Long Sleeve Mini Dress",
+    "category": "dresses",
+    "color": "black",
+    "price": 39.99,
+    "style": [
+      "trendy",
+      "night out",
+      "statement"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-nMffL1zjbw4?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Mesh+Long+Sleeve+Mini+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN1382370C",
+    "asin": "GEN1382370C",
+    "name": "Women's Lace Trim Slip Midi Dress",
+    "category": "dresses",
+    "color": "dusty pink",
+    "price": 47.99,
+    "style": [
+      "feminine",
+      "romantic",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-KMn4VEeEPR8?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Lace+Trim+Slip+Midi+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN3D2BD5F9",
+    "asin": "GEN3D2BD5F9",
+    "name": "Women's Denim Button Front Midi Dress",
+    "category": "dresses",
+    "color": "navy",
+    "price": 58.99,
+    "style": [
+      "casual",
+      "classic",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-BmWWRRFZLHI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Denim+Button+Front+Midi+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN306E7206",
+    "asin": "GEN306E7206",
+    "name": "Women's Smocked Waist Floral Dress",
+    "category": "dresses",
+    "color": "lavender",
+    "price": 41.99,
+    "style": [
+      "boho",
+      "feminine",
+      "casual"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-rDLBArZUl1c?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Smocked+Waist+Floral+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN2E316FF6",
+    "asin": "GEN2E316FF6",
+    "name": "Women's Long Sleeve Turtleneck Dress",
+    "category": "dresses",
+    "color": "charcoal",
+    "price": 46.99,
+    "style": [
+      "minimal",
+      "classic",
+      "work"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-LrlyZzX6Sc0?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Long+Sleeve+Turtleneck+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN1E03C60B",
+    "asin": "GEN1E03C60B",
+    "name": "Women's Off Shoulder Ruched Dress",
+    "category": "dresses",
+    "color": "burgundy",
+    "price": 43.99,
+    "style": [
+      "feminine",
+      "night out",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-lxSKpAHJV4g?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Off+Shoulder+Ruched+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN8CCFB446",
+    "asin": "GEN8CCFB446",
+    "name": "Women's Pleated Chiffon Maxi Dress",
+    "category": "dresses",
+    "color": "sage",
+    "price": 62.99,
+    "style": [
+      "elegant",
+      "feminine",
+      "occasions"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-vYcH7pI6v1Q?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Pleated+Chiffon+Maxi+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN18101CCC",
+    "asin": "GEN18101CCC",
+    "name": "Women's Square Neck Puff Sleeve Dress",
+    "category": "dresses",
+    "color": "white",
+    "price": 39.99,
+    "style": [
+      "trendy",
+      "feminine",
+      "casual"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-RqAMQEzIp8k?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Square+Neck+Puff+Sleeve+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6A11B3CA",
+    "asin": "GEN6A11B3CA",
+    "name": "Women's Flowy Bohemian Maxi Dress",
+    "category": "dresses",
+    "color": "tan",
+    "price": 54.99,
+    "style": [
+      "boho",
+      "weekend",
+      "casual"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-l0oM5JmBMiI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Flowy+Bohemian+Maxi+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN41F0B749",
+    "asin": "GEN41F0B749",
+    "name": "Women's Halter Neck Backless Dress",
+    "category": "dresses",
+    "color": "black",
+    "price": 45.99,
+    "style": [
+      "night out",
+      "statement",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-EB2T2XKOHKQ?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Halter+Neck+Backless+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6FAD8CA0",
+    "asin": "GEN6FAD8CA0",
+    "name": "Women's Jacquard Midi Pencil Dress",
+    "category": "dresses",
+    "color": "navy",
+    "price": 72.99,
+    "style": [
+      "work",
+      "classic",
+      "elegant"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-nMffL1zjbw4?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Jacquard+Midi+Pencil+Dress&tag=mira0f-20"
+  },
+  {
+    "id": "GEN27B76955",
+    "asin": "GEN27B76955",
+    "name": "Women's Oversized Linen Button Shirt",
+    "category": "tops",
+    "color": "white",
+    "price": 37.99,
+    "style": [
+      "casual",
+      "minimal",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-IF9TK5Uy-KI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Oversized+Linen+Button+Shirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN122D991E",
+    "asin": "GEN122D991E",
+    "name": "Women's Cropped Ribbed Tank Top",
+    "category": "tops",
+    "color": "black",
+    "price": 22.99,
+    "style": [
+      "trendy",
+      "casual",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-J7rRzjSi5hM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Cropped+Ribbed+Tank+Top&tag=mira0f-20"
+  },
+  {
+    "id": "GEN7FC3B102",
+    "asin": "GEN7FC3B102",
+    "name": "Women's Satin Blouse Bow Neck",
+    "category": "tops",
+    "color": "cream",
+    "price": 44.99,
+    "style": [
+      "work",
+      "chic",
+      "elegant"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-fS3tGOkp0xo?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Satin+Blouse+Bow+Neck&tag=mira0f-20"
+  },
+  {
+    "id": "GEN9AD30B74",
+    "asin": "GEN9AD30B74",
+    "name": "Women's Off Shoulder Ruffle Blouse",
+    "category": "tops",
+    "color": "white",
+    "price": 32.99,
+    "style": [
+      "feminine",
+      "casual",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-fJTqyZMkLDo?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Off+Shoulder+Ruffle+Blouse&tag=mira0f-20"
+  },
+  {
+    "id": "GEN57E0A394",
+    "asin": "GEN57E0A394",
+    "name": "Women's Striped Breton Long Sleeve Top",
+    "category": "tops",
+    "color": "navy",
+    "price": 28.99,
+    "style": [
+      "classic",
+      "casual",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-mEZ3PoFGs48?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Striped+Breton+Long+Sleeve+Top&tag=mira0f-20"
+  },
+  {
+    "id": "GEN18892782",
+    "asin": "GEN18892782",
+    "name": "Women's Floral Chiffon Wrap Blouse",
+    "category": "tops",
+    "color": "dusty pink",
+    "price": 38.99,
+    "style": [
+      "feminine",
+      "work",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-9QTQFihyles?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Floral+Chiffon+Wrap+Blouse&tag=mira0f-20"
+  },
+  {
+    "id": "GENB138AB9B",
+    "asin": "GENB138AB9B",
+    "name": "Women's Cropped Knit Cardigan",
+    "category": "tops",
+    "color": "cream",
+    "price": 49.99,
+    "style": [
+      "casual",
+      "layering",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-VT4CG5smzSM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Cropped+Knit+Cardigan&tag=mira0f-20"
+  },
+  {
+    "id": "GENE56E62F4",
+    "asin": "GENE56E62F4",
+    "name": "Women's Smocked Puff Sleeve Blouse",
+    "category": "tops",
+    "color": "sage",
+    "price": 34.99,
+    "style": [
+      "trendy",
+      "feminine",
+      "boho"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-omNfIqhJkE4?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Smocked+Puff+Sleeve+Blouse&tag=mira0f-20"
+  },
+  {
+    "id": "GEN13C1B6B0",
+    "asin": "GEN13C1B6B0",
+    "name": "Women's Basic V Neck Tee 3 Pack",
+    "category": "tops",
+    "color": "white",
+    "price": 29.99,
+    "style": [
+      "casual",
+      "minimal",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-aO_jMXTduUE?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Basic+V+Neck+Tee+3+Pack&tag=mira0f-20"
+  },
+  {
+    "id": "GEN77F81BD2",
+    "asin": "GEN77F81BD2",
+    "name": "Women's Silk Effect Cami Top",
+    "category": "tops",
+    "color": "black",
+    "price": 26.99,
+    "style": [
+      "chic",
+      "casual",
+      "layering"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-jBnCGiMDl9I?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Silk+Effect+Cami+Top&tag=mira0f-20"
+  },
+  {
+    "id": "GEN16641FD4",
+    "asin": "GEN16641FD4",
+    "name": "Women's Lace Up Front Corset Top",
+    "category": "tops",
+    "color": "burgundy",
+    "price": 31.99,
+    "style": [
+      "trendy",
+      "statement",
+      "night out"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-IF9TK5Uy-KI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Lace+Up+Front+Corset+Top&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6F3652BF",
+    "asin": "GEN6F3652BF",
+    "name": "Women's Linen Henley Button Top",
+    "category": "tops",
+    "color": "beige",
+    "price": 33.99,
+    "style": [
+      "casual",
+      "minimal",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-J7rRzjSi5hM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Linen+Henley+Button+Top&tag=mira0f-20"
+  },
+  {
+    "id": "GEN75BF7724",
+    "asin": "GEN75BF7724",
+    "name": "Women's Sheer Long Sleeve Blouse",
+    "category": "tops",
+    "color": "white",
+    "price": 35.99,
+    "style": [
+      "work",
+      "layering",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-fS3tGOkp0xo?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Sheer+Long+Sleeve+Blouse&tag=mira0f-20"
+  },
+  {
+    "id": "GEN214AB91D",
+    "asin": "GEN214AB91D",
+    "name": "Women's Boxy Crop Graphic Tee",
+    "category": "tops",
+    "color": "charcoal",
+    "price": 24.99,
+    "style": [
+      "casual",
+      "trendy",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-fJTqyZMkLDo?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Boxy+Crop+Graphic+Tee&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5AED3D4A",
+    "asin": "GEN5AED3D4A",
+    "name": "Women's Cold Shoulder Knit Sweater",
+    "category": "tops",
+    "color": "camel",
+    "price": 54.99,
+    "style": [
+      "classic",
+      "casual",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-mEZ3PoFGs48?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Cold+Shoulder+Knit+Sweater&tag=mira0f-20"
+  },
+  {
+    "id": "GEND12CBE53",
+    "asin": "GEND12CBE53",
+    "name": "Women's Tied Front Gingham Shirt",
+    "category": "tops",
+    "color": "navy",
+    "price": 36.99,
+    "style": [
+      "classic",
+      "casual",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-9QTQFihyles?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Tied+Front+Gingham+Shirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN75630C77",
+    "asin": "GEN75630C77",
+    "name": "Women's Strapless Bandeau Tube Top",
+    "category": "tops",
+    "color": "black",
+    "price": 18.99,
+    "style": [
+      "trendy",
+      "casual",
+      "summer"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-VT4CG5smzSM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Strapless+Bandeau+Tube+Top&tag=mira0f-20"
+  },
+  {
+    "id": "GEN706775DD",
+    "asin": "GEN706775DD",
+    "name": "Women's Merino Wool Fitted Turtleneck",
+    "category": "tops",
+    "color": "cream",
+    "price": 68.99,
+    "style": [
+      "classic",
+      "work",
+      "minimal"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-omNfIqhJkE4?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Merino+Wool+Fitted+Turtleneck&tag=mira0f-20"
+  },
+  {
+    "id": "GEN3484FE8A",
+    "asin": "GEN3484FE8A",
+    "name": "Women's High Rise Straight Leg Jeans",
+    "category": "bottoms",
+    "color": "navy",
+    "price": 54.99,
+    "style": [
+      "classic",
+      "casual",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-2JIvboGLeho?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+High+Rise+Straight+Leg+Jeans&tag=mira0f-20"
+  },
+  {
+    "id": "GEN22449CC3",
+    "asin": "GEN22449CC3",
+    "name": "Women's Wide Leg Linen Trousers",
+    "category": "bottoms",
+    "color": "beige",
+    "price": 47.99,
+    "style": [
+      "casual",
+      "minimal",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-CrEFkn2PsPk?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Wide+Leg+Linen+Trousers&tag=mira0f-20"
+  },
+  {
+    "id": "GEN22851291",
+    "asin": "GEN22851291",
+    "name": "Women's Pleated Midi Skirt Elastic Waist",
+    "category": "bottoms",
+    "color": "black",
+    "price": 38.99,
+    "style": [
+      "work",
+      "classic",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-3XYPaYbxBKQ?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Pleated+Midi+Skirt+Elastic+Waist&tag=mira0f-20"
+  },
+  {
+    "id": "GEN48B2352A",
+    "asin": "GEN48B2352A",
+    "name": "Women's Biker Shorts High Waist",
+    "category": "bottoms",
+    "color": "black",
+    "price": 24.99,
+    "style": [
+      "sporty",
+      "casual",
+      "comfort"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-oBn8yMSA13I?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Biker+Shorts+High+Waist&tag=mira0f-20"
+  },
+  {
+    "id": "GEN4FE9BE93",
+    "asin": "GEN4FE9BE93",
+    "name": "Women's Cargo Wide Leg Pants",
+    "category": "bottoms",
+    "color": "olive",
+    "price": 52.99,
+    "style": [
+      "trendy",
+      "casual",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-hkFxFwPFAAM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Cargo+Wide+Leg+Pants&tag=mira0f-20"
+  },
+  {
+    "id": "GEN38002E69",
+    "asin": "GEN38002E69",
+    "name": "Women's Flowy Palazzo Pants",
+    "category": "bottoms",
+    "color": "cream",
+    "price": 43.99,
+    "style": [
+      "boho",
+      "casual",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-8sxM7XPVS68?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Flowy+Palazzo+Pants&tag=mira0f-20"
+  },
+  {
+    "id": "GEN3058535C",
+    "asin": "GEN3058535C",
+    "name": "Women's Denim Mini Skirt Frayed Hem",
+    "category": "bottoms",
+    "color": "navy",
+    "price": 34.99,
+    "style": [
+      "casual",
+      "trendy",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-mSHan7dYkzM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Denim+Mini+Skirt+Frayed+Hem&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5A702C89",
+    "asin": "GEN5A702C89",
+    "name": "Women's High Waist Tailored Trousers",
+    "category": "bottoms",
+    "color": "charcoal",
+    "price": 59.99,
+    "style": [
+      "work",
+      "classic",
+      "elegant"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-H1PNLHAnS0s?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+High+Waist+Tailored+Trousers&tag=mira0f-20"
+  },
+  {
+    "id": "GEN56A998FB",
+    "asin": "GEN56A998FB",
+    "name": "Women's Floral Wrap Midi Skirt",
+    "category": "bottoms",
+    "color": "terracotta",
+    "price": 41.99,
+    "style": [
+      "boho",
+      "feminine",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-HJckKnwCXxQ?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Floral+Wrap+Midi+Skirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN33F26DDE",
+    "asin": "GEN33F26DDE",
+    "name": "Women's Satin Bias Cut Midi Skirt",
+    "category": "bottoms",
+    "color": "dusty pink",
+    "price": 46.99,
+    "style": [
+      "chic",
+      "elegant",
+      "night out"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-q0YnJR0bBMc?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Satin+Bias+Cut+Midi+Skirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN62502C98",
+    "asin": "GEN62502C98",
+    "name": "Women's Paperbag Waist Bermuda Shorts",
+    "category": "bottoms",
+    "color": "khaki",
+    "price": 36.99,
+    "style": [
+      "casual",
+      "weekend",
+      "classic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-2JIvboGLeho?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Paperbag+Waist+Bermuda+Shorts&tag=mira0f-20"
+  },
+  {
+    "id": "GEN110CC20F",
+    "asin": "GEN110CC20F",
+    "name": "Women's Slim Fit Cigarette Trousers",
+    "category": "bottoms",
+    "color": "black",
+    "price": 55.99,
+    "style": [
+      "work",
+      "minimal",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-CrEFkn2PsPk?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Slim+Fit+Cigarette+Trousers&tag=mira0f-20"
+  },
+  {
+    "id": "GEN36190910",
+    "asin": "GEN36190910",
+    "name": "Women's Distressed Boyfriend Jeans",
+    "category": "bottoms",
+    "color": "navy",
+    "price": 49.99,
+    "style": [
+      "casual",
+      "classic",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-3XYPaYbxBKQ?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Distressed+Boyfriend+Jeans&tag=mira0f-20"
+  },
+  {
+    "id": "GEN38EE962F",
+    "asin": "GEN38EE962F",
+    "name": "Women's Faux Leather Mini Skirt",
+    "category": "bottoms",
+    "color": "black",
+    "price": 38.99,
+    "style": [
+      "trendy",
+      "night out",
+      "statement"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-oBn8yMSA13I?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Faux+Leather+Mini+Skirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN7748BFD2",
+    "asin": "GEN7748BFD2",
+    "name": "Women's Classic Belted Trench Coat",
+    "category": "outerwear",
+    "color": "camel",
+    "price": 119.99,
+    "style": [
+      "classic",
+      "work",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-YmQ0-nmv3_0?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Classic+Belted+Trench+Coat&tag=mira0f-20"
+  },
+  {
+    "id": "GEN1BF96505",
+    "asin": "GEN1BF96505",
+    "name": "Women's Oversized Wool Blend Coat",
+    "category": "outerwear",
+    "color": "charcoal",
+    "price": 139.99,
+    "style": [
+      "classic",
+      "elegant",
+      "winter"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-c9FQyqIECds?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Oversized+Wool+Blend+Coat&tag=mira0f-20"
+  },
+  {
+    "id": "GEN50678B9B",
+    "asin": "GEN50678B9B",
+    "name": "Women's Cropped Faux Leather Jacket",
+    "category": "outerwear",
+    "color": "black",
+    "price": 69.99,
+    "style": [
+      "trendy",
+      "casual",
+      "statement"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-NpTPCHWFlhA?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Cropped+Faux+Leather+Jacket&tag=mira0f-20"
+  },
+  {
+    "id": "GEN629BD9DC",
+    "asin": "GEN629BD9DC",
+    "name": "Women's Longline Puffer Jacket Quilted",
+    "category": "outerwear",
+    "color": "navy",
+    "price": 89.99,
+    "style": [
+      "casual",
+      "winter",
+      "comfort"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-w_9GB-DFXAM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Longline+Puffer+Jacket+Quilted&tag=mira0f-20"
+  },
+  {
+    "id": "GEN7E377A1B",
+    "asin": "GEN7E377A1B",
+    "name": "Women's Open Front Longline Cardigan",
+    "category": "outerwear",
+    "color": "cream",
+    "price": 62.99,
+    "style": [
+      "casual",
+      "layering",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-f5pHBPiPpMk?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Open+Front+Longline+Cardigan&tag=mira0f-20"
+  },
+  {
+    "id": "GEN42D88D80",
+    "asin": "GEN42D88D80",
+    "name": "Women's Tailored Double Breasted Blazer",
+    "category": "outerwear",
+    "color": "black",
+    "price": 84.99,
+    "style": [
+      "work",
+      "classic",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-1fZC2rYkqf8?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Tailored+Double+Breasted+Blazer&tag=mira0f-20"
+  },
+  {
+    "id": "GEN7B4DCE63",
+    "asin": "GEN7B4DCE63",
+    "name": "Women's Sherpa Lined Denim Jacket",
+    "category": "outerwear",
+    "color": "navy",
+    "price": 74.99,
+    "style": [
+      "casual",
+      "weekend",
+      "classic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-kSoG8BRDiDE?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Sherpa+Lined+Denim+Jacket&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6297CC92",
+    "asin": "GEN6297CC92",
+    "name": "Women's Velvet Blazer Relaxed Fit",
+    "category": "outerwear",
+    "color": "burgundy",
+    "price": 79.99,
+    "style": [
+      "statement",
+      "chic",
+      "evening"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-q9r3WT7VJZQ?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Velvet+Blazer+Relaxed+Fit&tag=mira0f-20"
+  },
+  {
+    "id": "GEN29CD2B74",
+    "asin": "GEN29CD2B74",
+    "name": "Women's Teddy Bear Fleece Jacket",
+    "category": "outerwear",
+    "color": "cream",
+    "price": 67.99,
+    "style": [
+      "casual",
+      "comfort",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-9vph-R8LjPs?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Teddy+Bear+Fleece+Jacket&tag=mira0f-20"
+  },
+  {
+    "id": "GEN51B8CC39",
+    "asin": "GEN51B8CC39",
+    "name": "Women's Utility Lightweight Anorak",
+    "category": "outerwear",
+    "color": "olive",
+    "price": 72.99,
+    "style": [
+      "casual",
+      "outdoor",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-xfU7Fz-eFgk?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Utility+Lightweight+Anorak&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5CEED62F",
+    "asin": "GEN5CEED62F",
+    "name": "Women's Plaid Wool Blend Cape Coat",
+    "category": "outerwear",
+    "color": "charcoal",
+    "price": 109.99,
+    "style": [
+      "classic",
+      "elegant",
+      "statement"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-YmQ0-nmv3_0?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Plaid+Wool+Blend+Cape+Coat&tag=mira0f-20"
+  },
+  {
+    "id": "GEN151EA7C3",
+    "asin": "GEN151EA7C3",
+    "name": "Women's Cropped Puffer Vest Quilted",
+    "category": "outerwear",
+    "color": "navy",
+    "price": 54.99,
+    "style": [
+      "casual",
+      "layering",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-c9FQyqIECds?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Cropped+Puffer+Vest+Quilted&tag=mira0f-20"
+  },
+  {
+    "id": "GEN40A0E752",
+    "asin": "GEN40A0E752",
+    "name": "Women's Faux Fur Collar Wrap Coat",
+    "category": "outerwear",
+    "color": "camel",
+    "price": 129.99,
+    "style": [
+      "elegant",
+      "classic",
+      "winter"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-NpTPCHWFlhA?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Faux+Fur+Collar+Wrap+Coat&tag=mira0f-20"
+  },
+  {
+    "id": "GEN7DE5B8B9",
+    "asin": "GEN7DE5B8B9",
+    "name": "Women's Platform White Leather Sneakers",
+    "category": "shoes",
+    "color": "white",
+    "price": 64.99,
+    "style": [
+      "casual",
+      "trendy",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-E7RLgUjjazc?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Platform+White+Leather+Sneakers&tag=mira0f-20"
+  },
+  {
+    "id": "GEN725E71B7",
+    "asin": "GEN725E71B7",
+    "name": "Women's Block Heel Mule Sandals",
+    "category": "shoes",
+    "color": "tan",
+    "price": 48.99,
+    "style": [
+      "chic",
+      "casual",
+      "summer"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-h0Vxgz5tyXA?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Block+Heel+Mule+Sandals&tag=mira0f-20"
+  },
+  {
+    "id": "GEN2E17517F",
+    "asin": "GEN2E17517F",
+    "name": "Women's Chelsea Ankle Boots Leather",
+    "category": "shoes",
+    "color": "black",
+    "price": 84.99,
+    "style": [
+      "classic",
+      "work",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-5MSSTnpLBZE?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Chelsea+Ankle+Boots+Leather&tag=mira0f-20"
+  },
+  {
+    "id": "GENC2733B55",
+    "asin": "GENC2733B55",
+    "name": "Women's Strappy Heeled Sandals",
+    "category": "shoes",
+    "color": "nude",
+    "price": 54.99,
+    "style": [
+      "elegant",
+      "occasions",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-3TNsHTEWpIY?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Strappy+Heeled+Sandals&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6010F7DF",
+    "asin": "GEN6010F7DF",
+    "name": "Women's Pointed Toe Kitten Heel Pumps",
+    "category": "shoes",
+    "color": "black",
+    "price": 69.99,
+    "style": [
+      "work",
+      "classic",
+      "elegant"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-VJ2s9RdODWI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Pointed+Toe+Kitten+Heel+Pumps&tag=mira0f-20"
+  },
+  {
+    "id": "GEN238FDEE3",
+    "asin": "GEN238FDEE3",
+    "name": "Women's Slip On Loafers Penny",
+    "category": "shoes",
+    "color": "camel",
+    "price": 58.99,
+    "style": [
+      "classic",
+      "casual",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-0riO7oOG--Q?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Slip+On+Loafers+Penny&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6AE33E6A",
+    "asin": "GEN6AE33E6A",
+    "name": "Women's Chunky Platform Sandals",
+    "category": "shoes",
+    "color": "black",
+    "price": 52.99,
+    "style": [
+      "trendy",
+      "statement",
+      "casual"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-6EPeH_zTsiQ?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Chunky+Platform+Sandals&tag=mira0f-20"
+  },
+  {
+    "id": "GEN324FB392",
+    "asin": "GEN324FB392",
+    "name": "Women's Over The Knee Heeled Boots",
+    "category": "shoes",
+    "color": "black",
+    "price": 94.99,
+    "style": [
+      "statement",
+      "chic",
+      "winter"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-w7a7iPOjM-0?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Over+The+Knee+Heeled+Boots&tag=mira0f-20"
+  },
+  {
+    "id": "GEN575A6EA4",
+    "asin": "GEN575A6EA4",
+    "name": "Women's Canvas Slip On Espadrilles",
+    "category": "shoes",
+    "color": "beige",
+    "price": 36.99,
+    "style": [
+      "casual",
+      "summer",
+      "boho"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-xq90jBFMoRY?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Canvas+Slip+On+Espadrilles&tag=mira0f-20"
+  },
+  {
+    "id": "GEN78BAA1EA",
+    "asin": "GEN78BAA1EA",
+    "name": "Women's Lace Up Ankle Boots Block Heel",
+    "category": "shoes",
+    "color": "tan",
+    "price": 76.99,
+    "style": [
+      "casual",
+      "classic",
+      "weekend"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-a_MjLqTsOcY?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Lace+Up+Ankle+Boots+Block+Heel&tag=mira0f-20"
+  },
+  {
+    "id": "GEN29875994",
+    "asin": "GEN29875994",
+    "name": "Women's Barely There Heeled Sandals",
+    "category": "shoes",
+    "color": "nude",
+    "price": 44.99,
+    "style": [
+      "elegant",
+      "minimal",
+      "occasions"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-E7RLgUjjazc?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Barely+There+Heeled+Sandals&tag=mira0f-20"
+  },
+  {
+    "id": "GENF7C76EE8",
+    "asin": "GENF7C76EE8",
+    "name": "Women's Flatform Sole Sneakers",
+    "category": "shoes",
+    "color": "white",
+    "price": 58.99,
+    "style": [
+      "trendy",
+      "casual",
+      "comfort"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-h0Vxgz5tyXA?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Flatform+Sole+Sneakers&tag=mira0f-20"
+  },
+  {
+    "id": "GEN13D0999E",
+    "asin": "GEN13D0999E",
+    "name": "Women's Large Canvas Tote Work Bag",
+    "category": "bags",
+    "color": "beige",
+    "price": 38.99,
+    "style": [
+      "casual",
+      "work",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-Rg3_bdOBBX0?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Large+Canvas+Tote+Work+Bag&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5C88DE5A",
+    "asin": "GEN5C88DE5A",
+    "name": "Women's Leather Crossbody Bag Minimal",
+    "category": "bags",
+    "color": "tan",
+    "price": 64.99,
+    "style": [
+      "minimal",
+      "chic",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-eHlVZcO_LOs?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Leather+Crossbody+Bag+Minimal&tag=mira0f-20"
+  },
+  {
+    "id": "GEN7F46B4C7",
+    "asin": "GEN7F46B4C7",
+    "name": "Women's Mini Shoulder Bag Chain Strap",
+    "category": "bags",
+    "color": "black",
+    "price": 42.99,
+    "style": [
+      "chic",
+      "night out",
+      "trendy"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-v3pTGwpBz8M?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Mini+Shoulder+Bag+Chain+Strap&tag=mira0f-20"
+  },
+  {
+    "id": "GEN2E49BA3D",
+    "asin": "GEN2E49BA3D",
+    "name": "Women's Woven Straw Raffia Tote Bag",
+    "category": "bags",
+    "color": "beige",
+    "price": 34.99,
+    "style": [
+      "boho",
+      "summer",
+      "casual"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-kAeYxE4RSPY?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Woven+Straw+Raffia+Tote+Bag&tag=mira0f-20"
+  },
+  {
+    "id": "GEN2D0264C9",
+    "asin": "GEN2D0264C9",
+    "name": "Women's Structured Top Handle Handbag",
+    "category": "bags",
+    "color": "camel",
+    "price": 79.99,
+    "style": [
+      "work",
+      "classic",
+      "elegant"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-6-53cHoGUbs?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Structured+Top+Handle+Handbag&tag=mira0f-20"
+  },
+  {
+    "id": "GEN3A7763BD",
+    "asin": "GEN3A7763BD",
+    "name": "Women's Bucket Bag Drawstring Closure",
+    "category": "bags",
+    "color": "black",
+    "price": 52.99,
+    "style": [
+      "trendy",
+      "casual",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-ILip77SbmOE?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Bucket+Bag+Drawstring+Closure&tag=mira0f-20"
+  },
+  {
+    "id": "GEN61F65C5F",
+    "asin": "GEN61F65C5F",
+    "name": "Women's Quilted Camera Bag Crossbody",
+    "category": "bags",
+    "color": "navy",
+    "price": 58.99,
+    "style": [
+      "classic",
+      "casual",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-CIuakYIjadc?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Quilted+Camera+Bag+Crossbody&tag=mira0f-20"
+  },
+  {
+    "id": "GEN1E0FC2E7",
+    "asin": "GEN1E0FC2E7",
+    "name": "Women's Leather Belt Bag Waist Pack",
+    "category": "bags",
+    "color": "black",
+    "price": 44.99,
+    "style": [
+      "casual",
+      "trendy",
+      "functional"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-uv5_bsypFUM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Leather+Belt+Bag+Waist+Pack&tag=mira0f-20"
+  },
+  {
+    "id": "GEN11025168",
+    "asin": "GEN11025168",
+    "name": "Women's Hobo Shoulder Bag Soft Leather",
+    "category": "bags",
+    "color": "tan",
+    "price": 72.99,
+    "style": [
+      "classic",
+      "casual",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-q60NOwNjPiI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Hobo+Shoulder+Bag+Soft+Leather&tag=mira0f-20"
+  },
+  {
+    "id": "GEN18F7887A",
+    "asin": "GEN18F7887A",
+    "name": "Women's Transparent PVC Tote Bag",
+    "category": "bags",
+    "color": "cream",
+    "price": 32.99,
+    "style": [
+      "trendy",
+      "summer",
+      "casual"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-_0DeltaRoPI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Transparent+PVC+Tote+Bag&tag=mira0f-20"
+  },
+  {
+    "id": "GEN46ACA482",
+    "asin": "GEN46ACA482",
+    "name": "Women's Backpack Mini Fashion",
+    "category": "bags",
+    "color": "black",
+    "price": 48.99,
+    "style": [
+      "casual",
+      "everyday",
+      "functional"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-Rg3_bdOBBX0?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Backpack+Mini+Fashion&tag=mira0f-20"
+  },
+  {
+    "id": "GEN7F57EB82",
+    "asin": "GEN7F57EB82",
+    "name": "Women's Evening Clutch Bag Rhinestone",
+    "category": "bags",
+    "color": "black",
+    "price": 28.99,
+    "style": [
+      "elegant",
+      "night out",
+      "occasions"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-eHlVZcO_LOs?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Evening+Clutch+Bag+Rhinestone&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5621E4A8",
+    "asin": "GEN5621E4A8",
+    "name": "Women's Gold Chunky Chain Necklace",
+    "category": "accessories",
+    "color": "tan",
+    "price": 22.99,
+    "style": [
+      "statement",
+      "chic",
+      "trendy"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-tVkdGtEe17s?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Gold+Chunky+Chain+Necklace&tag=mira0f-20"
+  },
+  {
+    "id": "GEN4E927682",
+    "asin": "GEN4E927682",
+    "name": "Women's Silk Square Scarf Twill",
+    "category": "accessories",
+    "color": "dusty pink",
+    "price": 28.99,
+    "style": [
+      "classic",
+      "chic",
+      "versatile"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-HjBOmBPbi9k?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Silk+Square+Scarf+Twill&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6D79FF61",
+    "asin": "GEN6D79FF61",
+    "name": "Women's Wide Brim Straw Sun Hat",
+    "category": "accessories",
+    "color": "beige",
+    "price": 24.99,
+    "style": [
+      "boho",
+      "summer",
+      "casual"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-GrFvF78PiIU?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Wide+Brim+Straw+Sun+Hat&tag=mira0f-20"
+  },
+  {
+    "id": "GEN54C72932",
+    "asin": "GEN54C72932",
+    "name": "Women's Oversized Square Sunglasses",
+    "category": "accessories",
+    "color": "black",
+    "price": 18.99,
+    "style": [
+      "trendy",
+      "chic",
+      "summer"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-Q9y4wv5ZICM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Oversized+Square+Sunglasses&tag=mira0f-20"
+  },
+  {
+    "id": "GEN73281EDD",
+    "asin": "GEN73281EDD",
+    "name": "Women's Gold Hoop Earrings Large",
+    "category": "accessories",
+    "color": "tan",
+    "price": 16.99,
+    "style": [
+      "classic",
+      "casual",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-pMW4jzELQCw?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Gold+Hoop+Earrings+Large&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5447000B",
+    "asin": "GEN5447000B",
+    "name": "Women's Leather Slim Belt Classic",
+    "category": "accessories",
+    "color": "black",
+    "price": 26.99,
+    "style": [
+      "classic",
+      "work",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-y5hQCIn1c6o?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Leather+Slim+Belt+Classic&tag=mira0f-20"
+  },
+  {
+    "id": "GEN1C359B71",
+    "asin": "GEN1C359B71",
+    "name": "Women's Layered Delicate Gold Necklace",
+    "category": "accessories",
+    "color": "tan",
+    "price": 19.99,
+    "style": [
+      "minimal",
+      "classic",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-JsVox6a4TKM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Layered+Delicate+Gold+Necklace&tag=mira0f-20"
+  },
+  {
+    "id": "GEN469FDBB8",
+    "asin": "GEN469FDBB8",
+    "name": "Women's Claw Hair Clip Set 4 Piece",
+    "category": "accessories",
+    "color": "beige",
+    "price": 12.99,
+    "style": [
+      "casual",
+      "everyday",
+      "trendy"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-_vmMNFXt8Vk?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Claw+Hair+Clip+Set+4+Piece&tag=mira0f-20"
+  },
+  {
+    "id": "GENF97A2D6D",
+    "asin": "GENF97A2D6D",
+    "name": "Women's Leopard Print Scarf Wrap",
+    "category": "accessories",
+    "color": "tan",
+    "price": 23.99,
+    "style": [
+      "classic",
+      "statement",
+      "chic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-cYyqhdbJ9TI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Leopard+Print+Scarf+Wrap&tag=mira0f-20"
+  },
+  {
+    "id": "GEN22A9C717",
+    "asin": "GEN22A9C717",
+    "name": "Women's Minimalist Watch Mesh Band",
+    "category": "accessories",
+    "color": "charcoal",
+    "price": 45.99,
+    "style": [
+      "minimal",
+      "classic",
+      "work"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-7e2pe9wjL9M?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Minimalist+Watch+Mesh+Band&tag=mira0f-20"
+  },
+  {
+    "id": "GEN16DD89B3",
+    "asin": "GEN16DD89B3",
+    "name": "Women's Beaded Layering Bracelet Set",
+    "category": "accessories",
+    "color": "dusty pink",
+    "price": 14.99,
+    "style": [
+      "boho",
+      "casual",
+      "feminine"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-tVkdGtEe17s?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Beaded+Layering+Bracelet+Set&tag=mira0f-20"
+  },
+  {
+    "id": "GEN2C4E136E",
+    "asin": "GEN2C4E136E",
+    "name": "Women's Structured Headband Wide",
+    "category": "accessories",
+    "color": "black",
+    "price": 11.99,
+    "style": [
+      "casual",
+      "minimal",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-HjBOmBPbi9k?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Structured+Headband+Wide&tag=mira0f-20"
+  },
+  {
+    "id": "GEN1A443703",
+    "asin": "GEN1A443703",
+    "name": "Women's High Waist Seamless Leggings",
+    "category": "activewear",
+    "color": "black",
+    "price": 38.99,
+    "style": [
+      "sporty",
+      "comfort",
+      "everyday"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-oLthDWAG244?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+High+Waist+Seamless+Leggings&tag=mira0f-20"
+  },
+  {
+    "id": "GEN1C2B07FA",
+    "asin": "GEN1C2B07FA",
+    "name": "Women's Sports Bra Medium Support",
+    "category": "activewear",
+    "color": "sage",
+    "price": 28.99,
+    "style": [
+      "sporty",
+      "athletic",
+      "comfort"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-3GZi5G5apXA?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Sports+Bra+Medium+Support&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6B4E9B22",
+    "asin": "GEN6B4E9B22",
+    "name": "Women's Matching Bike Short Set",
+    "category": "activewear",
+    "color": "charcoal",
+    "price": 52.99,
+    "style": [
+      "sporty",
+      "trendy",
+      "athletic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-ULHxWq8reao?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Matching+Bike+Short+Set&tag=mira0f-20"
+  },
+  {
+    "id": "GEN113768FC",
+    "asin": "GEN113768FC",
+    "name": "Women's Oversized Gym Hoodie",
+    "category": "activewear",
+    "color": "cream",
+    "price": 44.99,
+    "style": [
+      "casual",
+      "comfort",
+      "sporty"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-ASKeuOZqhYU?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Oversized+Gym+Hoodie&tag=mira0f-20"
+  },
+  {
+    "id": "GEN1EDDB0AB",
+    "asin": "GEN1EDDB0AB",
+    "name": "Women's Athletic Running Shorts 3 Inch",
+    "category": "activewear",
+    "color": "black",
+    "price": 26.99,
+    "style": [
+      "sporty",
+      "athletic",
+      "functional"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-4wDHmSMoD_M?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Athletic+Running+Shorts+3+Inch&tag=mira0f-20"
+  },
+  {
+    "id": "GEN638989A0",
+    "asin": "GEN638989A0",
+    "name": "Women's Zip Up Cropped Workout Jacket",
+    "category": "activewear",
+    "color": "navy",
+    "price": 48.99,
+    "style": [
+      "sporty",
+      "athletic",
+      "layering"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-fOGZB_-lDSk?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Zip+Up+Cropped+Workout+Jacket&tag=mira0f-20"
+  },
+  {
+    "id": "GEN213EB1EC",
+    "asin": "GEN213EB1EC",
+    "name": "Women's Flare Yoga Pants High Rise",
+    "category": "activewear",
+    "color": "olive",
+    "price": 42.99,
+    "style": [
+      "sporty",
+      "comfort",
+      "casual"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-pmvIiOdMCsw?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Flare+Yoga+Pants+High+Rise&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5B3FAFAA",
+    "asin": "GEN5B3FAFAA",
+    "name": "Women's Seamless Workout Set Ribbed",
+    "category": "activewear",
+    "color": "dusty pink",
+    "price": 56.99,
+    "style": [
+      "sporty",
+      "trendy",
+      "athletic"
+    ],
+    "gender": "women",
+    "image_url": "https://images.unsplash.com/photo-FdPT0GDaJM0?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Women%27s+Seamless+Workout+Set+Ribbed&tag=mira0f-20"
+  },
+  {
+    "id": "GEN684E8FEE",
+    "asin": "GEN684E8FEE",
+    "name": "Men's Linen Short Sleeve Shirt",
+    "category": "tops",
+    "color": "beige",
+    "price": 38.99,
+    "style": [
+      "casual",
+      "classic",
+      "summer"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-7YVZYZeITc8?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Linen+Short+Sleeve+Shirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5DC7555E",
+    "asin": "GEN5DC7555E",
+    "name": "Men's Classic Polo Shirt",
+    "category": "tops",
+    "color": "navy",
+    "price": 34.99,
+    "style": [
+      "classic",
+      "casual",
+      "work"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-ViEBSoZH6M4?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Classic+Polo+Shirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN48160573",
+    "asin": "GEN48160573",
+    "name": "Men's Oversized Graphic Tee",
+    "category": "tops",
+    "color": "charcoal",
+    "price": 24.99,
+    "style": [
+      "casual",
+      "trendy",
+      "everyday"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-6VPEOdpFNAs?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Oversized+Graphic+Tee&tag=mira0f-20"
+  },
+  {
+    "id": "GEN69278628",
+    "asin": "GEN69278628",
+    "name": "Men's Oxford Button Down Shirt",
+    "category": "tops",
+    "color": "white",
+    "price": 44.99,
+    "style": [
+      "work",
+      "classic",
+      "chic"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-pAtA8xe_iVM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Oxford+Button+Down+Shirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN14EFD0D6",
+    "asin": "GEN14EFD0D6",
+    "name": "Men's Henley Long Sleeve Top",
+    "category": "tops",
+    "color": "cream",
+    "price": 32.99,
+    "style": [
+      "casual",
+      "classic",
+      "weekend"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-4e2O0Sj8aEM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Henley+Long+Sleeve+Top&tag=mira0f-20"
+  },
+  {
+    "id": "GEN620A4B1F",
+    "asin": "GEN620A4B1F",
+    "name": "Men's Crewneck Fleece Sweatshirt",
+    "category": "tops",
+    "color": "charcoal",
+    "price": 48.99,
+    "style": [
+      "casual",
+      "comfort",
+      "everyday"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-SYofHBgDkVQ?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Crewneck+Fleece+Sweatshirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN12407B23",
+    "asin": "GEN12407B23",
+    "name": "Men's Striped Resort Shirt",
+    "category": "tops",
+    "color": "navy",
+    "price": 36.99,
+    "style": [
+      "casual",
+      "classic",
+      "summer"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-DgHRmCZxBjI?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Striped+Resort+Shirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN4A74A6F4",
+    "asin": "GEN4A74A6F4",
+    "name": "Men's Quarter Zip Pullover Sweater",
+    "category": "tops",
+    "color": "camel",
+    "price": 54.99,
+    "style": [
+      "classic",
+      "work",
+      "weekend"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-rK7gDmbE_bg?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Quarter+Zip+Pullover+Sweater&tag=mira0f-20"
+  },
+  {
+    "id": "GEN5D3C050F",
+    "asin": "GEN5D3C050F",
+    "name": "Men's Slim Fit Dress Shirt",
+    "category": "tops",
+    "color": "white",
+    "price": 42.99,
+    "style": [
+      "work",
+      "classic",
+      "elegant"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-KIPqITwTkak?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Slim+Fit+Dress+Shirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN448062FB",
+    "asin": "GEN448062FB",
+    "name": "Men's Cotton Crew Neck T-Shirt",
+    "category": "tops",
+    "color": "black",
+    "price": 18.99,
+    "style": [
+      "casual",
+      "minimal",
+      "everyday"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-RZDKg5SJZVM?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Cotton+Crew+Neck+T-Shirt&tag=mira0f-20"
+  },
+  {
+    "id": "GEN3B78BEE7",
+    "asin": "GEN3B78BEE7",
+    "name": "Men's Slim Chino Pants",
+    "category": "bottoms",
+    "color": "khaki",
+    "price": 48.99,
+    "style": [
+      "work",
+      "classic",
+      "casual"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-3TNsHTEWpIY?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Slim+Chino+Pants&tag=mira0f-20"
+  },
+  {
+    "id": "GEN34285F6E",
+    "asin": "GEN34285F6E",
+    "name": "Men's Cargo Shorts Multi Pocket",
+    "category": "bottoms",
+    "color": "olive",
+    "price": 36.99,
+    "style": [
+      "casual",
+      "outdoor",
+      "weekend"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-NL_UtVtOoEA?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Cargo+Shorts+Multi+Pocket&tag=mira0f-20"
+  },
+  {
+    "id": "GEN57FEFAD5",
+    "asin": "GEN57FEFAD5",
+    "name": "Men's Jogger Pants Tapered",
+    "category": "bottoms",
+    "color": "charcoal",
+    "price": 42.99,
+    "style": [
+      "casual",
+      "comfort",
+      "sporty"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-1K8hVQSAfbc?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Jogger+Pants+Tapered&tag=mira0f-20"
+  },
+  {
+    "id": "GEN4A8FA651",
+    "asin": "GEN4A8FA651",
+    "name": "Men's Straight Fit Classic Jeans",
+    "category": "bottoms",
+    "color": "navy",
+    "price": 54.99,
+    "style": [
+      "classic",
+      "casual",
+      "everyday"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-mEZ3PoFGs48?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Straight+Fit+Classic+Jeans&tag=mira0f-20"
+  },
+  {
+    "id": "GEN6BA42539",
+    "asin": "GEN6BA42539",
+    "name": "Men's Linen Drawstring Trousers",
+    "category": "bottoms",
+    "color": "beige",
+    "price": 44.99,
+    "style": [
+      "casual",
+      "summer",
+      "minimal"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-eECnLHCMBnA?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Linen+Drawstring+Trousers&tag=mira0f-20"
+  },
+  {
+    "id": "GENEF40460B",
+    "asin": "GENEF40460B",
+    "name": "Men's Dress Trousers Slim Fit",
+    "category": "bottoms",
+    "color": "charcoal",
+    "price": 62.99,
+    "style": [
+      "work",
+      "classic",
+      "elegant"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-fJTqyZMkLDo?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Dress+Trousers+Slim+Fit&tag=mira0f-20"
+  },
+  {
+    "id": "GEN519804FD",
+    "asin": "GEN519804FD",
+    "name": "Men's Swim Trunks Quick Dry",
+    "category": "bottoms",
+    "color": "navy",
+    "price": 28.99,
+    "style": [
+      "casual",
+      "summer",
+      "sporty"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-VgbRMkMBp6s?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Swim+Trunks+Quick+Dry&tag=mira0f-20"
+  },
+  {
+    "id": "GEN10924B02",
+    "asin": "GEN10924B02",
+    "name": "Men's Wool Blend Dress Pants",
+    "category": "bottoms",
+    "color": "black",
+    "price": 72.99,
+    "style": [
+      "work",
+      "classic",
+      "elegant"
+    ],
+    "gender": "men",
+    "image_url": "https://images.unsplash.com/photo-qWfyGJ-T_9Y?w=500&q=80&fit=crop&auto=format",
+    "affiliate_url": "https://www.amazon.com/s?k=Men%27s+Wool+Blend+Dress+Pants&tag=mira0f-20"
   }
 ]

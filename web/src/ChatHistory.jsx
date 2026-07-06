@@ -29,11 +29,12 @@ function SessionItem({ session, active, onClick }) {
 
 export default function ChatHistory({
   sessions, archived, messages, activeSession,
-  loadingList, loadingMsgs, hasMoreArchived,
+  loadingList, loadingMsgs, hasMoreRecent, hasMoreArchived,
   loadSessions, loadArchived, loadMessages, closeMessages,
   onClose,
 }) {
-  useEffect(() => { loadSessions(); }, [loadSessions]);
+  // Load first page on mount (reset=true starts from the top)
+  useEffect(() => { loadSessions(true); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="ch-overlay" onClick={(e) => e.target === e.currentTarget && onClose()}>
@@ -77,6 +78,9 @@ export default function ChatHistory({
             {sessions.map(s => (
               <SessionItem key={s.id} session={s} active={activeSession} onClick={loadMessages} />
             ))}
+            {hasMoreRecent && (
+              <button className="ch-load-archive" onClick={() => loadSessions(false)}>Load more…</button>
+            )}
 
             {/* ── Archived sessions ── */}
             <div className="ch-archive-section">
