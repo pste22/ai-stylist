@@ -1,12 +1,12 @@
 const CATEGORY_EMOJI = {
-  dresses:    "👗",
-  tops:       "👚",
-  bottoms:    "👖",
-  outerwear:  "🧥",
-  shoes:      "👟",
-  bags:       "👜",
-  accessories:"✨",
-  activewear: "🏃",
+  dresses:     "👗",
+  tops:        "👚",
+  bottoms:     "👖",
+  outerwear:   "🧥",
+  shoes:       "👟",
+  bags:        "👜",
+  accessories: "✨",
+  activewear:  "🏃",
 };
 
 const SWATCH_COLORS = {
@@ -56,48 +56,64 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
     <CategoryThumbnail category={product.category} color={product.color} />
   );
 
-  const actions = (
-    <div className="card-actions">
-      <button
-        className={`love ${loved ? "is-loved" : ""}`}
-        onClick={() => onLove(product)}
-        aria-label={loved ? "Remove from saved" : "Save item"}
-        title={loved ? "Click to unlike" : "Save for later"}
-      >
-        {loved ? "♥ Saved" : "♡ Save"}
-      </button>
+  /* ── Compact card: horizontal layout for in-chat display ── */
+  if (compact) {
+    return (
+      <div className={`card compact${loved ? " loved" : ""}`}>
+        <div className="card-thumb">
+          {thumbnail}
+        </div>
+        <div className="card-body">
+          <p className="card-name">{product.name}</p>
+          <p className="card-meta">{product.color}</p>
+          <p className="card-price">${product.price}</p>
+          <div className="card-actions">
+            <button
+              className={`love${loved ? " is-loved" : ""}`}
+              onClick={() => onLove(product)}
+              title={loved ? "Click to unlike" : "Save for later"}
+            >{loved ? "♥ Saved" : "♡ Save"}</button>
+            <a
+              className="buy"
+              href={product.affiliate_url}
+              target="_blank"
+              rel="noopener noreferrer nofollow sponsored"
+              onClick={() => onBuy?.(product)}
+            >Shop →</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Portrait card: full editorial grid card ── */
+  return (
+    <div className={`card${loved ? " loved" : ""}${highlighted ? " highlighted" : ""}`}>
+      <div className="card-thumb">
+        {thumbnail}
+        {/* Heart overlay — top-right corner on the image */}
+        <button
+          className={`card-heart${loved ? " is-loved" : ""}`}
+          onClick={() => onLove(product)}
+          aria-label={loved ? "Remove from saved" : "Save item"}
+        >
+          {loved ? "♥" : "♡"}
+        </button>
+      </div>
+      <div className="card-body">
+        <p className="card-name">{product.name}</p>
+        <p className="card-meta">{product.color}</p>
+        <p className="card-price">${product.price}</p>
+      </div>
       <a
-        className="buy"
+        className="card-buy-btn"
         href={product.affiliate_url}
         target="_blank"
         rel="noopener noreferrer nofollow sponsored"
         onClick={() => onBuy?.(product)}
       >
-        Buy →
+        Shop Now
       </a>
-    </div>
-  );
-
-  return (
-    <div className={`card${loved ? " loved" : ""}${highlighted ? " highlighted" : ""}${compact ? " compact" : ""}`}>
-      <div className="card-thumb" data-cat={product.category}>
-        {thumbnail}
-      </div>
-      {compact ? (
-        <div className="card-body">
-          <p className="card-name">{product.name}</p>
-          <p className="card-meta">{product.color} · ${product.price}</p>
-          {actions}
-        </div>
-      ) : (
-        <>
-          <div className="card-body">
-            <p className="card-name">{product.name}</p>
-            <p className="card-meta">{product.color} · ${product.price}</p>
-          </div>
-          {actions}
-        </>
-      )}
     </div>
   );
 }
