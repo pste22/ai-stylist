@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import RiveAvatar from "./RiveAvatar.jsx";
 import ProductCard from "./ProductCard.jsx";
 import LoginScreen from "./LoginScreen.jsx";
@@ -229,10 +229,115 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
   );
 }
 
+const CATEGORY_EMOJI = {
+  dresses: "👗", tops: "👚", bottoms: "👖", outerwear: "🧥",
+  shoes: "👟", bags: "👜", accessories: "✨", activewear: "🏃",
+};
+
+// ─── Empty slot shown in the right panel before any product is highlighted ────
+function EmptyProductSpot() {
+  return (
+    <div className="featured-empty">
+      <div className="featured-empty-icon">✦</div>
+      <p className="featured-empty-text">
+        Products Mira recommends will appear here
+      </p>
+    </div>
+  );
+}
+
+// ─── Large featured product in the right panel ────────────────────────────────
+function FeaturedProduct({ product, loved, onLove, onBuy, reason }) {
+  if (!product) return <EmptyProductSpot />;
+
+  const usePhoto = product.image_url && (
+    product.image_url.includes("m.media-amazon.com") ||
+    product.image_url.includes("images.pexels.com")
+  );
+  const isLoved = loved.has(product.id);
+
+  return (
+    <div className="featured-product">
+      {/* ── Image with hover-detail overlay ── */}
+      <div className="featured-img-wrap">
+        {usePhoto
+          ? <img className="featured-img" src={product.image_url} alt={product.name} loading="lazy" />
+          : <div className="featured-cat-thumb" style={{ "--swatch": swatchColor(product.color) }}>
+              <span className="featured-cat-emoji">{CATEGORY_EMOJI[product.category] || "🛍️"}</span>
+            </div>
+        }
+        {/* Hover overlay: full details + reviews stub */}
+        <div className="featured-hover-overlay">
+          <span className="featured-overlay-badge">{product.category}</span>
+          <p className="featured-overlay-name">{product.name}</p>
+          {reason && <p className="featured-overlay-reason">"{reason}"</p>}
+          <div className="featured-overlay-meta">
+            <span>{product.color}</span>
+            <span className="featured-overlay-price">${product.price}</span>
+          </div>
+          {/* Reviews placeholder */}
+          <div className="featured-reviews-row">
+            <span className="reviews-stars">★★★★☆</span>
+            <span className="reviews-count">Reviews loading…</span>
+          </div>
+          <a
+            className="featured-overlay-shop"
+            href={product.affiliate_url}
+            target="_blank"
+            rel="noopener noreferrer nofollow sponsored"
+            onClick={() => onBuy?.(product)}
+          >
+            Shop Now →
+          </a>
+        </div>
+      </div>
+
+      {/* ── Card info strip below image ── */}
+      <div className="featured-info">
+        <div className="featured-info-row">
+          <div className="featured-info-text">
+            <p className="featured-name">{product.name}</p>
+            <p className="featured-meta">{product.color} · {product.category}</p>
+          </div>
+          <button
+            className={`featured-heart${isLoved ? " is-loved" : ""}`}
+            onClick={() => onLove(product)}
+            aria-label={isLoved ? "Remove from saved" : "Save item"}
+          >{isLoved ? "♥" : "♡"}</button>
+        </div>
+        <p className="featured-price">${product.price}</p>
+        {reason && <p className="featured-reason">"{reason}"</p>}
+        <a
+          className="featured-shop-btn"
+          href={product.affiliate_url}
+          target="_blank"
+          rel="noopener noreferrer nofollow sponsored"
+          onClick={() => onBuy?.(product)}
+        >
+          Shop Now
+        </a>
+      </div>
+
+      {/* ── Reviews section ── */}
+      <div className="featured-reviews-section">
+        <p className="featured-reviews-title">Customer Reviews</p>
+        <div className="featured-reviews-stars-row">
+          <span className="reviews-stars-lg">★★★★☆</span>
+          <span className="reviews-avg">4.2 / 5</span>
+        </div>
+        <p className="featured-reviews-coming">
+          Live review integration coming soon — we'll pull verified ratings from
+          Amazon and other retailers so you can shop with confidence.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 // ─── Full-screen chat view (text mode while connected) ────────────────────────
 function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
                     onStop, onSend, error, userName, userEmail, userAvatar, onSignOut,
-                    canShowMore, onShowMore }) {
+                    canShowMore, onShowMore, products, highlightedId }) {
   const [draft, setDraft] = useState("");
   const threadRef = useRef(null);
   const inputRef = useRef(null);
@@ -259,6 +364,30 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
                     : state === "talking"  ? "replying…"
                     : "online";
 
+  // Find the currently highlighted product for the right panel
+  const featuredProduct = useMemo(
+    () => products.find((p) => p.id === highlightedId) || null,
+    [products, highlightedId]
+  );
+
+  // Try to pull out why Mira mentioned the featured product from her last message
+  const featuredReason = useMemo(() => {
+    if (!featuredProduct) return null;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m.role === "mira" && m.text) {
+        const lower = m.text.toLowerCase();
+        const name = featuredProduct.name.toLowerCase();
+        if (lower.includes(name.split(" ")[0])) {
+          const sentences = m.text.split(/(?<=[.!?])\s+/);
+          const hit = sentences.find((s) => s.toLowerCase().includes(name.split(" ")[0]));
+          if (hit && hit.length < 200) return hit.trim();
+        }
+      }
+    }
+    return null;
+  }, [featuredProduct, messages]);
+
   return (
     <div className="chat-layout">
       {/* ── Header ── */}
@@ -277,66 +406,82 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
         </div>
       </div>
 
-      {/* ── Thread ── */}
-      <div className="chat-thread" ref={threadRef}>
-        {messages.length === 0 && (
-          <div className="chat-empty">
-            <span>Mira is thinking of a greeting…</span>
-          </div>
-        )}
-        {messages.map((msg) => (
-          <div key={msg.id} className={`bubble-row row-${msg.role}`}>
-            {msg.role === "mira" && <div className="bubble-avatar-dot" />}
-            <div className="bubble-col">
-              <div className={`bubble bubble-${msg.role}`}>
-                {msg.role === "mira"
-                  ? <MiraBubbleContent
-                      text={msg.text}
-                      products={msg.products}
-                      loved={loved}
-                      onLove={onLove}
-                      onBuy={onBuy}
-                    />
-                  : msg.text}
+      {/* ── Two-panel body ── */}
+      <div className="chat-body">
+        {/* ── LEFT: conversation thread ── */}
+        <div className="chat-left">
+          <div className="chat-thread" ref={threadRef}>
+            {messages.length === 0 && (
+              <div className="chat-empty">
+                <span>Mira is thinking of a greeting…</span>
               </div>
-            </div>
+            )}
+            {messages.map((msg) => (
+              <div key={msg.id} className={`bubble-row row-${msg.role}`}>
+                {msg.role === "mira" && <div className="bubble-avatar-dot" />}
+                <div className="bubble-col">
+                  <div className={`bubble bubble-${msg.role}`}>
+                    {msg.role === "mira"
+                      ? <MiraBubbleContent
+                          text={msg.text}
+                          products={msg.products}
+                          loved={loved}
+                          onLove={onLove}
+                          onBuy={onBuy}
+                        />
+                      : msg.text}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </div>
 
-      {/* ── Show more ── */}
-      {canShowMore && (
-        <div className="show-more-bar">
-          <button className="show-more-btn" onClick={onShowMore}>
-            Show 10 more →
-          </button>
+          {/* ── Show more ── */}
+          {canShowMore && (
+            <div className="show-more-bar">
+              <button className="show-more-btn" onClick={onShowMore}>
+                Show 10 more →
+              </button>
+            </div>
+          )}
+
+          {/* ── Input ── */}
+          <div className="chat-input-area">
+            {error && <p className="chat-error">{error}</p>}
+            <div className="chat-input-bar">
+              <textarea
+                ref={inputRef}
+                className="chat-input"
+                rows={1}
+                placeholder="Message Mira…"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                onKeyDown={onKey}
+                autoFocus
+              />
+              <button
+                className="chat-send-btn"
+                onClick={submit}
+                disabled={!draft.trim()}
+                aria-label="Send"
+              >
+                ↑
+              </button>
+            </div>
+            <p className="chat-hint">Enter to send · Shift+Enter for new line</p>
+          </div>
         </div>
-      )}
 
-      {/* ── Input ── */}
-      <div className="chat-input-area">
-        {error && <p className="chat-error">{error}</p>}
-        <div className="chat-input-bar">
-          <textarea
-            ref={inputRef}
-            className="chat-input"
-            rows={1}
-            placeholder="Message Mira…"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKey}
-            autoFocus
+        {/* ── RIGHT: featured product spotlight ── */}
+        <div className="chat-right">
+          <FeaturedProduct
+            product={featuredProduct}
+            loved={loved}
+            onLove={onLove}
+            onBuy={onBuy}
+            reason={featuredReason}
           />
-          <button
-            className="chat-send-btn"
-            onClick={submit}
-            disabled={!draft.trim()}
-            aria-label="Send"
-          >
-            ↑
-          </button>
         </div>
-        <p className="chat-hint">Enter to send · Shift+Enter for new line</p>
       </div>
     </div>
   );
@@ -410,6 +555,8 @@ export default function App() {
           onSignOut={signOut}
           canShowMore={canShowMore}
           onShowMore={showMore}
+          products={products}
+          highlightedId={highlightedId}
         />
       </>
     );
