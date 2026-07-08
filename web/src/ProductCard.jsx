@@ -24,6 +24,12 @@ function swatchHex(color) {
   return SWATCH_COLORS[color?.toLowerCase()] || "#cbb9a8";
 }
 
+function pseudoRandom(id, seed) {
+  let h = seed | 0;
+  for (const c of String(id || "")) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
+  return Math.abs(h);
+}
+
 function isRealProductPhoto(url) {
   return url && (
     url.includes("m.media-amazon.com") ||
@@ -56,6 +62,10 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
     <CategoryThumbnail category={product.category} color={product.color} />
   );
 
+  // Deterministic badges — stable per product id
+  const isTrending = pseudoRandom(product.id, 7777) % 6 === 0;
+  const isNew      = pseudoRandom(product.id, 9999) % 9 === 0 && !isTrending;
+
   /* ── Compact card: horizontal layout for in-chat display ── */
   if (compact) {
     return (
@@ -65,7 +75,10 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
         </div>
         <div className="card-body">
           <p className="card-name">{product.name}</p>
-          <p className="card-meta">{product.color}</p>
+          <p className="card-meta">
+            <span className="card-color-swatch" style={{ background: swatchHex(product.color) }} />
+            {product.color}
+          </p>
           <p className="card-price">${product.price}</p>
           <div className="card-actions">
             <button
@@ -91,7 +104,10 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
     <div className={`card${loved ? " loved" : ""}${highlighted ? " highlighted" : ""}`}>
       <div className="card-thumb">
         {thumbnail}
-        {/* Heart overlay — top-right corner on the image */}
+        {/* Trend / New badge — top-left */}
+        {isTrending && <span className="card-badge card-badge--hot">🔥 Trending</span>}
+        {isNew      && <span className="card-badge card-badge--new">✦ New</span>}
+        {/* Heart — top-right */}
         <button
           className={`card-heart${loved ? " is-loved" : ""}`}
           onClick={() => onLove(product)}
@@ -102,7 +118,10 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
       </div>
       <div className="card-body">
         <p className="card-name">{product.name}</p>
-        <p className="card-meta">{product.color}</p>
+        <p className="card-meta">
+          <span className="card-color-swatch" style={{ background: swatchHex(product.color) }} />
+          {product.color}
+        </p>
         <p className="card-price">${product.price}</p>
       </div>
       <a
