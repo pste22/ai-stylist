@@ -140,6 +140,17 @@ _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
 _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
 
+# Cost guardrails — both configurable via env so you can tighten as usage grows.
+# Idle timeout: close Live session (and stop billing) after N seconds of silence.
+_IDLE_TIMEOUT_SEC  = int(os.environ.get("MIRA_IDLE_TIMEOUT",  "300"))   # 5 min default
+# Hard cap: close session after N seconds regardless of activity, with a goodbye.
+_MAX_SESSION_SEC   = int(os.environ.get("MIRA_MAX_SESSION",   "1200"))  # 20 min default
+
+# Gemini Live blended pricing (mid-2025). Audio dominates so we use audio rates.
+# Swap to TEXT rates if/when text-mode REST routing lands (issue #4).
+_COST_PER_M_INPUT  = float(os.environ.get("MIRA_COST_INPUT",  "0.70"))  # $/1M tokens
+_COST_PER_M_OUTPUT = float(os.environ.get("MIRA_COST_OUTPUT", "1.50"))  # $/1M tokens
+
 # Lightweight mood read off Mira's own words (keeps the UI lively without a model call).
 _EXCITED_HINTS = ("!", "love", "perfect", "gorgeous", "amazing", "obsessed", "yes")
 _LOW_HINTS = ("sorry", "tough", "okay", "take your time", "no rush", "here for you")
@@ -241,6 +252,35 @@ async def _send_json(ws, **payload) -> None:
     await ws.send(json.dumps(payload))
 
 
+def _log_session_cost(
+    session_id: str,
+    user_id: str | None,
+    prompt_tokens: int,
+    response_tokens: int,
+    duration_sec: float,
+) -> None:
+    """Write per-session cost row to Supabase session_costs table (best-effort)."""
+    try:
+        cost_usd = (
+            prompt_tokens   * _COST_PER_M_INPUT  / 1_000_000 +
+            response_tokens * _COST_PER_M_OUTPUT / 1_000_000
+        )
+        from product_store import _db
+        _db().table("session_costs").insert({
+            "session_id":       session_id,
+            "user_id":          user_id,
+            "prompt_tokens":    prompt_tokens,
+            "response_tokens":  response_tokens,
+            "total_tokens":     prompt_tokens + response_tokens,
+            "cost_usd":         round(cost_usd, 6),
+            "duration_sec":     round(duration_sec, 1),
+        }).execute()
+        print(f"  💰 session cost: {prompt_tokens+response_tokens:,} tokens "
+              f"≈ ${cost_usd:.4f}  ({duration_sec:.0f}s)")
+    except Exception as exc:
+        print(f"  ! cost log failed (non-fatal): {exc}")
+
+
 async def handle(ws) -> None:
     """One browser connection ⇆ a Gemini Live session that auto-reconnects on drop.
 
@@ -269,6 +309,12 @@ async def handle(ws) -> None:
     session_shown_ids: set[str] = set()
     # When True, pump_mira will only surface saved products (not all matched products).
     show_saved_mode: bool = False
+    # Cost tracking — accumulated across all turns this session.
+    session_prompt_tokens: int = 0
+    session_response_tokens: int = 0
+    session_start_time: float = 0.0
+    # Idle timeout — updated on every user mic packet or text message.
+    last_activity_time: float = 0.0
     try:
         raw = await asyncio.wait_for(ws.recv(), timeout=10.0)
         if isinstance(raw, str):
@@ -335,9 +381,11 @@ async def handle(ws) -> None:
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
         nonlocal chat_title, session_shown_ids, show_saved_mode
+        nonlocal last_activity_time
         try:
             async for msg in ws:
                 if isinstance(msg, bytes):
+                    last_activity_time = asyncio.get_event_loop().time()
                     sess = current["session"]
                     if sess is not None:
                         try:
@@ -347,6 +395,7 @@ async def handle(ws) -> None:
                         except Exception:
                             pass  # mid-reconnect — drop this frame, mic keeps flowing
                 else:
+                    last_activity_time = asyncio.get_event_loop().time()
                     data = json.loads(msg)
                     if data.get("type") == "reset":
                         sess = current["session"]
@@ -511,6 +560,7 @@ async def handle(ws) -> None:
         when receive() ends WITHOUT a turn_complete, i.e. the session genuinely closed.
         """
         nonlocal show_saved_mode
+        nonlocal session_prompt_tokens, session_response_tokens
         mood = "neutral"
         while not stop.is_set():
             talking = False
@@ -518,6 +568,10 @@ async def handle(ws) -> None:
             sent_ids: set[str] = set()  # product cards already pushed THIS turn
             turn_ended = False
             async for resp in session.receive():
+                # Accumulate token usage for cost tracking.
+                if resp.usage_metadata:
+                    session_prompt_tokens   += resp.usage_metadata.prompt_token_count   or 0
+                    session_response_tokens += resp.usage_metadata.response_token_count or 0
                 # Stash the newest resumption handle so a reconnect keeps the conversation.
                 update = resp.session_resumption_update
                 if update and update.resumable and update.new_handle:
@@ -607,8 +661,49 @@ async def handle(ws) -> None:
             if not turn_ended:
                 return  # receive() ended without a turn → session really closed; reconnect
 
+    async def _watchdog(session) -> None:
+        """Close idle or over-time sessions to prevent runaway Gemini billing."""
+        nonlocal last_activity_time, session_start_time
+        while not stop.is_set():
+            await asyncio.sleep(30)
+            now = asyncio.get_event_loop().time()
+            idle_sec  = now - last_activity_time
+            total_sec = now - session_start_time
+            if idle_sec >= _IDLE_TIMEOUT_SEC:
+                print(f"  ⏱ idle {idle_sec:.0f}s — closing session to save cost")
+                try:
+                    await session.send_client_content(
+                        turns=[types.Content(role="user", parts=[types.Part(
+                            text="[SYSTEM] Session timed out due to inactivity. "
+                                 "Say a brief, warm goodbye (one sentence) and end the session."
+                        )])],
+                        turn_complete=True,
+                    )
+                    await asyncio.sleep(4)
+                except Exception:
+                    pass
+                stop.set()
+                return
+            if total_sec >= _MAX_SESSION_SEC:
+                print(f"  ⏱ max session length {total_sec:.0f}s reached — closing")
+                try:
+                    await session.send_client_content(
+                        turns=[types.Content(role="user", parts=[types.Part(
+                            text="[SYSTEM] Maximum session length reached. "
+                                 "Tell the user warmly that you've reached today's chat limit "
+                                 "and they can start a new session anytime. One sentence."
+                        )])],
+                        turn_complete=True,
+                    )
+                    await asyncio.sleep(4)
+                except Exception:
+                    pass
+                stop.set()
+                return
+
     async def run_live() -> None:
         """Open Live sessions, reconnecting with backoff until the browser leaves."""
+        nonlocal session_start_time, last_activity_time
         backoff = 0.5
         first = True
         while not stop.is_set():
@@ -624,6 +719,8 @@ async def handle(ws) -> None:
                     if not first:
                         print("  ↻ Live session reconnected")
                     else:
+                        session_start_time  = t0
+                        last_activity_time  = t0
                         # Kick off Mira's opening greeting on first connect.
                         # We suppress the input transcription echo so "hi" doesn't
                         # appear in the "you:" caption.
@@ -666,14 +763,28 @@ async def handle(ws) -> None:
                         )
                     first = False
                     await _send_json(ws, type="state", state="idle", mood="neutral")
-                    await pump_mira(session)  # runs until the session ends/drops
-                # Clean end (no exception): the server closed the stream itself.
-                print(f"  · Live session ended cleanly after {asyncio.get_event_loop().time() - t0:.1f}s")
+                    await asyncio.gather(
+                        pump_mira(session),
+                        _watchdog(session),
+                    )
+                # Clean end: log cost, then decide whether to reconnect or stop.
+                dur = asyncio.get_event_loop().time() - t0
+                print(f"  · Live session ended cleanly after {dur:.1f}s")
+                await asyncio.to_thread(
+                    _log_session_cost,
+                    session_id, user_id,
+                    session_prompt_tokens, session_response_tokens, dur,
+                )
             except websockets.ConnectionClosed:
                 break  # browser gone
             except Exception as exc:
                 dur = asyncio.get_event_loop().time() - t0
                 print(f"  ! Live session dropped after {dur:.1f}s ({exc}) — reconnecting")
+                await asyncio.to_thread(
+                    _log_session_cost,
+                    session_id, user_id,
+                    session_prompt_tokens, session_response_tokens, dur,
+                )
             finally:
                 current["session"] = None
             if stop.is_set():
