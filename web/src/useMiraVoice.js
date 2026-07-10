@@ -167,6 +167,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
             budget:         userPrefs?.budget         ?? null,
           }));
         setConnected(true);
+        setCanShowMore(true); // always show browse button once connected (1000+ products available)
         if (!textMode) {
           const mic = new MicCapture((bytes) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
@@ -215,10 +216,12 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
 
           case "products": {
             const items = msg.items || [];
-            // show_more flag from server OR a large batch (≥8) suggests more exist
+            // Show the button whenever server says more exist, OR any product arrives
+            // (the catalog has 1000+ items so we almost always have more to page).
+            // Only hide if the server explicitly says show_more: false.
             const serverSaysMore = msg.show_more === true;
-            const largeBatch = items.length >= 8;
-            if (serverSaysMore || largeBatch) setCanShowMore(true);
+            const serverSaysNoMore = msg.show_more === false;
+            if (serverSaysMore || (!serverSaysNoMore && items.length > 0)) setCanShowMore(true);
             // Voice mode: update the product shelf
             if (!textMode) {
               setProducts((prev) => {

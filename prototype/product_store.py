@@ -59,18 +59,27 @@ def _db():
 # ------------------------------------------------------------------
 
 def _load_catalog_from_db() -> list[dict]:
-    """Fetch all active products from Supabase.  Returns list of product dicts."""
-    result = (
-        _db()
-        .table("products")
-        .select("id,source,asin,name,category,color,price,style,gender,image_url,affiliate_url,partner_tag")
-        .eq("is_active", True)
-        .order("name")
-        .execute()
-    )
-    products = result.data or []
-    print(f"[product_store] catalog loaded: {len(products)} active products")
-    return products
+    """Fetch all active products from Supabase (bypasses the default 1000-row page cap)."""
+    all_products: list[dict] = []
+    page_size = 1000
+    start = 0
+    while True:
+        result = (
+            _db()
+            .table("products")
+            .select("id,source,asin,name,category,color,price,style,gender,image_url,affiliate_url,partner_tag")
+            .eq("is_active", True)
+            .order("name")
+            .range(start, start + page_size - 1)
+            .execute()
+        )
+        page = result.data or []
+        all_products.extend(page)
+        if len(page) < page_size:
+            break
+        start += page_size
+    print(f"[product_store] catalog loaded: {len(all_products)} active products")
+    return all_products
 
 
 # ------------------------------------------------------------------

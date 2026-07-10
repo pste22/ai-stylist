@@ -47,29 +47,44 @@ from product_source import get_source  # noqa: E402
 # not just the bundled demo catalog — so curated SiteStripe / PA-API items Mira can
 # actually earn on flow straight into the spoken conversation. See docs/10-sourcing.
 _SOURCE = get_source()
-_CATALOG = _SOURCE.search(limit=50)
+# Full catalog for "Show 10 more" paging — never put all of this in the AI prompt.
+_CATALOG = _SOURCE.search(limit=2000)
+# Curated spotlight (≤50 products, ~2 per category) for the grounding prompt so
+# Mira has focused, speakable recommendations without a 40k-token product dump.
+_SPOTLIGHT_PER_CAT = 5
+_SPOTLIGHT: list[dict] = []
+_seen_cats: dict = {}
+for _p in _CATALOG:
+    _cat = _p.get("category", "other")
+    if _seen_cats.get(_cat, 0) < _SPOTLIGHT_PER_CAT:
+        _SPOTLIGHT.append(_p)
+        _seen_cats[_cat] = _seen_cats.get(_cat, 0) + 1
 # Index by id so we can match Mira's spoken recommendations.
 _BY_ID = {p["id"]: p for p in _CATALOG}
 
 
 def full_grounding_prompt(memory: str = "") -> str:
-    """Persona + optional user memory + active catalog as one grounding block."""
+    """Persona + optional user memory + curated product spotlight as grounding."""
     parts = [SYSTEM_PROMPT]
     if memory:
         parts.append(f"SHOPPER CONTEXT (use naturally, never recite as a list):\n{memory}")
-    parts.append(f"PRODUCTS you may recommend:\n{_SOURCE.render(_CATALOG)}")
+    parts.append(
+        f"PRODUCTS you may recommend (curated spotlight — {len(_CATALOG)} total in catalog):\n"
+        f"{_SOURCE.render(_SPOTLIGHT)}\n\n"
+        f"IMPORTANT: When the shopper wants to see more options, say "
+        f"\"tap 'Show 10 more' to browse the full catalog\" — do NOT list all products yourself."
+    )
     return "\n\n".join(parts)
 
 
 # Per-product "signature" tokens for spoken-name matching (see _match_products): the
-# words in a product's name/color that are UNIQUE to it across the catalog. Generic
-# fashion words shared by several items (e.g. "sneakers", "slip-on") are dropped so they
-# can't cause false matches; brand/model/color words (e.g. "reebok", "bruno") remain.
+# words in a product's name/color that are UNIQUE to it within the spotlight set. Built
+# from _SPOTLIGHT (the curated products Mira knows about) so matches stay reliable.
 def _build_distinctive() -> dict[str, set[str]]:
     def toks(s: str) -> set[str]:
-        return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) > 2}
+        return {w for w in re.findall(r"[a-z0-9]+", (s or "").lower()) if len(w) >= 5}
 
-    name_tokens = {p["id"]: toks(p["name"]) | toks(p.get("color", "")) for p in _CATALOG}
+    name_tokens = {p["id"]: toks(p["name"]) | toks(p.get("color", "")) for p in _SPOTLIGHT}
     df: dict[str, int] = {}
     for t in name_tokens.values():
         for w in t:
@@ -83,10 +98,28 @@ _DISTINCTIVE = _build_distinctive()
 # speech ("walking around", "casual day dress"). On their own they must NOT trigger a
 # product card — only a brand/model word, or two such descriptors together, counts.
 _GENERIC_TOKENS = {
-    "sneakers", "shoes", "shoe", "slip", "slipon", "casual", "walking", "running",
-    "lightweight", "comfort", "athletic", "sporty", "minimal", "everyday", "dress",
-    "top", "tops", "jacket", "coat", "jeans", "pants", "boots", "black", "white",
-    "gray", "grey", "navy", "blue", "red", "green", "brown", "tan", "beige",
+    # footwear
+    "sneakers", "shoes", "boots", "heels", "loafers", "pumps", "sandals", "wedges",
+    # tops / outerwear
+    "shirt", "blouse", "sweater", "hoodie", "jacket", "blazer", "cardigan", "pullover",
+    "sweatshirt", "camisole", "bralette",
+    # bottoms / dresses
+    "dress", "dresses", "skirt", "jeans", "pants", "trousers", "shorts", "leggings",
+    # style words Mira uses naturally in speech
+    "casual", "classic", "elegant", "chic", "trendy", "stylish", "fitted", "flared",
+    "vintage", "floral", "printed", "striped", "solid", "flare", "oversized", "loose",
+    "midi", "maxi", "mini", "high", "waist", "neck", "sleeve", "strap", "lace",
+    "satin", "velvet", "denim", "knit", "ribbed", "woven", "cotton", "linen",
+    # colors
+    "black", "white", "gray", "grey", "navy", "blue", "green", "brown", "beige",
+    "cream", "camel", "olive", "coral", "blush", "khaki", "ivory", "gold", "silver",
+    # generic fashion modifiers
+    "women", "womens", "ladies", "girls", "summer", "winter", "spring", "autumn",
+    "comfortable", "lightweight", "breathable", "stretchy", "athletic", "sporty",
+    "formal", "office", "casual", "everyday", "vacation", "beach", "workout",
+    "going", "party", "event", "wear", "style", "fashion", "basic", "simple",
+    "pack", "bundle", "sizes", "pockets", "pocket", "collar", "sleeve",
+    "short", "long", "regular", "loose", "tight", "baggy", "skinny", "slim",
 }
 
 # Affiliate handoff (Phase 3): we NEVER sell or ship — "Buy" deep-links to a retailer
@@ -136,7 +169,7 @@ def _match_products(transcript: str) -> list[dict]:
     seen: set[str] = set()
     # Order products by where Mira first mentions them in the transcript.
     ordered = []
-    for p in _CATALOG:
+    for p in _SPOTLIGHT:
         sig = _DISTINCTIVE.get(p["id"], set())
         present = [w for w in sig if w in low]
         strong = [w for w in present if w not in _GENERIC_TOKENS]
@@ -149,6 +182,8 @@ def _match_products(transcript: str) -> list[dict]:
     for _, p in sorted(ordered, key=lambda t: t[0]):
         if p["id"] in seen:
             continue
+        if len(hits) >= 10:  # cap: never push more than 10 product cards per Mira turn
+            break
         seen.add(p["id"])
         hits.append(
             {
@@ -232,6 +267,8 @@ async def handle(ws) -> None:
     session_saved: dict[str, str] = {}
     # Tracks every product card sent this session so show_more can page forward.
     session_shown_ids: set[str] = set()
+    # When True, pump_mira will only surface saved products (not all matched products).
+    show_saved_mode: bool = False
     try:
         raw = await asyncio.wait_for(ws.recv(), timeout=10.0)
         if isinstance(raw, str):
@@ -297,7 +334,7 @@ async def handle(ws) -> None:
 
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
-        nonlocal chat_title, session_shown_ids
+        nonlocal chat_title, session_shown_ids, show_saved_mode
         try:
             async for msg in ws:
                 if isinstance(msg, bytes):
@@ -359,6 +396,29 @@ async def handle(ws) -> None:
                     elif data.get("type") == "text_input":
                         text = (data.get("text") or "").strip()
                         if text:
+                            # Detect "show my saved/liked/wishlist" intent — push saved
+                            # cards directly so _match_products can't mix in unsaved items.
+                            _tl = text.lower()
+                            _show_saved_intent = (
+                                session_saved and
+                                any(w in _tl for w in ("saved", "liked", "wishlist", "heart", "favourites", "favorites")) and
+                                any(w in _tl for w in ("show", "see", "view", "list", "what", "display", "bring", "tell"))
+                            )
+                            if _show_saved_intent:
+                                show_saved_mode = True
+                                saved_items = [_BY_ID[pid] for pid in session_saved if pid in _BY_ID]
+                                if saved_items:
+                                    await _send_json(ws, type="products",
+                                                     items=[{
+                                                         "id": p["id"], "name": p["name"],
+                                                         "category": p["category"], "color": p["color"],
+                                                         "price": p["price"],
+                                                         "image_url": p.get("image_url"),
+                                                         "affiliate_url": _affiliate_url(p),
+                                                     } for p in saved_items],
+                                                     show_more=False)
+                            else:
+                                show_saved_mode = False
                             sess = current["session"]
                             if sess is not None:
                                 # Always prepend saved items context so Mira knows
@@ -450,6 +510,7 @@ async def handle(ws) -> None:
         context and the shopper has to repeat themselves. We only return (→ reconnect)
         when receive() ends WITHOUT a turn_complete, i.e. the session genuinely closed.
         """
+        nonlocal show_saved_mode
         mood = "neutral"
         while not stop.is_set():
             talking = False
@@ -503,25 +564,30 @@ async def handle(ws) -> None:
                     await _send_json(ws, type="transcript", who="mira", text=chunk)
                     # Push each product card the MOMENT she names it, so the screen keeps
                     # pace with her voice instead of all options appearing at the end.
-                    fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
-                    if fresh:
-                        for p in fresh:
-                            sent_ids.add(p["id"])
-                            session_shown_ids.add(p["id"])
-                            if user_id:
-                                await asyncio.to_thread(
-                                    user_store.log_product_event,
-                                    user_id, p["id"], p["name"], "shown",
-                                )
-                        await _send_json(ws, type="products", items=fresh)
+                    # In show_saved_mode we already pushed exact saved cards — skip matching.
+                    if not show_saved_mode:
+                        fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
+                        if fresh:
+                            for p in fresh:
+                                sent_ids.add(p["id"])
+                                session_shown_ids.add(p["id"])
+                                if user_id:
+                                    await asyncio.to_thread(
+                                        user_store.log_product_event,
+                                        user_id, p["id"], p["name"], "shown",
+                                    )
+                            await _send_json(ws, type="products", items=fresh, show_more=True)
                 # turn done → brief react, then back to idle. Break to await the NEXT
                 # turn on this same session (keeps context alive).
                 if sc and sc.turn_complete:
-                    fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
-                    if fresh:
-                        for p in fresh:
-                            session_shown_ids.add(p["id"])
-                        await _send_json(ws, type="products", items=fresh)
+                    _was_saved_mode = show_saved_mode
+                    show_saved_mode = False  # reset after each turn
+                    if not _was_saved_mode:
+                        fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
+                        if fresh:
+                            for p in fresh:
+                                session_shown_ids.add(p["id"])
+                            await _send_json(ws, type="products", items=fresh, show_more=True)
                     # Full turn text → browser tells LiveAvatar to speak it.
                     full = "".join(said).strip()
                     if full:

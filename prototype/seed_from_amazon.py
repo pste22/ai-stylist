@@ -266,17 +266,13 @@ Choose one of these options:
                 "partner_tag":   tag,
                 "is_active":     True,
             }
-            rating = item.get("rating")
-            if rating:
-                row["rating"] = rating
-            total = item.get("ratings_total")
-            if total:
-                row["ratings_total"] = total
-
             if dry_run:
                 print(f"  DRY  {asin}  ${price:>7.2f}  {item['name'][:60]}")
             else:
-                sb.table("products").upsert(row, on_conflict="id").execute()
+                # Only send columns that exist in the schema
+                safe_row = {k: v for k, v in row.items()
+                            if k not in ("rating", "ratings_total")}
+                sb.table("products").upsert(safe_row, on_conflict="id").execute()
                 print(f"  ✓  {asin}  ${price:>7.2f}  {item['name'][:60]}")
             inserted += 1
 
