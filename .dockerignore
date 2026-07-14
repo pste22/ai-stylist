@@ -1,0 +1,12 @@
+.git
+.venv
+node_modules
+web/node_modules
+prototype/__pycache__
+prototype/*.pyc
+prototype/data/*.jsonl
+.env
+prototype/.env
+web/.env
+*.log
+.DS_Store

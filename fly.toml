@@ -1,0 +1,32 @@
+# Fly.io deployment config for Mira AI Stylist
+# Docs: https://fly.io/docs/reference/configuration/
+app = "ai-stylist"
+primary_region = "iad"   # US East — lowest latency to Gemini's US endpoints
+
+[build]
+  dockerfile = "Dockerfile"
+
+  # Public VITE_ vars baked into the JS bundle at build time.
+  # These are non-secret (Supabase anon key + public URL) — safe to commit.
+  [build.args]
+    VITE_SUPABASE_URL      = "https://tizhjpycyygoysqbxulr.supabase.co"
+    VITE_HEYGEN_AVATAR_ID  = "Wayne_20240711"
+    # VITE_SUPABASE_ANON_KEY is passed via `fly deploy --build-arg` or set below.
+    # It's a PUBLIC key (safe in browser) but kept out of the repo for hygiene.
+
+[http_service]
+  internal_port       = 8080
+  force_https         = true
+  auto_stop_machines  = "stop"    # scale to zero when idle (saves cost)
+  auto_start_machines = true      # cold-start on first request
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type       = "connections"
+    hard_limit = 100   # max concurrent WebSocket connections per machine
+    soft_limit = 80
+
+[[vm]]
+  memory   = "512mb"
+  cpu_kind = "shared"
+  cpus     = 1
