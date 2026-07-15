@@ -49,7 +49,7 @@ fly secrets set \
 echo ""
 
 # ── Build & deploy ─────────────────────────────────────────────────────────────
-ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpemhqcHljeXlnb3lzcWJ4dWxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDcxODgzMzMsImV4cCI6MjA2Mjc2NDMzM30.KSNXNz_l3HAOqJzF9QnwGxJ0lW1EvfZiBBkFqBq6N9c"
+ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpemhqcHljeXlnb3lzcWJ4dWxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMTg3MDcsImV4cCI6MjA5ODU5NDcwN30.uN-ptgBjEY9pdRFNNEzuwYAE-9557pgLcxH4CMdqwRs"
 
 echo "→ Building and deploying (this takes ~5 min)..."
 fly deploy --build-arg VITE_SUPABASE_ANON_KEY="$ANON_KEY"

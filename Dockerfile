@@ -26,11 +26,7 @@ WORKDIR /app
 
 # Python dependencies (pinned for reproducibility)
 COPY prototype/requirements.txt ./
-RUN pip install --no-cache-dir \
-    google-genai==2.10.0 \
-    supabase==2.31.0 \
-    websockets==15.0.1 \
-    python-dotenv==1.2.2
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Application code
 COPY prototype/ ./prototype/
