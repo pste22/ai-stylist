@@ -15,11 +15,11 @@ if [ ! -f "$ENV_FILE" ]; then
   exit 1
 fi
 
-# Export only lines that look like KEY=VALUE (skip comments and blanks)
-set -a
-# shellcheck disable=SC1090
-source <(grep -E '^[A-Z_]+=.+' "$ENV_FILE")
-set +a
+# Load secrets line by line (robust on macOS + Linux, handles comments)
+while IFS= read -r line || [ -n "$line" ]; do
+  [[ -z "$line" || "$line" == \#* ]] && continue
+  export "$line" 2>/dev/null || true
+done < "$ENV_FILE"
 
 # ── Validate required keys are present ─────────────────────────────────────────
 MISSING=()
