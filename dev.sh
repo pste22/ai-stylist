@@ -1,28 +1,31 @@
 #!/bin/bash
-# Start the Mira dev environment in tmux (two panes: voice bridge + Vite UI).
+# Start the Mira dev environment.
 # Usage: ./dev.sh
-# Requires: tmux installed in the Codespace (already available by default)
+# Runs both servers in background and tails their logs.
 
 set -e
 
-SESSION="mira-dev"
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+LOG_DIR="/tmp/mira-dev"
+mkdir -p "$LOG_DIR"
 
-# Kill any existing session with the same name
-tmux kill-session -t "$SESSION" 2>/dev/null || true
+# Kill any previous instances
+pkill -f "python live_server.py" 2>/dev/null || true
+pkill -f "vite" 2>/dev/null || true
+sleep 1
 
-# Create a new detached session running the Python voice bridge
-tmux new-session -d -s "$SESSION" -x 220 -y 50 \
-  -c "$ROOT/prototype" \
-  "python live_server.py; read"
+echo "→ Starting Python voice bridge..."
+cd "$ROOT/prototype"
+nohup python live_server.py > "$LOG_DIR/live_server.log" 2>&1 &
+echo "  PID $! — logs: $LOG_DIR/live_server.log"
 
-# Split horizontally and run the Vite dev server in the second pane
-tmux split-window -h -t "$SESSION" \
-  -c "$ROOT/web" \
-  "npm run dev; read"
+echo "→ Starting Vite dev server..."
+cd "$ROOT/web"
+nohup npm run dev > "$LOG_DIR/vite.log" 2>&1 &
+echo "  PID $! — logs: $LOG_DIR/vite.log"
 
-# Make panes equal width
-tmux select-layout -t "$SESSION" even-horizontal
-
-# Attach so you can see both servers
-tmux attach-session -t "$SESSION"
+echo ""
+echo "Both servers started. Tailing logs (Ctrl+C to stop tailing — servers keep running):"
+echo "──────────────────────────────────────────────────────"
+sleep 2
+tail -f "$LOG_DIR/live_server.log" "$LOG_DIR/vite.log"
