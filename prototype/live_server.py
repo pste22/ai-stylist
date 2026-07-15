@@ -850,6 +850,11 @@ async def process_request(connection, request):
             return resp
         except Exception as exc:
             return connection.respond(500, json.dumps({"error": str(exc)}))
+    # Return 200 for plain HTTP health checks (no WebSocket upgrade headers).
+    # Without this, the websockets library raises InvalidUpgrade which can
+    # confuse reverse-proxy health checks and Vite's ws proxy startup.
+    if request.headers.get("Upgrade", "").lower() != "websocket":
+        return connection.respond(200, "OK")
     return None
 
 
