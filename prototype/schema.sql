@@ -29,8 +29,22 @@ create table if not exists user_preferences (
   budget_max integer,
   vibes      text[],
   body_notes text,
+  -- Compatibility fields used by the existing web onboarding flow.
+  style_vibe     text,
+  shopping_focus text,
+  top_size       text,
+  bottom_size    text,
+  budget         text,
   updated_at timestamptz default now()
 );
+
+-- Existing deployments may have been created before the web onboarding fields
+-- existed. These are intentionally idempotent so this file remains safe to rerun.
+alter table user_preferences add column if not exists style_vibe text;
+alter table user_preferences add column if not exists shopping_focus text;
+alter table user_preferences add column if not exists top_size text;
+alter table user_preferences add column if not exists bottom_size text;
+alter table user_preferences add column if not exists budget text;
 
 -- ------------------------------------------------------------
 -- 3. USER HISTORY (per-user product interaction log)
@@ -129,6 +143,49 @@ create index if not exists idx_events_user_ts
 create index if not exists idx_events_type_ts
   on events(event, ts desc);
 
+-- ------------------------------------------------------------
+-- 6. EVENT EDITS + COMPLETE LOOKS
+--    An event brief captures the shopper's practical constraints before Mira
+--    recommends a complete outfit. Looks only reference products in our catalog,
+--    preserving the affiliate-grounding guarantee.
+-- ------------------------------------------------------------
+create table if not exists event_briefs (
+  id           uuid        primary key default gen_random_uuid(),
+  user_id      uuid        references users(user_id) on delete set null,
+  session_id   text,
+  occasion     text        not null,
+  event_date   date,
+  location     text,
+  dress_code   text,
+  vibe         text,
+  budget_max   numeric(10,2),
+  constraints  text,
+  status       text        not null default 'ready',
+  created_at   timestamptz default now()
+);
+
+create index if not exists idx_event_briefs_user_created
+  on event_briefs(user_id, created_at desc)
+  where user_id is not null;
+
+create table if not exists looks (
+  id             uuid        primary key default gen_random_uuid(),
+  event_brief_id uuid        references event_briefs(id) on delete cascade,
+  user_id        uuid        references users(user_id) on delete set null,
+  name           text        not null,
+  rationale      text        not null,
+  total_price    numeric(10,2),
+  created_at     timestamptz default now()
+);
+
+create table if not exists look_items (
+  look_id     uuid        references looks(id) on delete cascade,
+  product_id  text        references products(id) on delete restrict,
+  category    text        not null,
+  sort_order  integer     not null,
+  primary key (look_id, product_id)
+);
+
 -- ============================================================
 --  ROW-LEVEL SECURITY
 --  products + events are read-only from the browser (anon key).
@@ -139,6 +196,9 @@ alter table events   enable row level security;
 alter table users    enable row level security;
 alter table user_preferences enable row level security;
 alter table user_history     enable row level security;
+alter table event_briefs     enable row level security;
+alter table looks            enable row level security;
+alter table look_items       enable row level security;
 
 -- Anyone can read active products (needed if we ever add a public API)
 drop policy if exists "public read active products" on products;

@@ -31,6 +31,13 @@ def _now_iso() -> str:
 _cache: dict[str, tuple[str, bool, float]] = {}  # user_id → (prompt, is_returning, ts)
 _CACHE_TTL = 300  # seconds
 
+_BUDGET_BANDS = {
+    "budget": (None, 50),
+    "mid": (50, 150),
+    "premium": (150, 400),
+    "luxury": (400, None),
+}
+
 
 def _days_ago(iso: str) -> int:
     try:
@@ -105,18 +112,28 @@ def _returning_user_prompt(db, user: dict) -> str:
     prefs = db.table("user_preferences").select("*").eq("user_id", user["user_id"]).execute()
     if prefs.data:
         p = prefs.data[0]
-        if p.get("budget_max"):
-            bmin = p.get("budget_min")
-            if bmin:
-                lines.append(f"Known budget: ${bmin}–${p['budget_max']}. Don't ask again.")
+        budget_min = p.get("budget_min")
+        budget_max = p.get("budget_max")
+        if not budget_max and p.get("budget") in _BUDGET_BANDS:
+            budget_min, budget_max = _BUDGET_BANDS[p["budget"]]
+        if budget_max:
+            if budget_min:
+                lines.append(f"Known budget: ${budget_min}–${budget_max}. Don't ask again.")
             else:
-                lines.append(f"Known budget: up to ${p['budget_max']}. Don't ask again.")
+                lines.append(f"Known budget: up to ${budget_max}. Don't ask again.")
         else:
             lines.append("Budget: unknown — ask once before showing options.")
-        if p.get("vibes"):
-            lines.append(f"Style vibes they like: {', '.join(p['vibes'])}.")
+        vibes = p.get("vibes") or ([p["style_vibe"]] if p.get("style_vibe") else [])
+        if vibes:
+            lines.append(f"Style vibes they like: {', '.join(vibes)}.")
         if p.get("body_notes"):
             lines.append(f"Fit notes: {p['body_notes']}.")
+        sizes = [
+            f"tops/dresses {p['top_size']}" if p.get("top_size") else "",
+            f"bottoms {p['bottom_size']}" if p.get("bottom_size") else "",
+        ]
+        if any(sizes):
+            lines.append(f"Known sizes: {', '.join(s for s in sizes if s)}.")
     else:
         lines.append("Budget: unknown — ask once before showing options.")
 
@@ -209,3 +226,23 @@ def save_preferences(user_id: str, **kwargs) -> None:
         ).execute()
     except Exception as exc:
         print(f"  ! user_store.save_preferences: {exc}")
+
+
+def save_event_brief(user_id: str | None, session_id: str, brief: dict) -> None:
+    """Persist an explicit event brief; failure must never block a styling session."""
+    if not brief.get("occasion"):
+        return
+    try:
+        _db().table("event_briefs").insert({
+            "user_id": user_id,
+            "session_id": session_id,
+            "occasion": brief["occasion"],
+            "event_date": brief.get("date") or None,
+            "location": brief.get("location") or None,
+            "dress_code": brief.get("dress_code") or None,
+            "vibe": brief.get("vibe") or None,
+            "budget_max": brief.get("budget_max") or None,
+            "constraints": brief.get("constraints") or None,
+        }).execute()
+    except Exception as exc:
+        print(f"  ! user_store.save_event_brief: {exc}")

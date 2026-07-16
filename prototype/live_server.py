@@ -42,6 +42,7 @@ import user_store  # noqa: E402
 import chat_store  # noqa: E402
 from stylist import SYSTEM_PROMPT  # noqa: E402  (the SAME persona + grounding rules)
 from product_source import get_source  # noqa: E402
+from look_engine import build_looks  # noqa: E402
 
 # Ground the voice on the ACTIVE source (env PRODUCT_SOURCE: local / curated / amazon),
 # not just the bundled demo catalog — so curated SiteStripe / PA-API items Mira can
@@ -63,11 +64,32 @@ for _p in _CATALOG:
 _BY_ID = {p["id"]: p for p in _CATALOG}
 
 
-def full_grounding_prompt(memory: str = "") -> str:
+def full_grounding_prompt(memory: str = "", event_brief: dict | None = None) -> str:
     """Persona + optional user memory + curated product spotlight as grounding."""
     parts = [SYSTEM_PROMPT]
     if memory:
         parts.append(f"SHOPPER CONTEXT (use naturally, never recite as a list):\n{memory}")
+    if event_brief and event_brief.get("occasion"):
+        fields = [
+            f"{label}: {event_brief[key]}"
+            for key, label in (
+                ("occasion", "occasion"),
+                ("date", "date"),
+                ("location", "location"),
+                ("dress_code", "dress code"),
+                ("vibe", "desired vibe"),
+                ("budget_max", "total budget"),
+                ("constraints", "non-negotiables"),
+            )
+            if event_brief.get(key)
+        ]
+        parts.append(
+            "EVENT BRIEF (the shopper submitted this before the chat):\n"
+            + "\n".join(f"- {field}" for field in fields)
+            + "\n\nStart by acknowledging the brief. Ask only one concise question if a "
+            "critical detail is missing; otherwise help them decide between the three "
+            "grounded look drafts already shown in the interface. Never invent an item."
+        )
     parts.append(
         f"PRODUCTS you may recommend (curated spotlight — {len(_CATALOG)} total in catalog):\n"
         f"{_SOURCE.render(_SPOTLIGHT)}\n\n"
@@ -210,7 +232,7 @@ def _match_products(transcript: str) -> list[dict]:
     return hits
 
 
-def _build(memory: str = ""):
+def _build(memory: str = "", event_brief: dict | None = None):
     from google import genai
     from google.genai import types
 
@@ -220,7 +242,7 @@ def _build(memory: str = ""):
         # full turn text to the browser, which tells LiveAvatar to speak it (LITE mode,
         # session.repeat(text)). LiveAvatar's avatar voice does the TTS + lip-sync.
         response_modalities=["AUDIO"],
-        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory))]),
+        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, event_brief))]),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         speech_config=types.SpeechConfig(
@@ -299,6 +321,7 @@ async def handle(ws) -> None:
     top_size: str | None = None
     bottom_size: str | None = None
     budget: str | None = None
+    event_brief: dict = {}
     memory = ""
     chat_session_id: str | None = None
     chat_title: str | None = None  # first user message — set once
@@ -327,6 +350,7 @@ async def handle(ws) -> None:
                 top_size       = data.get("top_size")
                 bottom_size    = data.get("bottom_size")
                 budget         = data.get("budget")
+                event_brief    = data.get("event_brief") or {}
                 if user_id:
                     try:
                         memory, is_returning = await asyncio.to_thread(
@@ -370,8 +394,10 @@ async def handle(ws) -> None:
     except (asyncio.TimeoutError, Exception):
         pass  # anonymous session — Mira still works fine
 
-    client, config, types = _build(memory)
+    client, config, types = _build(memory, event_brief)
     session_id = events.new_session_id()
+    if event_brief.get("occasion"):
+        await asyncio.to_thread(user_store.save_event_brief, user_id, session_id, event_brief)
     current = {"session": None}  # the live session pump_mic forwards audio into
     resume = {"handle": None}    # latest Gemini resumption handle (preserves context)
     stop = asyncio.Event()       # set when the browser disconnects
@@ -721,6 +747,15 @@ async def handle(ws) -> None:
                     else:
                         session_start_time  = t0
                         last_activity_time  = t0
+                        if event_brief.get("occasion"):
+                            looks = build_looks(
+                                _CATALOG,
+                                occasion=event_brief["occasion"],
+                                vibe=event_brief.get("vibe", ""),
+                                budget_max=event_brief.get("budget_max"),
+                            )
+                            if looks:
+                                await _send_json(ws, type="looks", items=looks)
                         # Kick off Mira's opening greeting on first connect.
                         # We suppress the input transcription echo so "hi" doesn't
                         # appear in the "you:" caption.
@@ -735,7 +770,15 @@ async def handle(ws) -> None:
                         if budget:         profile_parts.append(f"budget: {budget}")
                         profile_str = ", ".join(profile_parts)
 
-                        if has_prefs:
+                        if event_brief.get("occasion"):
+                            greeting_instruction = (
+                                f"[START SESSION] Greet {user_name} warmly by name and acknowledge "
+                                f"their {event_brief['occasion']} event brief. Three grounded look "
+                                f"drafts are already visible. Ask ONE concise question only if needed "
+                                f"to refine the looks; otherwise invite them to compare the drafts. "
+                                f"Keep it to 2 sentences. Do NOT say you are great."
+                            )
+                        elif has_prefs:
                             greeting_instruction = (
                                 f"[START SESSION] Greet {user_name} warmly by name. "
                                 f"Their saved style profile is: {profile_str}. "

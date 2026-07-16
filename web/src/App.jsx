@@ -3,6 +3,7 @@ import RiveAvatar from "./RiveAvatar.jsx";
 import ProductCard from "./ProductCard.jsx";
 import LoginScreen from "./LoginScreen.jsx";
 import OnboardingFlow from "./OnboardingFlow.jsx";
+import EventBriefFlow from "./EventBriefFlow.jsx";
 import ChatHistory from "./ChatHistory.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
 import { useAuth } from "./useAuth.js";
@@ -229,6 +230,38 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
   );
 }
 
+function LookDeck({ looks, loved, onLove, onBuy, onSaveLook }) {
+  if (!looks?.length) return null;
+  return (
+    <section className="look-deck" aria-label="Mira's complete look drafts">
+      <div className="look-deck-heading">
+        <p className="look-deck-eyebrow">Mira Event Edit</p>
+        <h2>Three ways to make it yours</h2>
+      </div>
+      <div className="look-grid">
+        {looks.map((look) => (
+          <article className="look-card" key={look.id}>
+            <div className="look-card-head">
+              <h3>{look.name}</h3>
+              <strong>${Number(look.total_price || 0).toFixed(2)}</strong>
+            </div>
+            <p>{look.rationale}</p>
+            <div className="look-items">
+              {look.items.map((product) => (
+                <ProductCard key={product.id} product={product} compact
+                  loved={loved.has(product.id)} onLove={onLove} onBuy={onBuy} />
+              ))}
+            </div>
+            <button className="look-save" onClick={() => onSaveLook(look.items)}>
+              ♡ Save this look
+            </button>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 const CATEGORY_EMOJI = {
   dresses: "👗", tops: "👚", bottoms: "👖", outerwear: "🧥",
   shoes: "👟", bags: "👜", accessories: "✨", activewear: "🏃",
@@ -373,7 +406,7 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
 // ─── Full-screen chat view (text mode while connected) ────────────────────────
 function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
                     onStop, onSend, error, userName, userEmail, userAvatar, onSignOut,
-                    canShowMore, onShowMore, products, highlightedId }) {
+                    canShowMore, onShowMore, products, looks, onSaveLook, highlightedId }) {
   const [draft, setDraft] = useState("");
   const threadRef = useRef(null);
   const inputRef = useRef(null);
@@ -449,6 +482,7 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
         {/* ── LEFT: conversation thread ── */}
         <div className="chat-left">
           <div className="chat-thread" ref={threadRef}>
+            <LookDeck looks={looks} loved={loved} onLove={onLove} onBuy={onBuy} onSaveLook={onSaveLook} />
             {messages.length === 0 && (
               <div className="chat-empty">
                 <span>Mira is thinking of a greeting…</span>
@@ -542,13 +576,36 @@ export default function App() {
   const [textMode, setTextMode]     = useState(false);
   const [showSaved, setShowSaved]   = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showEventBrief, setShowEventBrief] = useState(false);
+  const [eventBrief, setEventBrief] = useState(null);
+  const [startRequested, setStartRequested] = useState(false);
 
   const {
     connected, state, mood, captions, messages,
-    products, savedProducts, loved, highlightedId, error,
+    products, looks, savedProducts, loved, highlightedId, error,
     canShowMore, setCanShowMore,
     start, stop, sendText, wouldBuy, getLevel, buyClick, showMore,
-  } = useMiraVoice({ userId, userName, userPrefs: prefs, textMode });
+  } = useMiraVoice({ userId, userName, userPrefs: prefs, eventBrief, textMode });
+
+  useEffect(() => {
+    if (startRequested && eventBrief && !connected) {
+      setStartRequested(false);
+      start();
+    }
+  }, [startRequested, eventBrief, connected, start]);
+
+  const startEventEdit = (brief) => {
+    setEventBrief(brief);
+    setTextMode(true);
+    setShowEventBrief(false);
+    setStartRequested(true);
+  };
+
+  const saveLook = (items) => {
+    items.forEach((product) => {
+      if (!loved.has(product.id)) wouldBuy(product);
+    });
+  };
 
   // Splash while checking for existing session or onboarding status
   if (loading || (user && needsOnboarding === null)) {
@@ -569,6 +626,10 @@ export default function App() {
   // New user → show onboarding
   if (needsOnboarding) {
     return <OnboardingFlow userName={userName} onComplete={completeOnboarding} />;
+  }
+
+  if (showEventBrief) {
+    return <EventBriefFlow onStart={startEventEdit} onCancel={() => setShowEventBrief(false)} />;
   }
 
   // Text mode while connected → full-screen chat UI
@@ -596,6 +657,8 @@ export default function App() {
           canShowMore={canShowMore}
           onShowMore={showMore}
           products={products}
+          looks={looks}
+          onSaveLook={saveLook}
           highlightedId={highlightedId}
         />
       </>
@@ -628,6 +691,11 @@ export default function App() {
           </div>
         </div>
         <p className="tagline">Your personal AI stylist</p>
+        {!connected && (
+          <button className="event-edit-cta" onClick={() => setShowEventBrief(true)}>
+            ✦ Plan an event look
+          </button>
+        )}
         {savedProducts.length > 0 && (
           <button className="saved-toggle" onClick={() => setShowSaved((v) => !v)}>
             {showSaved ? "Hide saves" : `💜 Saved (${savedProducts.length})`}

@@ -803,6 +803,89 @@ button.primary.stop { background: var(--accent); }
 .saved-toggle:hover { background: var(--bg-alt); transform: none; filter: none; border-color: var(--border-dark); }
 
 /* ══════════════════════════════════════════════════════════
+   EVENT BRIEF + COMPLETE LOOKS
+══════════════════════════════════════════════════════════ */
+.event-edit-cta {
+  margin-top: .85rem; background: var(--ink); color: #fff;
+  border: 0; border-radius: var(--r-pill); padding: .62rem 1rem;
+  font-size: .84rem; font-weight: 750; cursor: pointer;
+}
+.event-edit-cta:hover { background: var(--accent); }
+.event-brief-screen {
+  min-height: 100dvh; padding: 2rem 1rem; display: grid; place-items: center;
+  background: radial-gradient(circle at 15% 20%, #f9e8df 0, transparent 35%), var(--bg);
+}
+.event-brief-card {
+  position: relative; width: min(680px, 100%); padding: 2.5rem;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg); animation: fadeUp .3s ease;
+}
+.event-brief-close {
+  border: 0; background: transparent; color: var(--ink-2); padding: 0; cursor: pointer;
+  font-size: .85rem; font-weight: 650;
+}
+.event-brief-eyebrow, .look-deck-eyebrow {
+  margin: 1.5rem 0 .35rem; color: var(--accent); font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase; font-size: .68rem;
+}
+.event-brief-card h1 { margin: 0; letter-spacing: -.045em; font-size: clamp(2rem, 6vw, 3rem); }
+.event-brief-intro { color: var(--ink-2); line-height: 1.6; max-width: 52ch; }
+.event-brief-card fieldset { border: 0; padding: 0; margin: 1.5rem 0; }
+.event-brief-card legend, .event-brief-card label {
+  color: var(--ink-2); display: block; font-size: .78rem; font-weight: 750;
+  letter-spacing: .03em; margin-bottom: .45rem;
+}
+.event-brief-chips { display: flex; gap: .5rem; flex-wrap: wrap; }
+.event-brief-chips button {
+  background: var(--bg); border: 1px solid var(--border); border-radius: var(--r-pill);
+  color: var(--ink); padding: .48rem .78rem; cursor: pointer; font-weight: 650;
+}
+.event-brief-chips button.is-selected { background: var(--ink); color: #fff; border-color: var(--ink); }
+.event-brief-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+.event-brief-card input, .event-brief-card textarea {
+  display: block; width: 100%; margin-top: .4rem; padding: .7rem .75rem;
+  color: var(--ink); background: var(--bg); border: 1px solid var(--border);
+  border-radius: var(--r-sm); font: inherit; font-weight: 450;
+}
+.event-brief-notes { margin-top: 1.25rem; }
+.event-brief-submit {
+  width: 100%; margin-top: 1.25rem; border: 0; border-radius: var(--r-sm);
+  background: var(--accent); color: #fff; padding: .85rem; font-weight: 800; cursor: pointer;
+}
+.event-brief-submit:disabled { opacity: .45; cursor: not-allowed; }
+.event-brief-disclosure { color: var(--ink-3); text-align: center; font-size: .71rem; line-height: 1.45; }
+.look-deck { width: 100%; margin-bottom: .5rem; }
+.look-deck-eyebrow { margin-top: 0; }
+.look-deck h2 { margin: 0 0 .85rem; font-size: 1.25rem; letter-spacing: -.03em; }
+.look-grid { display: grid; gap: .75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.look-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: .9rem; box-shadow: var(--shadow-xs);
+}
+.look-card-head { display: flex; gap: .5rem; justify-content: space-between; align-items: baseline; }
+.look-card h3 { margin: 0; font-size: .9rem; }
+.look-card-head strong { color: var(--accent); white-space: nowrap; font-size: .82rem; }
+.look-card > p { color: var(--ink-2); font-size: .76rem; line-height: 1.45; }
+.look-items { display: grid; gap: .5rem; }
+.look-items .card.compact .card-thumb { width: 56px; min-width: 56px; height: 56px; }
+.look-items .card.compact .card-actions { display: none; }
+.look-items .card.compact .card-body { padding: .4rem .5rem; }
+.look-items .card.compact .card-name { font-size: .72rem; -webkit-line-clamp: 2; }
+.look-items .card.compact .card-meta, .look-items .card.compact .card-price { font-size: .68rem; }
+.look-save {
+  width: 100%; margin-top: .75rem; background: transparent; border: 1px solid var(--border);
+  border-radius: var(--r-sm); padding: .5rem; color: var(--ink); cursor: pointer; font-weight: 700;
+}
+.look-save:hover { border-color: var(--accent); color: var(--accent); }
+@media (max-width: 800px) {
+  .look-grid { grid-template-columns: 1fr; }
+  .event-brief-card { padding: 1.5rem; }
+}
+@media (max-width: 440px) {
+  .event-brief-grid { grid-template-columns: 1fr; }
+}
+
+/* ══════════════════════════════════════════════════════════
    FULL-SCREEN CHAT LAYOUT (text mode)
 ══════════════════════════════════════════════════════════ */
 .chat-layout {
