@@ -322,6 +322,9 @@ async def handle(ws) -> None:
     bottom_size: str | None = None
     budget: str | None = None
     event_brief: dict = {}
+    event_brief_id: str | None = None
+    event_looks: dict[str, dict] = {}
+    saved_look_ids: set[str] = set()
     memory = ""
     chat_session_id: str | None = None
     chat_title: str | None = None  # first user message — set once
@@ -384,6 +387,11 @@ async def handle(ws) -> None:
                                     ws, type="restore_loved",
                                     ids=loved_ids, products=loved_products,
                                 )
+                            saved_looks = await asyncio.to_thread(
+                                user_store.get_saved_looks, user_id
+                            )
+                            if saved_looks:
+                                await _send_json(ws, type="restore_looks", items=saved_looks)
                     except Exception as exc:
                         print(f"  ! user_store.load_user failed: {exc}")
                 # Create a chat session row for history tracking
@@ -397,7 +405,9 @@ async def handle(ws) -> None:
     client, config, types = _build(memory, event_brief)
     session_id = events.new_session_id()
     if event_brief.get("occasion"):
-        await asyncio.to_thread(user_store.save_event_brief, user_id, session_id, event_brief)
+        event_brief_id = await asyncio.to_thread(
+            user_store.save_event_brief, user_id, session_id, event_brief
+        )
     current = {"session": None}  # the live session pump_mic forwards audio into
     resume = {"handle": None}    # latest Gemini resumption handle (preserves context)
     stop = asyncio.Event()       # set when the browser disconnects
@@ -468,6 +478,36 @@ async def handle(ws) -> None:
                             )
                         session_saved.pop(pid, None)
                         print(f"  ♡ unlike: {prod.get('name', pid)}")
+                    elif data.get("type") == "save_look":
+                        draft_id = data.get("look_id", "")
+                        look = event_looks.get(draft_id)
+                        if not user_id or not look:
+                            await _send_json(
+                                ws, type="error",
+                                message="That Event Edit is no longer available to save. Please create it again.",
+                            )
+                            continue
+                        if draft_id in saved_look_ids:
+                            await _send_json(ws, type="look_saved", look_id=draft_id)
+                            continue
+                        saved_id = await asyncio.to_thread(
+                            user_store.save_look, user_id, event_brief_id, look
+                        )
+                        if saved_id:
+                            saved_look_ids.add(draft_id)
+                            events.log_event(
+                                "look_saved",
+                                session_id=session_id,
+                                user_id=user_id,
+                                meta={"look_id": saved_id, "draft_id": draft_id},
+                            )
+                            await _send_json(ws, type="look_saved", look_id=draft_id)
+                            print(f"  ✦ saved Event Edit: {look['name']}")
+                        else:
+                            await _send_json(
+                                ws, type="error",
+                                message="Couldn't save that Event Edit right now. Please try again.",
+                            )
                     elif data.get("type") == "text_input":
                         text = (data.get("text") or "").strip()
                         if text:
@@ -755,6 +795,7 @@ async def handle(ws) -> None:
                                 budget_max=event_brief.get("budget_max"),
                             )
                             if looks:
+                                event_looks.update({look["id"]: look for look in looks})
                                 await _send_json(ws, type="looks", items=looks)
                         # Kick off Mira's opening greeting on first connect.
                         # We suppress the input transcription echo so "hi" doesn't

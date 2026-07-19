@@ -877,6 +877,27 @@ button.primary.stop { background: var(--accent); }
   border-radius: var(--r-sm); padding: .5rem; color: var(--ink); cursor: pointer; font-weight: 700;
 }
 .look-save:hover { border-color: var(--accent); color: var(--accent); }
+.look-save:disabled {
+  cursor: default; background: var(--accent-soft); border-color: var(--accent);
+  color: var(--accent);
+}
+.saved-event-edits {
+  width: 100%; background: var(--gold-soft); border: 1px solid #ebd6ad;
+  border-radius: var(--r-card); padding: .8rem 1rem;
+}
+.saved-event-edits .look-deck-eyebrow { margin: 0 0 .55rem; color: #8b6428; }
+.saved-event-edits-list { display: grid; gap: .45rem; }
+.saved-event-edit {
+  display: flex; align-items: center; justify-content: space-between; gap: .8rem;
+  border-top: 1px solid #ead8b5; padding-top: .5rem;
+}
+.saved-event-edit div { min-width: 0; display: grid; gap: .12rem; }
+.saved-event-edit strong { font-size: .8rem; }
+.saved-event-edit span {
+  color: var(--ink-2); font-size: .72rem; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.saved-event-edit b { color: #8b6428; font-size: .78rem; white-space: nowrap; }
 @media (max-width: 800px) {
   .look-grid { grid-template-columns: 1fr; }
   .event-brief-card { padding: 1.5rem; }

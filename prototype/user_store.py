@@ -228,12 +228,12 @@ def save_preferences(user_id: str, **kwargs) -> None:
         print(f"  ! user_store.save_preferences: {exc}")
 
 
-def save_event_brief(user_id: str | None, session_id: str, brief: dict) -> None:
+def save_event_brief(user_id: str | None, session_id: str, brief: dict) -> str | None:
     """Persist an explicit event brief; failure must never block a styling session."""
     if not brief.get("occasion"):
-        return
+        return None
     try:
-        _db().table("event_briefs").insert({
+        result = _db().table("event_briefs").insert({
             "user_id": user_id,
             "session_id": session_id,
             "occasion": brief["occasion"],
@@ -244,5 +244,55 @@ def save_event_brief(user_id: str | None, session_id: str, brief: dict) -> None:
             "budget_max": brief.get("budget_max") or None,
             "constraints": brief.get("constraints") or None,
         }).execute()
+        return result.data[0]["id"] if result.data else None
     except Exception as exc:
         print(f"  ! user_store.save_event_brief: {exc}")
+        return None
+
+
+def save_look(
+    user_id: str,
+    event_brief_id: str | None,
+    look: dict,
+) -> str | None:
+    """Persist an Event Edit snapshot and turn its items into style-memory signals."""
+    try:
+        result = _db().table("looks").insert({
+            "event_brief_id": event_brief_id,
+            "user_id": user_id,
+            "name": look["name"],
+            "rationale": look["rationale"],
+            "total_price": look.get("total_price"),
+            "items": look.get("items", []),
+            "is_saved": True,
+        }).execute()
+        saved_id = result.data[0]["id"] if result.data else None
+        for product in look.get("items", []):
+            log_product_event(
+                user_id,
+                product.get("id", ""),
+                product.get("name", ""),
+                "wishlist",
+            )
+        return saved_id
+    except Exception as exc:
+        print(f"  ! user_store.save_look: {exc}")
+        return None
+
+
+def get_saved_looks(user_id: str, limit: int = 8) -> list[dict]:
+    """Load saved Event Edit snapshots for a returning shopper."""
+    try:
+        result = (
+            _db().table("looks")
+            .select("id, name, rationale, total_price, items, created_at")
+            .eq("user_id", user_id)
+            .eq("is_saved", True)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+    except Exception as exc:
+        print(f"  ! user_store.get_saved_looks: {exc}")
+        return []

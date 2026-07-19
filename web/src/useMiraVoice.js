@@ -33,6 +33,8 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const [miraText, setMiraText] = useState(null);
   const [canShowMore, setCanShowMore] = useState(false);
   const [looks, setLooks] = useState([]);
+  const [savedLooks, setSavedLooks] = useState([]);
+  const [savedLookIds, setSavedLookIds] = useState(() => new Set());
 
   // Text mode: full chat history (persists across turns so user can scroll up)
   const [messages, setMessages] = useState([]);
@@ -136,6 +138,12 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
       ws.send(JSON.stringify({ type: "buy_click", product_id: product.id }));
   }, []);
 
+  const saveLook = useCallback((look) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN)
+      ws.send(JSON.stringify({ type: "save_look", look_id: look.id }));
+  }, []);
+
   const showMore = useCallback(() => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
@@ -148,6 +156,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     setError(null);
     setMessages([]);
     setLooks([]);
+    setSavedLookIds(new Set());
     miraBubbleId.current = null;
     try {
       const ws = new WebSocket(WS_URL);
@@ -248,6 +257,17 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
           case "looks":
             setLooks(msg.items || []);
             break;
+          case "restore_looks":
+            setSavedLooks(msg.items || []);
+            break;
+          case "look_saved":
+            setSavedLookIds((previous) => new Set(previous).add(msg.look_id));
+            setLooks((current) => {
+              const saved = current.find((look) => look.id === msg.look_id);
+              if (saved) setSavedLooks((previous) => [saved, ...previous]);
+              return current;
+            });
+            break;
 
           case "restore_loved":
             setLoved((prev) => { const n = new Set(prev); msg.ids.forEach((id) => n.add(id)); return n; });
@@ -270,8 +290,8 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
 
   return {
     connected, state, mood, captions, messages,
-    products, looks, savedProducts, loved, highlightedId, error, miraText,
+    products, looks, savedLooks, savedLookIds, savedProducts, loved, highlightedId, error, miraText,
     canShowMore, setCanShowMore,
-    start, stop, sendText, wouldBuy, getLevel, buyClick, showMore,
+    start, stop, sendText, wouldBuy, getLevel, buyClick, saveLook, showMore,
   };
 }
