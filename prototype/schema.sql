@@ -175,8 +175,15 @@ create table if not exists looks (
   name           text        not null,
   rationale      text        not null,
   total_price    numeric(10,2),
+  -- Snapshot keeps an Event Edit recoverable even when a merchant later removes
+  -- a product from its active feed.
+  items          jsonb       not null default '[]'::jsonb,
+  is_saved       boolean     not null default true,
   created_at     timestamptz default now()
 );
+
+alter table looks add column if not exists items jsonb not null default '[]'::jsonb;
+alter table looks add column if not exists is_saved boolean not null default true;
 
 create table if not exists look_items (
   look_id     uuid        references looks(id) on delete cascade,

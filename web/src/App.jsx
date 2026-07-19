@@ -230,7 +230,7 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
   );
 }
 
-function LookDeck({ looks, loved, onLove, onBuy, onSaveLook }) {
+function LookDeck({ looks, loved, savedLookIds, onLove, onBuy, onSaveLook }) {
   if (!looks?.length) return null;
   return (
     <section className="look-deck" aria-label="Mira's complete look drafts">
@@ -252,10 +252,31 @@ function LookDeck({ looks, loved, onLove, onBuy, onSaveLook }) {
                   loved={loved.has(product.id)} onLove={onLove} onBuy={onBuy} />
               ))}
             </div>
-            <button className="look-save" onClick={() => onSaveLook(look.items)}>
-              ♡ Save this look
+            <button className="look-save" disabled={savedLookIds.has(look.id)}
+              onClick={() => onSaveLook(look)}>
+              {savedLookIds.has(look.id) ? "♥ Saved Event Edit" : "♡ Save this Event Edit"}
             </button>
           </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function SavedEventEdits({ looks = [] }) {
+  if (!looks.length) return null;
+  return (
+    <section className="saved-event-edits" aria-label="Saved Event Edits">
+      <p className="look-deck-eyebrow">Your saved Event Edits</p>
+      <div className="saved-event-edits-list">
+        {looks.map((look) => (
+          <div className="saved-event-edit" key={look.id}>
+            <div>
+              <strong>{look.name}</strong>
+              <span>{(look.items || []).map((item) => item.name).join(" · ")}</span>
+            </div>
+            <b>${Number(look.total_price || 0).toFixed(2)}</b>
+          </div>
         ))}
       </div>
     </section>
@@ -406,7 +427,8 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
 // ─── Full-screen chat view (text mode while connected) ────────────────────────
 function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
                     onStop, onSend, error, userName, userEmail, userAvatar, onSignOut,
-                    canShowMore, onShowMore, products, looks, onSaveLook, highlightedId }) {
+                    canShowMore, onShowMore, products, looks, savedLooks, savedLookIds,
+                    onSaveLook, highlightedId }) {
   const [draft, setDraft] = useState("");
   const threadRef = useRef(null);
   const inputRef = useRef(null);
@@ -482,7 +504,9 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
         {/* ── LEFT: conversation thread ── */}
         <div className="chat-left">
           <div className="chat-thread" ref={threadRef}>
-            <LookDeck looks={looks} loved={loved} onLove={onLove} onBuy={onBuy} onSaveLook={onSaveLook} />
+            <SavedEventEdits looks={savedLooks} />
+            <LookDeck looks={looks} loved={loved} savedLookIds={savedLookIds}
+              onLove={onLove} onBuy={onBuy} onSaveLook={onSaveLook} />
             {messages.length === 0 && (
               <div className="chat-empty">
                 <span>Mira is thinking of a greeting…</span>
@@ -582,9 +606,9 @@ export default function App() {
 
   const {
     connected, state, mood, captions, messages,
-    products, looks, savedProducts, loved, highlightedId, error,
+    products, looks, savedLooks, savedLookIds, savedProducts, loved, highlightedId, error,
     canShowMore, setCanShowMore,
-    start, stop, sendText, wouldBuy, getLevel, buyClick, showMore,
+    start, stop, sendText, wouldBuy, getLevel, buyClick, saveLook, showMore,
   } = useMiraVoice({ userId, userName, userPrefs: prefs, eventBrief, textMode });
 
   useEffect(() => {
@@ -599,12 +623,6 @@ export default function App() {
     setTextMode(true);
     setShowEventBrief(false);
     setStartRequested(true);
-  };
-
-  const saveLook = (items) => {
-    items.forEach((product) => {
-      if (!loved.has(product.id)) wouldBuy(product);
-    });
   };
 
   // Splash while checking for existing session or onboarding status
@@ -658,6 +676,8 @@ export default function App() {
           onShowMore={showMore}
           products={products}
           looks={looks}
+          savedLooks={savedLooks}
+          savedLookIds={savedLookIds}
           onSaveLook={saveLook}
           highlightedId={highlightedId}
         />
