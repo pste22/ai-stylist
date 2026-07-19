@@ -1,6 +1,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "./supabaseClient.js";
 
+const BUDGET_BANDS = {
+  budget: { min: null, max: 50 },
+  mid: { min: 50, max: 150 },
+  premium: { min: 150, max: 400 },
+  luxury: { min: 400, max: null },
+};
+
 export function useOnboarding(userId) {
   const [needsOnboarding, setNeedsOnboarding] = useState(null);
   const [prefs, setPrefs]                     = useState(null);
@@ -9,7 +16,7 @@ export function useOnboarding(userId) {
     if (!userId) return;
     supabase
       .from("user_preferences")
-      .select("style_vibe, shopping_focus, top_size, bottom_size, budget")
+      .select("style_vibe, shopping_focus, top_size, bottom_size, budget, budget_min, budget_max, vibes")
       .eq("user_id", userId)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -21,12 +28,18 @@ export function useOnboarding(userId) {
 
   const completeOnboarding = async ({ styleVibe, shoppingFocus, topSize, bottomSize, budget } = {}) => {
     if (!userId) return;
+    const band = BUDGET_BANDS[budget] || {};
     const updates = {
       style_vibe:     styleVibe     ?? null,
       shopping_focus: shoppingFocus ?? null,
       top_size:       topSize       ?? null,
       bottom_size:    bottomSize    ?? null,
       budget:         budget        ?? null,
+      // Keep the canonical fields in sync with the legacy web-flow names. The
+      // voice bridge reads these fields when it constructs persistent memory.
+      vibes:          styleVibe ? [styleVibe] : [],
+      budget_min:     band.min ?? null,
+      budget_max:     band.max ?? null,
     };
 
     // Check if row exists first, then insert or update

@@ -20,7 +20,7 @@ const WS_URL = resolveWsUrl();
 let _msgId = 0;
 const mkId = () => ++_msgId;
 
-export function useMiraVoice({ userId, userName, userPrefs = null, textMode = false } = {}) {
+export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = null, textMode = false } = {}) {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(AvatarState.IDLE);
   const [mood, setMood] = useState(Mood.NEUTRAL);
@@ -32,6 +32,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
   const [error, setError] = useState(null);
   const [miraText, setMiraText] = useState(null);
   const [canShowMore, setCanShowMore] = useState(false);
+  const [looks, setLooks] = useState([]);
 
   // Text mode: full chat history (persists across turns so user can scroll up)
   const [messages, setMessages] = useState([]);
@@ -107,7 +108,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
             .then(({ error }) => { if (error) console.error("unlike:", error); });
         } else {
           supabase.from("user_history")
-            .insert({ user_id: userId, product_id: product.id, action: "would_buy", created_at: new Date().toISOString() })
+            .insert({ user_id: userId, product_id: product.id, action: "would_buy", ts: new Date().toISOString() })
             .then(({ error }) => { if (error) console.error("save:", error); });
         }
       }
@@ -146,6 +147,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
   const start = useCallback(async () => {
     setError(null);
     setMessages([]);
+    setLooks([]);
     miraBubbleId.current = null;
     try {
       const ws = new WebSocket(WS_URL);
@@ -165,6 +167,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
             top_size:       userPrefs?.top_size       ?? null,
             bottom_size:    userPrefs?.bottom_size    ?? null,
             budget:         userPrefs?.budget         ?? null,
+            event_brief:    eventBrief,
           }));
         setConnected(true);
         setCanShowMore(true); // always show browse button once connected (1000+ products available)
@@ -242,6 +245,9 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
             }
             break;
           }
+          case "looks":
+            setLooks(msg.items || []);
+            break;
 
           case "restore_loved":
             setLoved((prev) => { const n = new Set(prev); msg.ids.forEach((id) => n.add(id)); return n; });
@@ -260,11 +266,11 @@ export function useMiraVoice({ userId, userName, userPrefs = null, textMode = fa
     } catch (e) {
       setError(String(e));
     }
-  }, [stop, textMode, userId, userName]);
+  }, [stop, textMode, userId, userName, userPrefs, eventBrief]);
 
   return {
     connected, state, mood, captions, messages,
-    products, savedProducts, loved, highlightedId, error, miraText,
+    products, looks, savedProducts, loved, highlightedId, error, miraText,
     canShowMore, setCanShowMore,
     start, stop, sendText, wouldBuy, getLevel, buyClick, showMore,
   };
