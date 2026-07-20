@@ -27,6 +27,7 @@ import asyncio
 import json
 import os
 import re
+import time
 
 from dotenv import load_dotenv
 
@@ -64,9 +65,109 @@ for _p in _CATALOG:
 _BY_ID = {p["id"]: p for p in _CATALOG}
 
 
-def full_grounding_prompt(memory: str = "", event_brief: dict | None = None) -> str:
+_BUDGET_RANGES = {
+    "budget":  (0,   50),
+    "mid":     (50,  150),
+    "premium": (150, 400),
+    "luxury":  (400, 9999),
+}
+_BUDGET_LABELS = {
+    "budget": "under $50", "mid": "$50–$150",
+    "premium": "$150–$400", "luxury": "$400+",
+}
+_FOCUS_CATS = {
+    "everyday":   {"tops", "bottoms", "shoes", "activewear"},
+    "work":       {"tops", "bottoms", "outerwear", "bags", "accessories"},
+    "occasions":  {"dresses", "outerwear", "accessories", "shoes", "bags"},
+    "everything": None,
+}
+
+
+def _taste_profile(saved_ids: list) -> str | None:
+    """Derive a short taste description from a user's saved products."""
+    from collections import Counter
+    products = [_BY_ID[pid] for pid in saved_ids if pid in _BY_ID]
+    if not products:
+        return None
+    cats   = Counter(p.get("category") for p in products if p.get("category"))
+    colors = Counter(p.get("color")    for p in products if p.get("color"))
+    prices = [p["price"] for p in products if p.get("price")]
+    parts  = []
+    if cats:
+        parts.append("loves " + ", ".join(c for c, _ in cats.most_common(3)))
+    if colors:
+        parts.append("prefers " + "/".join(c for c, _ in colors.most_common(2)) + " tones")
+    if prices:
+        parts.append(f"avg saved price ${sum(prices)/len(prices):.0f}")
+    return "; ".join(parts) if parts else None
+
+
+def _personalized_top_picks(
+    prefs: dict | None,
+    exclude_ids: set,
+    n: int = 10,
+) -> list:
+    """Return n spotlight products biased toward the user's budget and focus area."""
+    budget_key = (prefs or {}).get("budget")
+    focus_key  = (prefs or {}).get("shopping_focus")
+    price_range = _BUDGET_RANGES.get(budget_key) if budget_key else None
+    focus_cats  = _FOCUS_CATS.get(focus_key)     if focus_key  else None
+
+    scored = []
+    for p in _SPOTLIGHT:
+        if p["id"] in exclude_ids:
+            continue
+        score = 0
+        price = p.get("price", 0) or 0
+        if price_range:
+            lo, hi = price_range
+            if lo <= price <= hi:
+                score += 10
+            elif abs(price - (lo + hi) / 2) < 40:
+                score += 3
+        if focus_cats and p.get("category") in focus_cats:
+            score += 5
+        scored.append((score, p))
+
+    scored.sort(key=lambda x: -x[0])
+    picks = [p for _, p in scored]
+
+    # Fill remainder from spotlight if not enough matched
+    if len(picks) < n:
+        seen = {p["id"] for p in picks}
+        for p in _SPOTLIGHT:
+            if p["id"] not in seen and p["id"] not in exclude_ids:
+                picks.append(p)
+            if len(picks) >= n:
+                break
+
+    return picks[:n]
+
+
+def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None) -> str:
     """Persona + optional user memory + curated product spotlight as grounding."""
     parts = [SYSTEM_PROMPT]
+
+    if prefs:
+        profile = []
+        if prefs.get("style_vibe"):
+            profile.append(f"Style: {prefs['style_vibe']}")
+        if prefs.get("shopping_focus"):
+            profile.append(f"Shops for: {prefs['shopping_focus']}")
+        if prefs.get("top_size"):
+            profile.append(f"Top size: {prefs['top_size']}")
+        if prefs.get("bottom_size"):
+            profile.append(f"Bottom size: {prefs['bottom_size']}")
+        if prefs.get("budget"):
+            profile.append(f"Budget: {_BUDGET_LABELS.get(prefs['budget'], prefs['budget'])} per piece")
+        if taste:
+            profile.append(f"Taste from saves: {taste}")
+        if profile:
+            parts.append(
+                "USER PROFILE (weave this into recommendations naturally — never recite it):\n"
+                + "\n".join(profile)
+            )
+
     if memory:
         parts.append(f"SHOPPER CONTEXT (use naturally, never recite as a list):\n{memory}")
     if event_brief and event_brief.get("occasion"):
@@ -93,8 +194,11 @@ def full_grounding_prompt(memory: str = "", event_brief: dict | None = None) -> 
     parts.append(
         f"PRODUCTS you may recommend (curated spotlight — {len(_CATALOG)} total in catalog):\n"
         f"{_SOURCE.render(_SPOTLIGHT)}\n\n"
-        f"IMPORTANT: When the shopper wants to see more options, say "
-        f"\"tap 'Show 10 more' to browse the full catalog\" — do NOT list all products yourself."
+        f"RULES: Always say the brand name when recommending (e.g. 'Levi's 501', 'Nike Air Max'). "
+        f"3 curated picks are already on screen when the user opens the app — greet them warmly and invite them to ask anything. "
+        f"Only recommend up to 3 products per turn — quality over quantity. "
+        f"If the user asks to see more than 3 at once, apologise briefly: 'I can only show 3 at a time right now — let me make sure these three are exactly right for you.' "
+        f"When the shopper wants to browse further, say 'tap Show more to see the next 3'."
     )
     return "\n\n".join(parts)
 
@@ -164,7 +268,7 @@ _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
 
 # Cost guardrails — both configurable via env so you can tighten as usage grows.
 # Idle timeout: close Live session (and stop billing) after N seconds of silence.
-_IDLE_TIMEOUT_SEC  = int(os.environ.get("MIRA_IDLE_TIMEOUT",  "300"))   # 5 min default
+_IDLE_TIMEOUT_SEC  = int(os.environ.get("MIRA_IDLE_TIMEOUT",  "180"))   # 3 min default
 # Hard cap: close session after N seconds regardless of activity, with a goodbye.
 _MAX_SESSION_SEC   = int(os.environ.get("MIRA_MAX_SESSION",   "1200"))  # 20 min default
 
@@ -215,7 +319,7 @@ def _match_products(transcript: str) -> list[dict]:
     for _, p in sorted(ordered, key=lambda t: t[0]):
         if p["id"] in seen:
             continue
-        if len(hits) >= 10:  # cap: never push more than 10 product cards per Mira turn
+        if len(hits) >= 3:  # cap: show 3 products per turn — focused, not overwhelming
             break
         seen.add(p["id"])
         hits.append(
@@ -232,7 +336,7 @@ def _match_products(transcript: str) -> list[dict]:
     return hits
 
 
-def _build(memory: str = "", event_brief: dict | None = None):
+def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None):
     from google import genai
     from google.genai import types
 
@@ -242,7 +346,7 @@ def _build(memory: str = "", event_brief: dict | None = None):
         # full turn text to the browser, which tells LiveAvatar to speak it (LITE mode,
         # session.repeat(text)). LiveAvatar's avatar voice does the TTS + lip-sync.
         response_modalities=["AUDIO"],
-        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, event_brief))]),
+        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief))]),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         speech_config=types.SpeechConfig(
@@ -310,7 +414,8 @@ async def handle(ws) -> None:
     the SAME browser connection + session_id and transparently reopen a fresh Live
     session, nudging the avatar to `thinking` while we do.
     """
-    print(f"  ▸ browser connected ({ws.remote_address})")
+    _ip = _client_ip(ws, ws.request) if hasattr(ws, "request") else (ws.remote_address[0] if ws.remote_address else "unknown")
+    print(f"  ▸ browser connected ({_ip})")
 
     # Wait for the browser's {type:"init", user_id, name} before opening Gemini so the
     # system prompt can be personalised for this shopper.
@@ -323,6 +428,7 @@ async def handle(ws) -> None:
     budget: str | None = None
     event_brief: dict = {}
     memory = ""
+    taste: str | None = None   # derived from saved products
     chat_session_id: str | None = None
     chat_title: str | None = None  # first user message — set once
     # Declared here (before the init block) so restore_loved can populate it,
@@ -380,6 +486,8 @@ async def handle(ws) -> None:
                                 for pid in loved_ids:
                                     if (p := _BY_ID.get(pid)):
                                         session_saved[pid] = p["name"]
+                                # Derive taste profile from saved products
+                                taste = _taste_profile(loved_ids)
                                 await _send_json(
                                     ws, type="restore_loved",
                                     ids=loved_ids, products=loved_products,
@@ -394,7 +502,27 @@ async def handle(ws) -> None:
     except (asyncio.TimeoutError, Exception):
         pass  # anonymous session — Mira still works fine
 
-    client, config, types = _build(memory, event_brief)
+    # Push today's top picks immediately, personalised to the user's prefs.
+    prefs = {
+        "style_vibe":     style_vibe,
+        "shopping_focus": shopping_focus,
+        "top_size":       top_size,
+        "bottom_size":    bottom_size,
+        "budget":         budget,
+    }
+    raw_picks = _personalized_top_picks(prefs, exclude_ids=set(session_saved.keys()), n=3)
+    top_picks = []
+    for p in raw_picks:
+        top_picks.append({
+            "id": p["id"], "name": p["name"], "category": p["category"],
+            "color": p["color"], "price": p["price"],
+            "image_url": p.get("image_url"), "affiliate_url": _affiliate_url(p),
+        })
+        session_shown_ids.add(p["id"])
+    if top_picks:
+        await _send_json(ws, type="products", items=top_picks, show_more=True)
+
+    client, config, types = _build(memory, prefs=prefs, taste=taste, event_brief=event_brief)
     session_id = events.new_session_id()
     if event_brief.get("occasion"):
         await asyncio.to_thread(user_store.save_event_brief, user_id, session_id, event_brief)
@@ -538,8 +666,7 @@ async def handle(ws) -> None:
                             )
                         print(f"  buy-click -> retailer: {prod.get('name', pid)}")
                     elif data.get("type") == "show_more":
-                        # Silent page-forward: push next 10 unseen products without
-                        # Mira having to speak all their names (prevents speech flood).
+                        # Silent page-forward: push next 3 unseen products.
                         cat_filter = data.get("category")  # optional category hint
                         batch = []
                         for p in _CATALOG:
@@ -556,7 +683,7 @@ async def handle(ws) -> None:
                                 "image_url": p.get("image_url"),
                                 "affiliate_url": _affiliate_url(p),
                             })
-                            if len(batch) >= 10:
+                            if len(batch) >= 3:
                                 break
                         if batch:
                             for p in batch:
@@ -844,7 +971,8 @@ async def handle(ws) -> None:
     except websockets.ConnectionClosed:
         pass
     finally:
-        print("  ▸ browser disconnected")
+        await _rl_release(_ip)
+        print(f"  ▸ browser disconnected ({_ip})")
 
 
 def _mint_avatar_token() -> dict:
@@ -882,6 +1010,44 @@ def _mint_avatar_token() -> dict:
     return {"token": data.get("session_token"), "session_id": data.get("session_id")}
 
 
+# ── Per-IP rate limiting ──────────────────────────────────────────────────────
+_RL_MAX_CONCURRENT = int(os.environ.get("MIRA_MAX_CONCURRENT_PER_IP", "3"))
+_RL_MAX_PER_HOUR   = int(os.environ.get("MIRA_MAX_STARTS_PER_HOUR",   "10"))
+
+_rl_active: dict[str, int]        = {}   # ip → active session count
+_rl_starts: dict[str, list[float]] = {}  # ip → list of start timestamps this hour
+_rl_lock = asyncio.Lock()
+
+
+def _client_ip(connection, request) -> str:
+    """Real client IP — reads X-Real-IP forwarded by nginx, falls back to TCP address."""
+    forwarded = request.headers.get("X-Real-IP") or request.headers.get("X-Forwarded-For", "")
+    ip = forwarded.split(",")[0].strip()
+    return ip or (connection.remote_address[0] if connection.remote_address else "unknown")
+
+
+async def _rl_acquire(ip: str) -> str | None:
+    """Return None if request is allowed; error message string if rate-limited."""
+    async with _rl_lock:
+        now = time.monotonic()
+        cutoff = now - 3600
+        starts = [t for t in _rl_starts.get(ip, []) if t > cutoff]
+        _rl_starts[ip] = starts
+        active = _rl_active.get(ip, 0)
+        if active >= _RL_MAX_CONCURRENT:
+            return "Too many active sessions from your device — close another tab and try again."
+        if len(starts) >= _RL_MAX_PER_HOUR:
+            return "Too many sessions this hour — take a break and try again shortly."
+        _rl_active[ip] = active + 1
+        _rl_starts[ip].append(now)
+        return None
+
+
+async def _rl_release(ip: str) -> None:
+    async with _rl_lock:
+        _rl_active[ip] = max(0, _rl_active.get(ip, 1) - 1)
+
+
 async def process_request(connection, request):
     """Serve the LiveAvatar session token over plain HTTP; everything else upgrades to WS."""
     if request.path.rstrip("/") == "/avatar-token":
@@ -894,10 +1060,18 @@ async def process_request(connection, request):
         except Exception as exc:
             return connection.respond(500, json.dumps({"error": str(exc)}))
     # Return 200 for plain HTTP health checks (no WebSocket upgrade headers).
-    # Without this, the websockets library raises InvalidUpgrade which can
-    # confuse reverse-proxy health checks and Vite's ws proxy startup.
     if request.headers.get("Upgrade", "").lower() != "websocket":
         return connection.respond(200, "OK")
+
+    # Rate-limit WebSocket upgrades.
+    ip = _client_ip(connection, request)
+    err = await _rl_acquire(ip)
+    if err:
+        print(f"  ⛔ rate limit [{ip}]: {err}")
+        resp = connection.respond(429, json.dumps({"type": "error", "message": err}))
+        resp.headers["Content-Type"] = "application/json"
+        return resp
+
     return None
 
 

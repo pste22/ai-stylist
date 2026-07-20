@@ -1,36 +1,117 @@
-# Mira AI Stylist — Epics, User Stories & Implementation Order
+# Mira AI Stylist — Epics & User Stories
 
-_Derived from Harvard market strategy review + sales team consultation (July 2026)._  
-_Format: Epic → Stories → Acceptance Criteria → Priority / Effort / Value._
-
----
-
-## How to Read This Document
-
-**Priority tiers**
-- 🔴 **P0 — Gate** : Must be done before ANY real user touches the app. Bugs or blockers.
-- 🟠 **P1 — Launch** : Required to call this a real product worth sharing.
-- 🟡 **P2 — Monetise** : Turns traffic into revenue and data.
-- 🟢 **P3 — Retain** : Keeps users coming back.
-- 🔵 **P4 — Scale** : Platform and B2B plays.
-
-**Effort** (eng-days, solo developer)  
-`XS` < 1 day · `S` 1–2 days · `M` 3–5 days · `L` 1–2 weeks · `XL` 2–4 weeks
-
-**Value score** (1–10): business impact if shipped × user impact if missing
+_Last updated: July 2026. India-first MVP strategy, affiliate + subscription revenue model._
 
 ---
 
-## Recommended Sprint Order (6 sprints × 1 week)
+## Priority tiers
 
-| Sprint | Theme | Epics |
-|--------|-------|-------|
-| **S1** | Survival | E1 Catalog · E6 Error States · E9 Privacy |
-| **S2** | Mobile-first | E2 Mobile/PWA · E7 Rate Limiting |
-| **S3** | Growth loop | E3 Sharing · E4 Email Capture |
-| **S4** | Money | E5 Amazon PA-API · E8 Analytics |
-| **S5** | Retention | E10 User Profile · E11 Outfit Completion |
-| **S6** | Scale | E12 White-label · E13 Brand Partnerships |
+| Tag | Meaning |
+|-----|---------|
+| 🔴 P0 Gate | Blocking. Must ship before any real user touches the app. |
+| 🟠 P1 Launch | Required to call this a real, shareable product. |
+| 🟡 P2 Monetise | Turns traffic into revenue. |
+| 🟢 P3 Retain | Keeps users coming back week after week. |
+| 🔵 P4 Scale | Platform plays, B2B, white-label. |
+
+**Effort** (eng-days, solo developer):
+`XS` < 1d · `S` 1–2d · `M` 3–5d · `L` 1–2w · `XL` 2–4w
+
+**Status**: ✅ Done · 🔄 In progress · ⬜ Not started
+
+---
+
+## Sprint roadmap (India MVP)
+
+| Sprint | Theme | Epics | Status |
+|--------|-------|-------|--------|
+| S1 | Foundation | E1 Voice bridge · E2 Auth · E3 Onboarding | ✅ Done |
+| S2 | Personalisation | E4 Recommendations · E5 Session Management | ✅ Done |
+| S3 | India Catalogue | E6 VCommission Feed · E7 Myntra/Ajio affiliate | ⬜ |
+| S4 | Growth | E8 Pinterest OAuth · E9 First Look drops | ⬜ |
+| S5 | Money | E10 Subscription paywall · E11 Analytics | ⬜ |
+| S6 | Mobile & Retention | E12 PWA · E13 Email CRM · E14 Outfit Engine | ⬜ |
+| S7 | Scale | E15 White-label · E16 Brand sponsorships | ⬜ |
+
+---
+
+---
+
+# ✅ COMPLETED — Foundation & Core Engine
+
+---
+
+## E1 · Voice AI Bridge
+
+**Goal**: Real-time voice conversation with Mira powered by Gemini Live, running on Fly.io.
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| E1-1 | WebSocket bridge (live_server.py) with Gemini Live audio | ✅ |
+| E1-2 | Text / silent mode — full chat UI, no mic needed | ✅ |
+| E1-3 | Fly.io deployment with nginx WebSocket proxy | ✅ |
+| E1-4 | Hot reload in dev — watchmedo auto-restarts on .py save | ✅ |
+| E1-5 | Health check handler — nginx pings don't crash WS server | ✅ |
+| E1-6 | Idle timeout 3 min — auto-closes Gemini session to cap cost | ✅ |
+| E1-7 | Hard session cap 20 min — absolute cost guardrail | ✅ |
+| E1-8 | Gemini session auto-reconnect — transparent to user | ✅ |
+
+---
+
+## E2 · Auth & Identity
+
+**Goal**: Users sign in with Google/GitHub, have a persistent identity, and can sign out.
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| E2-1 | Supabase Google OAuth (implicit flow) | ✅ |
+| E2-2 | GitHub OAuth | ✅ |
+| E2-3 | User menu with avatar, name, email, sign-out | ✅ |
+| E2-4 | Session idle warning modal (countdown + stay/leave) | ✅ |
+| E2-5 | Fly.io Site URL + redirect URL config in Supabase | ✅ |
+
+---
+
+## E3 · Onboarding & Style Profile
+
+**Goal**: New users answer 4 quick questions so Mira personalises from the very first message.
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| E3-1 | 4-step quiz: style vibe → shopping focus → sizes → budget | ✅ |
+| E3-2 | Prefs stored in Supabase `user_preferences` table | ✅ |
+| E3-3 | Prefs sent to server on WS init and baked into Mira's grounding prompt | ✅ |
+| E3-4 | Skip option — user can bypass and tell Mira verbally | ✅ |
+| E3-5 | Schema migration for old column names (migrate_user_preferences.sql) | ✅ |
+
+---
+
+## E4 · Recommendations & Product Engine
+
+**Goal**: Mira shows the right products at the right time; top picks are personalised on load.
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| E4-1 | 1,136-product catalog in Supabase, served from in-memory cache | ✅ |
+| E4-2 | 40-product curated spotlight (5 per category) for grounding | ✅ |
+| E4-3 | Top picks push on session connect (10 products, before Mira speaks) | ✅ |
+| E4-4 | Personalised top picks — scored by user's budget + shopping focus | ✅ |
+| E4-5 | `show_more` pagination — 10 more from full 1,136-product catalog | ✅ |
+| E4-6 | Saved products restored on reconnect (`restore_loved`) | ✅ |
+| E4-7 | Taste profile from saved products — fed into Mira's grounding prompt | ✅ |
+| E4-8 | `_match_products` — token-match Mira's speech to push product cards | ✅ |
+| E4-9 | Save / unlike products — persisted to `user_history` in Supabase | ✅ |
+
+---
+
+## E5 · Session Management & Cost Controls
+
+| Story | Description | Status |
+|-------|-------------|--------|
+| E5-1 | Watchdog coroutine — closes idle sessions (3 min default) | ✅ |
+| E5-2 | Cost logging per session (tokens in/out, duration, estimated $) | ✅ |
+| E5-3 | `dev.sh` — one command starts both servers with hot reload | ✅ |
+| E5-4 | `deploy.sh` — one command deploys to Fly.io with secrets | ✅ |
 
 ---
 
@@ -40,328 +121,220 @@ _Format: Epic → Stories → Acceptance Criteria → Priority / Effort / Value.
 
 ---
 
-## E1 · Catalog Expansion
-
-> **Why first**: 9 products means Mira fails 80 % of requests. Every other improvement is wasted if she says "I don't have that."
-
-**Epic goal**: Reach 200+ products across all 6 categories (dresses, tops, bottoms, outerwear, shoes, accessories) with real images, real affiliate links, and accurate metadata.
-
----
-
-### Story E1-1 · Manual SiteStripe batch seeding
-**As a** product manager  
-**I want** 50 products added per day via Amazon SiteStripe  
-**So that** Mira has enough catalog depth to handle a realistic range of shopper requests
-
-**Acceptance criteria**
-- [ ] Each product has: ASIN, name, category, color, price, style tags, gender, image_url, affiliate_url
-- [ ] No product has a null image_url (image must render in the chat card)
-- [ ] Products cover at least: 3 dress styles, 4 bottom styles, 4 top styles, 2 outerwear, 3 shoe styles, 3 accessories
-- [ ] All ASINs verified as currently in-stock on Amazon before inserting
-- [ ] migrate_products.py --dry-run passes with 0 errors before each batch import
-
-**Priority**: 🔴 P0 · **Effort**: S per 50 products · **Value**: 10/10
-
----
-
-### Story E1-2 · Curated affiliate feed integration (Impact / CJ Affiliate)
-**As a** developer  
-**I want** a feed importer that pulls products from a third-party affiliate network  
-**So that** catalog can grow to 1 000+ products without manual SiteStripe work
-
-**Acceptance criteria**
-- [ ] Script fetches product feed (CSV or API) from Impact or CJ
-- [ ] Maps feed fields to Supabase products schema
-- [ ] Deduplicates by ASIN before inserting
-- [ ] Runs on a cron (daily refresh)
-- [ ] Only imports products with valid image_url
-
-**Priority**: 🟠 P1 · **Effort**: M · **Value**: 9/10
-
----
-
-### Story E1-3 · Catalog admin UI
-**As a** content manager  
-**I want** a simple web page to add, edit, and deactivate products  
-**So that** I don't need to run Python scripts or open Supabase Studio for every catalog change
-
-**Acceptance criteria**
-- [ ] Protected by a simple password (env var)
-- [ ] Can add a product by pasting an Amazon URL (scrapes ASIN + name + image)
-- [ ] Can toggle is_active without deleting (preserves FK integrity with events)
-- [ ] Shows current product count by category
-
-**Priority**: 🟠 P1 · **Effort**: M · **Value**: 7/10
-
----
-
-## E2 · Mobile Experience & PWA
-
-> **Why P0**: 73 % of fashion shopping is on mobile. If it doesn't work on a phone, it doesn't exist.
-
-**Epic goal**: App is fully usable on a phone browser, installable as a PWA, and the text-mode chat is the default on mobile.
-
----
-
-### Story E2-1 · Responsive CSS for chat layout
-**As a** mobile shopper  
-**I want** the chat UI to fill my phone screen properly  
-**So that** I can use Mira on my phone without pinching or horizontal scrolling
-
-**Acceptance criteria**
-- [ ] No horizontal scroll on viewport widths 320 px–430 px
-- [ ] Chat input stays above the keyboard (use `env(safe-area-inset-bottom)`)
-- [ ] Product-line cards are readable at 375 px width
-- [ ] Bubble max-width adjusts to 90 % on mobile (vs 72 % on desktop)
-- [ ] Tested on Chrome/Safari iOS and Chrome Android
-
-**Priority**: 🔴 P0 · **Effort**: S · **Value**: 9/10
-
----
-
-### Story E2-2 · Progressive Web App manifest
-**As a** returning user  
-**I want** to add Mira to my home screen  
-**So that** I can open her like a native app without going through a browser
-
-**Acceptance criteria**
-- [ ] `manifest.json` with name, icons (192 px + 512 px), theme_color, display: standalone
-- [ ] Service worker caches shell (offline shows "Mira is offline" gracefully)
-- [ ] iOS splash screen meta tags present
-- [ ] Lighthouse PWA score ≥ 80
-
-**Priority**: 🟠 P1 · **Effort**: S · **Value**: 7/10
-
----
-
-### Story E2-3 · Mobile-first text mode as default
-**As a** mobile user  
-**I want** the app to default to text/silent mode  
-**So that** I don't need to grant mic permissions just to browse
-
-**Acceptance criteria**
-- [ ] On first visit, detect if device is mobile (UA or screen width < 768 px) → default to text mode
-- [ ] Voice mode still accessible via toggle
-- [ ] Mode preference saved to localStorage
-
-**Priority**: 🔴 P0 · **Effort**: XS · **Value**: 8/10
-
----
-
 ## E6 · Error States & Reliability
 
-> **Why P0**: Right now a dropped bridge = blank screen. That's a trust-killer.
+> Right now a dropped connection = blank screen. That's a trust-killer for a first-time user.
 
----
-
-### Story E6-1 · Friendly offline / bridge-down state
-**As a** user  
-**I want** a helpful message when the server is unavailable  
-**So that** I don't think the app is broken and leave forever
+### E6-1 · Friendly offline state
+**As a** user whose server is unreachable  
+**I want** a helpful message instead of a blank screen  
+**So that** I don't assume the app is broken and leave forever
 
 **Acceptance criteria**
-- [ ] WebSocket connection failure shows: "Mira is taking a quick break — try again in a moment"
-- [ ] "Retry" button attempts reconnect
-- [ ] After 3 failed retries, shows "Something's wrong on our end. We'll be back soon."
-- [ ] No raw error messages or stack traces visible to the user
+- [ ] WebSocket failure shows: "Mira is taking a quick break — try again in a moment"
+- [ ] Retry button attempts reconnect (up to 3 times)
+- [ ] After 3 failures: "Something's wrong on our end. We'll be back soon."
+- [ ] No raw error text or stack traces visible
 
-**Priority**: 🔴 P0 · **Effort**: XS · **Value**: 8/10
-
----
-
-### Story E6-2 · Session reconnect with context
-**As a** user mid-conversation  
-**I want** Mira to reconnect automatically if the session drops  
-**So that** I don't lose my conversation and have to start over
-
-**Acceptance criteria**
-- [ ] Bridge auto-reconnects using Gemini resumption handle (already implemented)
-- [ ] Browser shows "Reconnecting…" avatar state during gap
-- [ ] On reconnect, Mira says a brief "Sorry about that — where were we?" without repeating context
-- [ ] If reconnect fails after 3 attempts, show the offline state (E6-1)
-
-**Priority**: 🔴 P0 · **Effort**: S · **Value**: 9/10
+**Priority**: 🔴 P0 · **Effort**: XS · **Status**: ⬜
 
 ---
 
-### Story E6-3 · Load test: 20 concurrent users
-**As a** founder  
-**I want** to know the app works under light real-world load  
-**So that** a social post or press mention doesn't take the service down
-
-**Acceptance criteria**
-- [ ] Locust or k6 load test script written and committed
-- [ ] 20 simultaneous WebSocket connections hold for 5 minutes without crash
-- [ ] P95 latency for first Mira response ≤ 4 s under load
-- [ ] Document the bottleneck (Gemini API concurrency limit, server RAM, etc.)
-
-**Priority**: 🔴 P0 · **Effort**: S · **Value**: 8/10
-
----
-
-## E7 · Rate Limiting & Security
-
----
-
-### Story E7-1 · Per-IP connection limit
+### E6-2 · Rate limiting — per-IP session cap
 **As a** platform operator  
 **I want** to cap WebSocket connections per IP  
-**So that** one person or bot can't exhaust the Gemini API quota for all users
+**So that** one user or bot can't exhaust the Gemini API quota for everyone
 
 **Acceptance criteria**
 - [ ] Max 3 concurrent sessions per IP
 - [ ] Max 10 session starts per IP per hour
-- [ ] Excess requests get a JSON error: `{"type":"error","message":"Too many sessions — try again shortly"}`
+- [ ] Excess gets: `{"type":"error","message":"Too many sessions — try again shortly"}`
 - [ ] Limits configurable via env vars
 
-**Priority**: 🔴 P0 · **Effort**: XS · **Value**: 8/10
+**Priority**: 🔴 P0 · **Effort**: XS · **Status**: ⬜
 
 ---
 
-### Story E7-2 · API key & secret rotation checklist
-**As a** security-conscious developer  
-**I want** all secrets stored safely and rotatable without code changes  
-**So that** a leaked key doesn't require a redeploy
-
-**Acceptance criteria**
-- [ ] All secrets in `.env` / Codespaces/Render secrets — never committed
-- [ ] `.env.example` lists required keys with placeholder values
-- [ ] README documents how to rotate each key (Gemini, Supabase, GROQ)
-- [ ] No hardcoded keys anywhere in git history (run `git log -p | grep -i "api_key"`)
-
-**Priority**: 🔴 P0 · **Effort**: XS · **Value**: 9/10
-
----
-
-## E9 · Privacy & Legal Compliance
-
-> **Why P0**: GDPR/CCPA apply the moment a real user from the EU or California touches the app.
-
----
-
-### Story E9-1 · Privacy policy & cookie banner
+### E6-3 · Privacy policy & data disclosure
 **As a** user  
-**I want** to know what data Mira stores about me  
-**So that** I can make an informed choice about using the app
+**I want** to know what data Mira stores  
+**So that** I can make an informed choice, and Mira complies with India's DPDP Act 2023
 
 **Acceptance criteria**
-- [ ] Privacy policy page exists (can be a simple `/privacy` route or modal)
-- [ ] Covers: what is stored (user_id, name, product interactions), how long, who has access
-- [ ] Cookie/localStorage consent banner on first visit
-- [ ] Link to privacy policy in app footer
+- [ ] Privacy policy page exists at `/privacy`
+- [ ] Covers: user_id, name, product interactions, retention period, third-party sharing (Gemini, Supabase)
+- [ ] Consent checkbox on sign-up
+- [ ] Link in footer
 
-**Priority**: 🔴 P0 · **Effort**: S · **Value**: 8/10
+**Priority**: 🔴 P0 · **Effort**: S · **Status**: ⬜
 
 ---
 
-### Story E9-2 · Right-to-delete endpoint
+### E6-4 · Right-to-delete
 **As a** user  
 **I want** to delete my account and all my data  
-**So that** I can exercise my GDPR right to erasure
+**So that** I can exercise my rights under DPDP / GDPR
 
 **Acceptance criteria**
-- [ ] `DELETE /user` endpoint (authenticated by user_id token) deletes: users, user_preferences, user_history rows
-- [ ] Cascades handled by FK `ON DELETE CASCADE` (already in schema)
-- [ ] Confirmation email sent (or in-app confirmation)
-- [ ] Button accessible from user profile page
+- [ ] "Delete account" in user menu → confirmation dialog → deletes all rows by user_id
+- [ ] FK cascade already in schema — verify it works end-to-end
+- [ ] Confirmation email (or in-app toast)
 
-**Priority**: 🔴 P0 · **Effort**: S · **Value**: 7/10
-
----
+**Priority**: 🔴 P0 · **Effort**: S · **Status**: ⬜
 
 ---
 
-# 🟠 P1 — Launch (required to call this a real product)
+---
+
+# 🟠 P1 — Launch (India MVP)
 
 ---
 
-## E3 · Viral Sharing Loop
+## E7 · VCommission Affiliate Feed (India)
 
-> **Why P1**: Zero-cost user acquisition. One good session → shareable card → new users.
+> **Why first for India**: VCommission covers Myntra, Ajio, Amazon India, Nykaa Fashion in one integration. This replaces the synthetic US catalog with real Indian products and real affiliate revenue.
 
-**Epic goal**: Every session can produce a shareable "Mira's picks for you" card that drives new signups.
-
----
-
-### Story E3-1 · Session summary card
-**As a** shopper  
-**I want** a visual summary of what Mira picked for me  
-**So that** I can share it with friends or save it for later
+### E7-1 · VCommission feed importer
+**As a** developer  
+**I want** to pull a live product feed from VCommission  
+**So that** Mira recommends real Indian fashion products with working affiliate links
 
 **Acceptance criteria**
-- [ ] At end of conversation, "See your session" button appears
-- [ ] Summary card shows: Mira avatar, 2–4 saved/recommended products (image + name + price), total outfit value, "Styled by Mira" branding
-- [ ] Card is a shareable URL (e.g. `/session/abc123`) that anyone can view without logging in
-- [ ] "Try Mira" CTA button on the shared card page
+- [ ] Script pulls CSV/API feed from VCommission for: Myntra, Ajio, Amazon Fashion India
+- [ ] Maps fields to Supabase products schema (name, category, color, price, image_url, affiliate_url)
+- [ ] Deduplicates by URL/SKU before inserting
+- [ ] Runs daily via cron (Fly.io cron job or GitHub Actions)
+- [ ] Only imports products with valid image_url and price
+- [ ] Covers all target categories: tops, bottoms, dresses, outerwear, shoes, bags, accessories
 
-**Priority**: 🟠 P1 · **Effort**: M · **Value**: 9/10
+**Priority**: 🟠 P1 · **Effort**: M · **Status**: ⬜
 
 ---
 
-### Story E3-2 · Shareable referral link
-**As a** happy user  
-**I want** a personal referral link  
-**So that** when I share it and a friend signs up, we both get a small reward (or just recognition)
+### E7-2 · India price currency (₹)
+**As a** Indian user  
+**I want** to see prices in rupees  
+**So that** I don't have to mentally convert from dollars
 
 **Acceptance criteria**
-- [ ] Each user has a unique `ref=<code>` parameter
-- [ ] Sign-ups via referral link are tracked in Supabase
-- [ ] Referrer sees a count "3 friends joined via your link"
-- [ ] Phase 1: tracking only — no reward needed yet
+- [ ] Products table has `currency` column (default: INR for new feed imports)
+- [ ] ProductCard and FeaturedProduct render ₹ symbol when currency = INR
+- [ ] Grounding prompt tells Mira to say "rupees" not "dollars" for INR products
 
-**Priority**: 🟡 P2 · **Effort**: S · **Value**: 7/10
-
----
-
-## E4 · Email Capture & CRM Foundation
-
-> **Why P1**: Without email, you have no way to re-engage users who leave. Email is your retention lifeline before you have an app.
+**Priority**: 🟠 P1 · **Effort**: XS · **Status**: ⬜
 
 ---
 
-### Story E4-1 · Email capture at session end
+### E7-3 · Nike / Adidas India direct affiliate
+**As a** business owner  
+**I want** direct affiliate agreements with Nike and Adidas India  
+**So that** premium sportswear — core to the 22–35 corporate demo — is in the catalog
+
+**Acceptance criteria**
+- [ ] Applied to Nike India affiliate program (via their website or VCommission)
+- [ ] Applied to Adidas India affiliate program
+- [ ] Products imported with direct brand affiliate URLs (not Google Shopping fallback)
+- [ ] At least 50 Nike + 50 Adidas products in catalog
+
+**Priority**: 🟠 P1 · **Effort**: S (outreach, not eng) · **Status**: ⬜
+
+---
+
+## E8 · Pinterest OAuth — Style Board Analysis
+
+> **Why**: Pinterest boards are "I want this" intent (stronger than Instagram likes). User connects once; Mira knows their aesthetic immediately. 2-day build.
+
+### E8-1 · Pinterest OAuth connect
+**As a** user during onboarding  
+**I want** to connect my Pinterest account  
+**So that** Mira can learn my style from boards I've already curated
+
+**Acceptance criteria**
+- [ ] "Connect Pinterest" button on onboarding step 2 (after style quiz)
+- [ ] Pinterest OAuth v5 flow: user authorises read_pins, read_boards
+- [ ] Access token stored encrypted in `user_integrations` table
+- [ ] Graceful skip if user doesn't have Pinterest
+
+**Priority**: 🟠 P1 · **Effort**: S · **Status**: ⬜
+
+---
+
+### E8-2 · Board & pin analysis
+**As a** developer  
+**I want** to analyse a user's Pinterest boards for style signals  
+**So that** Mira's recommendation profile is enriched before the first conversation
+
+**Acceptance criteria**
+- [ ] Fetch user's boards and top 50 pins via Pinterest API v5
+- [ ] For each pin image: call Gemini Vision to extract (category, color palette, style vibe, occasion)
+- [ ] Aggregate into a style summary: top 3 categories, dominant colors, primary vibe
+- [ ] Store summary in `user_preferences.pinterest_style_summary` (text field)
+- [ ] Summary injected into Mira's grounding prompt: "From their Pinterest: loves minimal dresses, navy + beige, office-to-evening occasions"
+
+**Priority**: 🟠 P1 · **Effort**: M · **Status**: ⬜
+
+---
+
+### E8-3 · Inspo link drop (no Pinterest account needed)
+**As a** user without Pinterest  
+**I want** to paste an Instagram/Pinterest post URL  
+**So that** Mira can analyse the outfit and understand my style
+
+**Acceptance criteria**
+- [ ] Input field in onboarding: "Drop an inspo link (Instagram, Pinterest, any image URL)"
+- [ ] Gemini Vision analyses the image from the URL
+- [ ] Extracted style signals added to user profile
+- [ ] Works for public Instagram posts and direct image URLs
+
+**Priority**: 🟠 P1 · **Effort**: S · **Status**: ⬜
+
+---
+
+## E9 · "First Look" — New Launch Feed
+
+> **The moat**: No one surfaces new Indian fashion drops through an AI stylist. This is the reason to subscribe.
+
+### E9-1 · New arrivals ingestion
 **As a** product owner  
-**I want** to capture the user's email before they leave  
-**So that** I can send them their saved items and bring them back
+**I want** to ingest new product launches from Myntra/Ajio daily  
+**So that** Mira's catalog always has the freshest drops
 
 **Acceptance criteria**
-- [ ] After first conversation ends, show: "Save your picks — enter your email and we'll send your Mira session"
-- [ ] Email stored in `users` table (add `email` column)
-- [ ] Opt-in checkbox for "Send me style tips from Mira" (GDPR compliant)
-- [ ] Non-blocking: user can dismiss without entering email
+- [ ] VCommission or Myntra affiliate feed filtered for `date_added` within last 7 days
+- [ ] Products tagged `is_new_launch = true` for 14 days after import
+- [ ] Mira's grounding prompt notes: "★ NEW = launched this week — mention as fresh finds"
 
-**Priority**: 🟠 P1 · **Effort**: S · **Value**: 9/10
+**Priority**: 🟠 P1 · **Effort**: S · **Status**: ⬜
 
 ---
 
-### Story E4-2 · "Your picks" summary email
-**As a** user who gave my email  
-**I want** to receive a summary of my Mira session  
-**So that** I can revisit the products I was interested in later
+### E9-2 · "First Look" weekly email
+**As a** subscriber  
+**I want** a weekly email of new drops curated to my style  
+**So that** I see fresh launches before they go viral, without opening the app
 
 **Acceptance criteria**
-- [ ] Email sent within 5 minutes of session end
-- [ ] Shows: saved products with image + name + price + affiliate link
-- [ ] "Chat with Mira again" CTA button
-- [ ] Uses Resend or SendGrid (free tier)
-- [ ] Unsubscribe link present (CAN-SPAM/GDPR)
+- [ ] Every Monday 9 AM IST: email sent to all Pro subscribers
+- [ ] Shows 6–8 new arrivals matched to user's style profile and budget
+- [ ] Subject line: "Mira's First Look — this week's drops, picked for you"
+- [ ] "Chat with Mira" CTA deep-links to a pre-loaded session about these products
+- [ ] Sent via Resend (free up to 3,000/month)
 
-**Priority**: 🟠 P1 · **Effort**: M · **Value**: 9/10
+**Priority**: 🟠 P1 · **Effort**: M · **Status**: ⬜
 
 ---
 
-### Story E4-3 · Restock & price drop alert email
-**As a** user who saved a product  
-**I want** to be notified if the price drops  
-**So that** I don't miss a deal on something I already wanted
+### E9-3 · In-app "New this week" shelf
+**As a** returning user  
+**I want** to see what dropped since my last visit  
+**So that** every session feels fresh and worth opening
 
 **Acceptance criteria**
-- [ ] Nightly job checks prices for all products in user_history (would_buy action)
-- [ ] If price drops ≥ 10 %, send email: "Good news — [Product] just dropped to $X"
-- [ ] Deep link back to Mira session with that product highlighted
-- [ ] Max 1 price alert per product per user per week
+- [ ] "New this week ✦" shelf appears above the standard product grid on the home screen
+- [ ] Shows last 7 days of new arrivals filtered by user's budget range
+- [ ] Shelf is collapsible; hidden if user has no prefs set (fallback to standard top picks)
 
-**Priority**: 🟢 P3 · **Effort**: M · **Value**: 8/10
+**Priority**: 🟠 P1 · **Effort**: S · **Status**: ⬜
 
 ---
 
@@ -371,104 +344,95 @@ _Format: Epic → Stories → Acceptance Criteria → Priority / Effort / Value.
 
 ---
 
-## E5 · Amazon PA-API Unlock
+## E10 · Subscription Paywall
 
-> **Why critical**: PA-API = access to 300 M products, real-time pricing, and reliable images. SiteStripe links expire. PA-API links don't.
+> **Revenue model**: Affiliate commission (free) + Pro subscription (₹299/month). Free tier is the funnel; Pro is the moat.
+
+### E10-1 · Free vs Pro feature split
+**As a** product owner  
+**I want** a clear free/paid split  
+**So that** free users get genuine value but Pro is an obvious upgrade
+
+| Feature | Free | Pro (₹299/mo) |
+|---------|------|--------------|
+| Conversations/month | 3 | Unlimited |
+| Top picks on load | Generic | Personalised |
+| First Look email | — | Weekly |
+| Pinterest sync | — | ✓ |
+| Outfit builder | — | ✓ |
+| New arrivals shelf | — | ✓ |
+
+**Acceptance criteria**
+- [ ] `user_subscriptions` table: user_id, plan (free/pro), started_at, expires_at
+- [ ] Conversation counter incremented per session; block at 3 for free tier
+- [ ] Paywall modal shows value prop + "Start Pro — ₹299/month"
+- [ ] Free tier still earns affiliate commission (never block the buy flow)
+
+**Priority**: 🟡 P2 · **Effort**: M · **Status**: ⬜
 
 ---
 
-### Story E5-1 · Drive 3 qualifying Amazon sales
+### E10-2 · Razorpay payment integration
+**As a** user  
+**I want** to pay for Pro via UPI, card, or net banking  
+**So that** I can upgrade without friction (India-native payment methods)
+
+**Acceptance criteria**
+- [ ] Razorpay Subscription API integration (handles recurring ₹299/month)
+- [ ] Payment widget embedded in paywall modal
+- [ ] Webhook updates `user_subscriptions` table on success/failure/renewal
+- [ ] Receipt email via Resend
+- [ ] Cancel anytime — no dark patterns
+
+**Priority**: 🟡 P2 · **Effort**: M · **Status**: ⬜
+
+---
+
+## E11 · Analytics & Revenue Tracking
+
+### E11-1 · Affiliate performance dashboard
 **As a** founder  
-**I want** to generate 3 legitimate Amazon sales through affiliate links  
-**So that** I can apply for PA-API access (Amazon's requirement)
+**I want** to see which products drive saves and buy-clicks  
+**So that** I know what to source more of
 
 **Acceptance criteria**
-- [ ] 3 distinct customers (not the founder) click "Buy →" and complete a purchase
-- [ ] Amazon Associates dashboard shows 3 qualifying sales
-- [ ] PA-API application submitted within 24 h of 3rd sale
+- [ ] Password-protected `/admin` page
+- [ ] Top 10 products by: shown → saved conversion, saved → buy-click conversion
+- [ ] Bottom 10 (low engagement → remove from catalog)
+- [ ] Filter by date range and platform (Myntra / Ajio / Amazon)
 
-**Priority**: 🟡 P2 · **Effort**: XL (sales effort, not eng) · **Value**: 10/10
-
----
-
-### Story E5-2 · PA-API product search integration
-**As a** developer  
-**I want** to search Amazon's live catalog via PA-API  
-**So that** Mira can recommend any of 300 M products, not just the 200 in our Supabase
-
-**Acceptance criteria**
-- [ ] `amazon_source.py` implements ProductSource protocol using PA-API
-- [ ] Search by keyword + category + price range
-- [ ] Returns: ASIN, name, image_url, price, affiliate_url (with associate tag)
-- [ ] Results cached in Supabase products table (soft-upsert) to avoid redundant API calls
-- [ ] Fallback to curated Supabase catalog if PA-API unavailable
-
-**Priority**: 🟡 P2 · **Effort**: M · **Value**: 10/10
+**Priority**: 🟡 P2 · **Effort**: M · **Status**: ⬜
 
 ---
 
-### Story E5-3 · Dynamic affiliate URL generation
-**As a** developer  
-**I want** affiliate URLs generated programmatically per product + user  
-**So that** we can track which user drove which sale and personalise commission splits later
-
-**Acceptance criteria**
-- [ ] All affiliate URLs include associate tag from env var
-- [ ] URL format: `https://www.amazon.com/dp/{ASIN}?tag={TAG}&linkCode=...`
-- [ ] Custom tracking ID per session embedded in URL for analytics
-- [ ] Old hardcoded SiteStripe links migrated to this format
-
-**Priority**: 🟡 P2 · **Effort**: S · **Value**: 8/10
-
----
-
-## E8 · Analytics Dashboard
-
----
-
-### Story E8-1 · Product performance report
+### E11-2 · Session funnel & revenue estimate
 **As a** founder  
-**I want** to see which products get the most saves and buy-clicks  
-**So that** I know what to add more of to the catalog
+**I want** to see the conversion funnel and estimated earnings  
+**So that** I can report progress and set targets
 
 **Acceptance criteria**
-- [ ] Dashboard page (password-protected) shows:
-  - Top 10 products by save rate (would_buy / shown)
-  - Top 10 products by buy-click rate
-  - Bottom 10 (low engagement — candidates for removal)
-- [ ] Filterable by date range (last 7 / 30 / 90 days)
-- [ ] Built on Supabase queries — no new infra needed
-
-**Priority**: 🟡 P2 · **Effort**: M · **Value**: 8/10
-
----
-
-### Story E8-2 · Session funnel metrics
-**As a** founder  
-**I want** to see the user journey from session start to purchase click  
-**So that** I know where users drop off
-
-**Acceptance criteria**
-- [ ] Funnel: Sessions started → Products shown → Products saved → Buy clicks
-- [ ] Conversion rate at each step shown as %
-- [ ] Average session length (turns / time)
-- [ ] New vs returning user breakdown
-
-**Priority**: 🟡 P2 · **Effort**: M · **Value**: 8/10
-
----
-
-### Story E8-3 · Revenue estimate tracker
-**As a** founder  
-**I want** to see estimated affiliate earnings  
-**So that** I can report progress to investors and set pricing targets
-
-**Acceptance criteria**
-- [ ] Estimated revenue = buy_click events × average Amazon affiliate rate (3–8 % by category)
-- [ ] Shown as: "Estimated this month: $X — actual confirmed in Associates dashboard"
+- [ ] Funnel: Sessions → Products shown → Saves → Buy-clicks
+- [ ] Estimated revenue = buy_clicks × avg commission rate by platform
+- [ ] Free vs Pro user breakdown
 - [ ] 30-day rolling chart
 
-**Priority**: 🟡 P2 · **Effort**: S · **Value**: 7/10
+**Priority**: 🟡 P2 · **Effort**: M · **Status**: ⬜
+
+---
+
+### E11-3 · Influencer tracking — "Mira noticed [Influencer] wore this"
+**As a** product owner  
+**I want** to track which Indian fashion influencers wear products in our catalog  
+**So that** Mira can surface "as seen on [Komal Pandey]" context
+
+**Acceptance criteria**
+- [ ] Curated list of 20–30 Indian fashion influencers (Instagram handles)
+- [ ] Weekly scrape of their public posts (manual tagging initially, or with Meta Graph API)
+- [ ] Products table has `influencer_tag` column linking to influencer handle
+- [ ] In grounding prompt: "★ = seen on [influencer] — mention this if relevant"
+- [ ] ProductCard shows small "As seen on @handle" label for tagged products
+
+**Priority**: 🟡 P2 · **Effort**: M · **Status**: ⬜
 
 ---
 
@@ -478,73 +442,118 @@ _Format: Epic → Stories → Acceptance Criteria → Priority / Effort / Value.
 
 ---
 
-## E10 · User Profile & Style Memory
+## E12 · Mobile PWA
+
+> 73% of fashion shopping in India is on mobile. If it doesn't work on a phone, it doesn't exist.
+
+### E12-1 · Responsive chat layout
+**As a** mobile user  
+**I want** the chat UI to fill my phone screen without horizontal scroll  
+**So that** I can use Mira on my phone
+
+**Acceptance criteria**
+- [ ] No horizontal scroll at 320px–430px viewport width
+- [ ] Chat input stays above keyboard using `env(safe-area-inset-bottom)`
+- [ ] Product cards readable at 375px
+- [ ] Tested on Chrome/Safari iOS and Chrome Android
+
+**Priority**: 🟢 P3 · **Effort**: S · **Status**: ⬜
 
 ---
 
-### Story E10-1 · "Your Mira" profile page
+### E12-2 · PWA install + offline shell
 **As a** returning user  
-**I want** to see my style history in one place  
-**So that** I feel like Mira genuinely knows me
+**I want** to add Mira to my home screen  
+**So that** I open her like a native app
 
 **Acceptance criteria**
-- [ ] Page shows: name, member since, total sessions, saved items, buy-clicked items
-- [ ] "Your style profile": inferred vibes (casual, chic, minimal etc.) based on saved items
-- [ ] Edit: budget preference, gender, sizes (optional)
-- [ ] "Start a new session" CTA
+- [ ] `manifest.json` with name, icons (192 + 512px), theme_color, display: standalone
+- [ ] Service worker caches app shell
+- [ ] Offline shows: "Mira needs a connection — tap to retry"
+- [ ] Lighthouse PWA score ≥ 80
 
-**Priority**: 🟢 P3 · **Effort**: M · **Value**: 8/10
+**Priority**: 🟢 P3 · **Effort**: S · **Status**: ⬜
 
 ---
 
-### Story E10-2 · Occasion calendar
-**As a** user planning ahead  
-**I want** to tell Mira about upcoming events  
-**So that** she can proactively suggest outfits before I need them
+### E12-3 · Default to text mode on mobile
+**As a** mobile user in public  
+**I want** text mode to be default on phones  
+**So that** I can use Mira without mic permissions or speaking aloud
 
 **Acceptance criteria**
-- [ ] User can add occasions: name + date + dress code (smart casual / formal / casual)
-- [ ] Stored in Supabase `user_occasions` table
-- [ ] 7 days before occasion: Mira-themed reminder email with outfit suggestions
-- [ ] In session, Mira references upcoming occasions: "You've got that wedding in 10 days — want to pick something today?"
+- [ ] Detect mobile (screen width < 768px) → default textMode = true
+- [ ] Voice mode accessible via toggle
+- [ ] Preference saved to localStorage
 
-**Priority**: 🟢 P3 · **Effort**: M · **Value**: 8/10
-
----
-
-## E11 · Outfit Completion Engine
-
-> **Why**: Increases average basket from 1 item to 3–4 items. Biggest single revenue lever.
+**Priority**: 🟢 P3 · **Effort**: XS · **Status**: ⬜
 
 ---
 
-### Story E11-1 · "Complete the look" recommendation
+## E13 · Email CRM & Re-engagement
+
+### E13-1 · Session summary email
+**As a** user who ended a session  
+**I want** an email with my saved products  
+**So that** I can come back and buy when I'm ready
+
+**Acceptance criteria**
+- [ ] Email sent within 5 min of session end (if user has email on record)
+- [ ] Shows saved items: image + name + price + affiliate link
+- [ ] "Chat with Mira again" CTA
+- [ ] Unsubscribe link (CAN-SPAM compliant)
+- [ ] Sent via Resend free tier
+
+**Priority**: 🟢 P3 · **Effort**: M · **Status**: ⬜
+
+---
+
+### E13-2 · Occasion reminder
+**As a** user who added a wedding to Mira  
+**I want** a reminder email 7 days before  
+**So that** I don't forget to buy my outfit in time
+
+**Acceptance criteria**
+- [ ] `user_occasions` table: user_id, event_name, event_date, dress_code
+- [ ] Mira can add occasions mid-conversation: "I'll remind you 7 days before your event"
+- [ ] 7-day-before email: outfit suggestions matched to dress_code + user budget
+- [ ] "Ask Mira to style me" deep-link CTA
+
+**Priority**: 🟢 P3 · **Effort**: M · **Status**: ⬜
+
+---
+
+## E14 · Outfit Completion Engine
+
+> Increases average session basket from 1 item to 3–4 items. Biggest single revenue lever.
+
+### E14-1 · "Complete the look" suggestion
 **As a** shopper who saved a dress  
-**I want** Mira to suggest shoes and a bag to go with it  
-**So that** I can buy a complete outfit in one session
+**I want** Mira to suggest matching shoes and a bag  
+**So that** I leave with a complete outfit, not just one piece
 
 **Acceptance criteria**
-- [ ] When user saves an item, Mira proactively offers: "Want me to find shoes and a bag to complete this look?"
-- [ ] Completion items filtered by: complementary category, similar price range, compatible style tags
-- [ ] Works for any anchor category: dress → shoes + bag; tops → bottoms + shoes; etc.
-- [ ] Mira explains the styling logic for each addition
+- [ ] When user saves an item, Mira offers: "Want me to find shoes to go with this?"
+- [ ] Completion items filtered by: complementary category, similar price tier, compatible style
+- [ ] Works for any anchor: dress → shoes + bag; top → bottoms + shoes; etc.
+- [ ] Mira explains why each piece works ("the ankle boots balance the midi length")
 
-**Priority**: 🟢 P3 · **Effort**: M · **Value**: 9/10
+**Priority**: 🟢 P3 · **Effort**: M · **Status**: ⬜
 
 ---
 
-### Story E11-2 · Outfit bundle save
-**As a** shopper  
-**I want** to save a complete outfit (not just individual items)  
-**So that** I can come back and buy everything together
+### E14-2 · Outfit bundle save
+**As a** user  
+**I want** to save a full outfit, not just individual items  
+**So that** I can come back and buy everything at once
 
 **Acceptance criteria**
-- [ ] "Save outfit" button appears when 2+ compatible items are shown together
-- [ ] Outfit stored in `user_outfits` table with name (e.g. "Date Night Look")
+- [ ] "Save outfit" button when 2+ items are shown together
+- [ ] `user_outfits` table: id, user_id, name, product_ids[], total_price
 - [ ] Profile page shows saved outfits with total price
-- [ ] Share button on outfit (drives E3 viral loop)
+- [ ] Share button on outfit (drives viral loop)
 
-**Priority**: 🟢 P3 · **Effort**: M · **Value**: 8/10
+**Priority**: 🟢 P3 · **Effort**: M · **Status**: ⬜
 
 ---
 
@@ -554,70 +563,72 @@ _Format: Epic → Stories → Acceptance Criteria → Priority / Effort / Value.
 
 ---
 
-## E12 · White-Label Mira for Brands
+## E15 · White-Label Mira for Indian Brands
 
----
-
-### Story E12-1 · Brand skin configuration
-**As a** brand partner  
-**I want** to configure Mira with my brand name, colors, and catalog  
-**So that** I can offer an AI stylist to my customers without building one
+### E15-1 · Brand skin & catalog isolation
+**As a** fashion brand (e.g. Rare Rabbit, Bewakoof, W for Woman)  
+**I want** to offer Mira with my brand name and catalog  
+**So that** my customers get an AI stylist without me building one
 
 **Acceptance criteria**
-- [ ] Brand config: `name`, `persona_prompt`, `primary_color`, `logo_url`, `catalog_source`
-- [ ] Stored in `brands` table; loaded at session start based on subdomain or API key
-- [ ] Catalog filtered to brand's own products only
+- [ ] `brands` table: name, persona_prompt, primary_color, logo_url, catalog_source
+- [ ] Loaded at session start based on subdomain or API key
+- [ ] Catalog filtered to brand's products only
 - [ ] Custom greeting: "Hi, I'm [Brand] Style Assistant"
+- [ ] Pricing: ₹15,000–50,000/month brand SaaS fee
 
-**Priority**: 🔵 P4 · **Effort**: L · **Value**: 9/10
-
----
-
-## E13 · Brand Sponsorship & Promoted Products
+**Priority**: 🔵 P4 · **Effort**: L · **Status**: ⬜
 
 ---
 
-### Story E13-1 · Promoted placement in catalog
-**As a** brand  
-**I want** my products to appear higher in Mira's recommendations  
-**So that** I can drive more visibility for new launches or clearance
+## E16 · Promoted Placements & Brand Partnerships
+
+### E16-1 · Sponsored product placement
+**As a** brand partner  
+**I want** my new collection to appear first in Mira's recommendations  
+**So that** I get visibility for a launch without a traditional ad campaign
 
 **Acceptance criteria**
 - [ ] Products table has `promoted_until` timestamptz and `promoted_weight` float
-- [ ] `search_products()` boosts promoted products in ranking (not forced — only if relevant to query)
-- [ ] Mira's grounding prompt notes: "★ = brand partner product — recommend if genuinely fitting"
-- [ ] Promotion disclosed in UI: small "Sponsored" label on card
+- [ ] Promoted products scored higher in spotlight selection (not forced — only if relevant)
+- [ ] "Sponsored" label on product card (disclosed clearly)
+- [ ] Mira's prompt: "★ = brand partner product — recommend only if genuinely fitting"
+- [ ] Pricing: ₹50,000–2,00,000/month per promoted slot
 
-**Priority**: 🔵 P4 · **Effort**: S · **Value**: 8/10
-
----
-
----
-
-# Backlog Summary Table
-
-| Epic | Stories | Priority | Total Effort | Value |
-|------|---------|----------|--------------|-------|
-| E1 Catalog Expansion | 3 | 🔴 P0 | M–L | 10 |
-| E2 Mobile / PWA | 3 | 🔴 P0 | S | 9 |
-| E6 Error States | 3 | 🔴 P0 | S | 8 |
-| E7 Rate Limiting | 2 | 🔴 P0 | XS | 8 |
-| E9 Privacy & Legal | 2 | 🔴 P0 | S | 8 |
-| E3 Viral Sharing | 2 | 🟠 P1 | M | 9 |
-| E4 Email & CRM | 3 | 🟠 P1 | M | 9 |
-| E5 Amazon PA-API | 3 | 🟡 P2 | M | 10 |
-| E8 Analytics | 3 | 🟡 P2 | M | 8 |
-| E10 User Profile | 2 | 🟢 P3 | M | 8 |
-| E11 Outfit Engine | 2 | 🟢 P3 | M | 9 |
-| E12 White-Label | 1 | 🔵 P4 | L | 9 |
-| E13 Sponsorships | 1 | 🔵 P4 | S | 8 |
-
-**Total stories: 30 · Estimated total effort (solo dev): ~14 weeks**
+**Priority**: 🔵 P4 · **Effort**: S · **Status**: ⬜
 
 ---
 
-## The Immovable First Action
+---
 
-Before any engineering: **manually add 50 products to the catalog this week**.  
-No sprint, no story — just open Amazon, SiteStripe 50 items across 6 categories, run `migrate_products.py`.  
-Every other story depends on having a real catalog. That's the one thing no amount of code can substitute for.
+# Backlog summary
+
+| Epic | Stories | Priority | Effort | Status |
+|------|---------|----------|--------|--------|
+| E1 Voice AI Bridge | 8 | ✅ Done | — | ✅ |
+| E2 Auth & Identity | 5 | ✅ Done | — | ✅ |
+| E3 Onboarding & Style Profile | 5 | ✅ Done | — | ✅ |
+| E4 Recommendations | 9 | ✅ Done | — | ✅ |
+| E5 Session & Cost Controls | 4 | ✅ Done | — | ✅ |
+| E6 Error States & Privacy | 4 | 🔴 P0 | S | ⬜ |
+| E7 VCommission India Feed | 3 | 🟠 P1 | M | ⬜ |
+| E8 Pinterest OAuth | 3 | 🟠 P1 | M | ⬜ |
+| E9 First Look — New Launches | 3 | 🟠 P1 | M | ⬜ |
+| E10 Subscription Paywall | 2 | 🟡 P2 | M | ⬜ |
+| E11 Analytics & Influencer | 3 | 🟡 P2 | M | ⬜ |
+| E12 Mobile PWA | 3 | 🟢 P3 | S | ⬜ |
+| E13 Email CRM | 2 | 🟢 P3 | M | ⬜ |
+| E14 Outfit Engine | 2 | 🟢 P3 | M | ⬜ |
+| E15 White-Label | 1 | 🔵 P4 | L | ⬜ |
+| E16 Brand Sponsorships | 1 | 🔵 P4 | S | ⬜ |
+
+**Total remaining stories: ~31 · Estimated effort (solo dev): ~10 weeks**
+
+---
+
+## Immediate next actions (this week)
+
+1. **E6-2** — Add rate limiting to live_server.py (2 hours, P0 blocker)
+2. **E7** — Sign up for VCommission, get API credentials, write feed importer
+3. **E8** — Pinterest OAuth (2 days, biggest personalisation unlock)
+4. **E6-1** — Friendly error UI in the frontend (half a day)

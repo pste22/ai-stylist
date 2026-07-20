@@ -52,6 +52,17 @@ export function useAuth() {
 
   const signOut = () => supabase.auth.signOut();
 
+  const deleteAccount = async () => {
+    if (!user) return;
+    const uid = user.id;
+    // Delete all user data (FK cascades handle preferences + history)
+    await supabase.from("user_preferences").delete().eq("user_id", uid);
+    await supabase.from("user_history").delete().eq("user_id", uid);
+    await supabase.from("users").delete().eq("user_id", uid);
+    // Sign out — Supabase auth entry cleanup handled server-side by admin
+    await supabase.auth.signOut();
+  };
+
   // Extract first name from whichever field the provider populates
   const meta     = user?.user_metadata ?? {};
   const fullName = meta.full_name || meta.name || "";
@@ -68,5 +79,6 @@ export function useAuth() {
     signInWithFacebook,
     signInWithGithub,
     signOut,
+    deleteAccount,
   };
 }

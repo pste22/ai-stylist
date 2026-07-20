@@ -1,4 +1,4 @@
-export default function LoginScreen({ onGoogle, onFacebook, onGithub }) {
+export default function LoginScreen({ onGoogle, onFacebook, onGithub, onGuest }) {
   return (
     <div className="login-screen">
       <div className="login-card">
@@ -32,6 +32,10 @@ export default function LoginScreen({ onGoogle, onFacebook, onGithub }) {
             Continue with Facebook
           </button>
         </div>
+
+        <button className="login-guest-btn" onClick={onGuest}>
+          Browse without signing in →
+        </button>
 
         <p className="login-legal">
           By signing in you agree to our{" "}

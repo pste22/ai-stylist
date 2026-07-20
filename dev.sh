@@ -14,9 +14,13 @@ pkill -f "python live_server.py" 2>/dev/null || true
 pkill -f "vite" 2>/dev/null || true
 sleep 1
 
-echo "→ Starting Python voice bridge..."
+echo "→ Starting Python voice bridge (auto-restarts on .py changes)..."
 cd "$ROOT/prototype"
-nohup python live_server.py > "$LOG_DIR/live_server.log" 2>&1 &
+nohup watchmedo auto-restart \
+  --patterns="*.py" \
+  --recursive \
+  --debounce-interval=1 \
+  -- python live_server.py > "$LOG_DIR/live_server.log" 2>&1 &
 echo "  PID $! — logs: $LOG_DIR/live_server.log"
 
 echo "→ Starting Vite dev server..."

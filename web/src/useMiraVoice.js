@@ -30,14 +30,22 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const [savedProducts, setSavedProducts] = useState([]);
   const [highlightedId, setHighlightedId] = useState(null);
   const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
   const [miraText, setMiraText] = useState(null);
   const [canShowMore, setCanShowMore] = useState(false);
   const [looks, setLooks] = useState([]);
 
-  // Text mode: full chat history (persists across turns so user can scroll up)
+  // Full chat history — always built regardless of voice/text mode
   const [messages, setMessages] = useState([]);
   // ref to the id of the bubble Mira is currently streaming into
   const miraBubbleId = useRef(null);
+
+  // Product timeline — each item records which message bubble it came from
+  const [productTimeline, setProductTimeline] = useState([]);
+
+  // Keep a live ref to textMode so WS handlers see mid-session switches
+  const textModeRef = useRef(textMode);
+  textModeRef.current = textMode;
 
   const wsRef = useRef(null);
   const micRef = useRef(null);
@@ -54,7 +62,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     miraBubbleId.current = null;
   }, []);
 
-  // Add a message to the chat thread (text mode only)
+  // Add a message to the chat thread
   const _addMsg = (role, text) => {
     const id = mkId();
     setMessages((prev) => [...prev, { id, role, text, products: [], ts: new Date() }]);
@@ -144,10 +152,28 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     }
   }, []);
 
+  // Switch audio on/off mid-session without restarting the WebSocket
+  const switchAudio = useCallback(async (enableAudio) => {
+    if (enableAudio && !micRef.current) {
+      const mic = new MicCapture((bytes) => {
+        if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(bytes);
+      });
+      micRef.current = mic;
+      try { await mic.start(); } catch { setError("Mic permission denied"); }
+      if (!playerRef.current) playerRef.current = new PcmPlayer();
+    } else if (!enableAudio) {
+      micRef.current?.stop();
+      micRef.current = null;
+      playerRef.current?.flush();
+      playerRef.current = null; // null so binary frames are silently dropped
+    }
+  }, []);
+
   const start = useCallback(async () => {
     setError(null);
     setMessages([]);
     setLooks([]);
+    setProductTimeline([]);
     miraBubbleId.current = null;
     try {
       const ws = new WebSocket(WS_URL);
@@ -183,7 +209,8 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
 
       ws.onmessage = (e) => {
         if (e.data instanceof ArrayBuffer) {
-          if (!textMode) playerRef.current?.push(e.data);
+          // Null-safe: playerRef is nulled by switchAudio when audio is off
+          playerRef.current?.push(e.data);
           return;
         }
         const msg = JSON.parse(e.data);
@@ -199,16 +226,20 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             break;
 
           case "transcript":
-            if (!textMode) {
-              // Voice mode: overwrite caption (latest chunk only)
+            if (!textModeRef.current) {
+              // Voice mode: update captions (latest chunk overwrites)
               setCaptions((c) => ({ ...c, [msg.who]: msg.text }));
-            } else if (msg.who === "mira") {
-              // Text mode: stream chunks into the current Mira bubble
+            }
+            if (msg.who === "mira") {
+              // Always stream into Mira bubble regardless of mode
               if (!miraBubbleId.current) {
                 miraBubbleId.current = _addMsg("mira", msg.text);
               } else {
                 _appendMsg(miraBubbleId.current, msg.text);
               }
+            } else if (msg.who === "you" && !textModeRef.current) {
+              // Voice mode: add your speech as a bubble (no optimistic add in voice)
+              _addMsg("you", msg.text);
             }
             // Skip 'you' echo in text mode — already added optimistically in sendText
             break;
@@ -220,28 +251,28 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
           case "products": {
             const items = msg.items || [];
             // Show the button whenever server says more exist, OR any product arrives
-            // (the catalog has 1000+ items so we almost always have more to page).
-            // Only hide if the server explicitly says show_more: false.
             const serverSaysMore = msg.show_more === true;
             const serverSaysNoMore = msg.show_more === false;
             if (serverSaysMore || (!serverSaysNoMore && items.length > 0)) setCanShowMore(true);
-            // Voice mode: update the product shelf
-            if (!textMode) {
-              setProducts((prev) => {
-                const seen = new Set(prev.map((p) => p.id));
-                return [...prev, ...items.filter((p) => !seen.has(p.id))];
-              });
-              if (items.length) setHighlightedId(items[items.length - 1].id);
-            } else {
-              // Text mode: attach cards to the bubble they came from
-              const bubId = miraBubbleId.current;
-              if (bubId) _attachProducts(bubId, items);
-              // Also keep the top-level products list for the saved shelf
-              setProducts((prev) => {
-                const seen = new Set(prev.map((p) => p.id));
-                return [...prev, ...items.filter((p) => !seen.has(p.id))];
-              });
-              if (items.length) setHighlightedId(items[items.length - 1].id);
+
+            // Always attach products to the current Mira bubble
+            const bubId = miraBubbleId.current;
+            if (bubId) _attachProducts(bubId, items);
+
+            // Always update top-level products list and highlighted item
+            setProducts((prev) => {
+              const seen = new Set(prev.map((p) => p.id));
+              return [...prev, ...items.filter((p) => !seen.has(p.id))];
+            });
+            if (items.length) setHighlightedId(items[items.length - 1].id);
+
+            // Append to product timeline with bubble reference
+            if (items.length) {
+              const bubbleId = miraBubbleId.current;
+              setProductTimeline((prev) => [
+                ...prev,
+                ...items.map((p) => ({ ...p, messageId: bubbleId, ts: Date.now() })),
+              ]);
             }
             break;
           }
@@ -256,22 +287,31 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
           case "interrupted":
             break;
           case "error":
-            setError(msg.message);
+            setError(msg.message || "connection_failed");
             break;
         }
       };
 
-      ws.onerror = () => setError("Could not reach the voice bridge (is live_server.py running?)");
+      ws.onerror = () => {
+        setRetryCount((c) => c + 1);
+        setError("connection_failed");
+      };
       ws.onclose = () => stop();
     } catch (e) {
       setError(String(e));
     }
   }, [stop, textMode, userId, userName, userPrefs, eventBrief]);
 
+  const retry = useCallback(() => {
+    setError(null);
+    start();
+  }, [start]);
+
   return {
     connected, state, mood, captions, messages,
-    products, looks, savedProducts, loved, highlightedId, error, miraText,
+    products, looks, savedProducts, loved, highlightedId, error, retryCount, miraText,
     canShowMore, setCanShowMore,
-    start, stop, sendText, wouldBuy, getLevel, buyClick, showMore,
+    productTimeline, switchAudio,
+    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
   };
 }

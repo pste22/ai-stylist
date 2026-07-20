@@ -10,9 +10,11 @@ import { useAuth } from "./useAuth.js";
 import { useOnboarding } from "./useOnboarding.js";
 import { useIdleTimeout } from "./useIdleTimeout.js";
 import { useChatHistory } from "./useChatHistory.js";
+import PrivacyPolicy from "./PrivacyPolicy.jsx";
+import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 
 // ─── User avatar menu (dropdown) ─────────────────────────────────────────────
-function UserMenu({ userName, userEmail, userAvatar, onSignOut }) {
+function UserMenu({ userName, userEmail, userAvatar, onSignOut, onDeleteAccount }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
 
@@ -41,7 +43,90 @@ function UserMenu({ userName, userEmail, userAvatar, onSignOut }) {
           <button className="user-dropdown-signout" onClick={() => { setOpen(false); onSignOut(); }}>
             Sign out
           </button>
+          <button className="user-dropdown-signout" style={{ color: "#c0103a", marginTop: ".25rem" }}
+            onClick={() => { setOpen(false); onDeleteAccount(); }}>
+            Delete account
+          </button>
         </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Signal strength indicator ───────────────────────────────────────────────
+function SignalBars({ quality }) {
+  const levels = { good: 3, moderate: 2, slow: 1, datasaver: 0, unknown: 3 };
+  const colors = { good: "#22c55e", moderate: "#f59e0b", slow: "#ef4444", datasaver: "#ef4444", unknown: "#94a3b8" };
+  const level = levels[quality] ?? 3;
+  const color = colors[quality] ?? "#94a3b8";
+  const label = quality === "datasaver" ? "Data Saver on" : `Network: ${quality}`;
+  return (
+    <span className="signal-bars" title={label} aria-label={label}>
+      {[1, 2, 3].map((i) => (
+        <span key={i} className={`sig-bar sig-bar-${i}`} style={i <= level ? { background: color } : {}} />
+      ))}
+    </span>
+  );
+}
+
+// ─── Network quality toast ────────────────────────────────────────────────────
+function NetworkToast({ message, action, onAction, onDismiss }) {
+  return (
+    <div className="net-toast">
+      <span className="net-toast-icon">📶</span>
+      <span className="net-toast-msg">{message}</span>
+      {action && (
+        <button className="net-toast-action" onClick={onAction}>{action}</button>
+      )}
+      <button className="net-toast-dismiss" onClick={onDismiss} aria-label="Dismiss">✕</button>
+    </div>
+  );
+}
+
+// ─── Delete account confirmation modal ───────────────────────────────────────
+function DeleteAccountModal({ onConfirm, onCancel }) {
+  const [deleting, setDeleting] = useState(false);
+  const confirm = async () => {
+    setDeleting(true);
+    await onConfirm();
+  };
+  return (
+    <div className="delete-overlay">
+      <div className="delete-modal">
+        <div className="delete-modal-icon">🗑️</div>
+        <h3 className="delete-modal-title">Delete your account?</h3>
+        <p className="delete-modal-body">
+          This permanently removes your profile, style preferences, saved products,
+          and session history. This cannot be undone.
+        </p>
+        <div className="delete-modal-actions">
+          <button className="delete-btn-confirm" onClick={confirm} disabled={deleting}>
+            {deleting ? "Deleting…" : "Yes, delete my account"}
+          </button>
+          <button className="delete-btn-cancel" onClick={onCancel} disabled={deleting}>
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Connection error card ────────────────────────────────────────────────────
+const CONN_MESSAGES = [
+  "Mira is taking a quick break — tap to try again.",
+  "Still having trouble connecting — one more try?",
+  "Something's wrong on our end. We'll be back soon.",
+];
+function ConnectionError({ retryCount, onRetry }) {
+  const msg = CONN_MESSAGES[Math.min(retryCount - 1, CONN_MESSAGES.length - 1)];
+  const isTerminal = retryCount >= 3;
+  return (
+    <div className="conn-error-card">
+      <span className="conn-error-icon">{isTerminal ? "⚠️" : "📡"}</span>
+      <p className="conn-error-msg">{msg}</p>
+      {!isTerminal && (
+        <button className="conn-error-retry" onClick={onRetry}>Try again</button>
       )}
     </div>
   );
@@ -77,22 +162,19 @@ function renderInline(str) {
 }
 
 // ─── Integrated bubble: text + product images inline ─────────────────────────
-// Bullet lines that match a product are rendered as an image+text+actions row.
-// Preamble / postamble text and unmatched bullets stay as plain paragraphs/list.
-function MiraBubbleContent({ text, products = [], loved, onLove, onBuy }) {
-  const byName = {};
-  for (const p of products) byName[p.name.toLowerCase()] = p;
-
+// Renders Mira's text with markdown-lite formatting — NO product cards.
+// Products always appear in the ProductGrid below the bubble.
+function MiraBubbleContent({ text }) {
   const lines = text.split("\n");
   const blocks = [];
-  const unmatchedBullets = [];
+  const pendingBullets = [];
   let key = 0;
 
-  const flushUnmatched = () => {
-    if (unmatchedBullets.length) {
+  const flushBullets = () => {
+    if (pendingBullets.length) {
       blocks.push(
         <ul className="bubble-list" key={key++}>
-          {unmatchedBullets.splice(0).map((item, i) => <li key={i}>{item}</li>)}
+          {pendingBullets.splice(0).map((item, i) => <li key={i}>{item}</li>)}
         </ul>
       );
     }
@@ -101,83 +183,33 @@ function MiraBubbleContent({ text, products = [], loved, onLove, onBuy }) {
   lines.forEach((line) => {
     const bullet = line.match(/^[•\-\*]\s+(.*)/);
     if (bullet) {
+      // Strip product-bullet lines that are just name — reason (products shown in grid)
       const content = bullet[1];
-      const dashIdx = content.indexOf("—");
-      const reason  = dashIdx > -1 ? content.slice(dashIdx + 1).trim() : "";
-
-      // Robust match: find any product whose name appears anywhere in the bullet.
-      // Strips **bold** markers first so formatting never breaks the match.
-      const cleaned = content.toLowerCase().replace(/\*\*/g, "").replace(/\*/g, "");
-      const product = products.find(p => cleaned.includes(p.name.toLowerCase()));
-
-      if (product) {
-        flushUnmatched();
-        const isLoved = loved.has(product.id);
-        blocks.push(
-          <div key={key++} className="product-line">
-            <div className="product-line-img-wrap">
-              {product.image_url && (product.image_url.includes("m.media-amazon.com") || product.image_url.includes("images.pexels.com"))
-                ? <img
-                    className="product-line-img"
-                    src={product.image_url}
-                    alt={product.name}
-                    loading="lazy"
-                    onError={(e) => { e.currentTarget.style.display = "none"; }}
-                  />
-                : <span className="product-line-swatch" style={{ background: swatchColor(product.color) }} />}
-            </div>
-            <div className="product-line-content">
-              <p className="product-line-name">{product.name}</p>
-              {reason && <p className="product-line-reason">{renderInline(reason)}</p>}
-              <p className="product-line-meta">{product.color} · ${product.price}</p>
-              <div className="product-line-actions">
-                <button
-                  className={`love${isLoved ? " is-loved" : ""}`}
-                  onClick={() => onLove(product)}
-                  title={isLoved ? "Click to unlike" : "Save for later"}
-                >{isLoved ? "♥ Saved" : "♡ Save"}</button>
-                <a className="buy" href={product.affiliate_url}
-                   target="_blank" rel="noopener noreferrer nofollow sponsored"
-                   onClick={() => onBuy?.(product)}>Buy →</a>
-              </div>
-            </div>
-          </div>
-        );
-      } else {
-        unmatchedBullets.push(renderInline(content));
-      }
+      const nameOnly = content.split("—")[0].trim();
+      pendingBullets.push(renderInline(nameOnly || content));
     } else {
-      flushUnmatched();
+      flushBullets();
       const trimmed = line.trim();
       if (trimmed) blocks.push(<p key={key++}>{renderInline(trimmed)}</p>);
     }
   });
-  flushUnmatched();
-
-  // Products not matched to any bullet (e.g. still streaming, or mentioned conversationally)
-  // fall through as compact cards. Use same robust matching as above.
-  const inlinedIds = new Set(
-    lines
-      .filter(l => l.match(/^[•\-\*]\s+/))
-      .flatMap(l => {
-        const content = l.replace(/^[•\-\*]\s+/, "").toLowerCase().replace(/\*\*/g, "").replace(/\*/g, "");
-        const match = products.find(p => content.includes(p.name.toLowerCase()));
-        return match ? [match.id] : [];
-      })
-  );
-  const overflow = products.filter(p => !inlinedIds.has(p.id));
-  if (overflow.length) {
-    blocks.push(
-      <div key={key++} className="bubble-products">
-        {overflow.map(p => (
-          <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
-            onLove={onLove} onBuy={onBuy} compact />
-        ))}
-      </div>
-    );
-  }
-
+  flushBullets();
   return <>{blocks}</>;
+}
+
+// Unified 3-column product grid — single source of truth for product display.
+const PRODUCTS_PER_TURN = 3;
+function ProductGrid({ products, loved, onLove, onBuy, highlightedId }) {
+  if (!products?.length) return null;
+  const shown = products.slice(0, PRODUCTS_PER_TURN);
+  return (
+    <div className="product-grid">
+      {shown.map((p) => (
+        <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
+          onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} />
+      ))}
+    </div>
+  );
 }
 
 // Colour swatch helper (mirrors ProductCard.jsx)
@@ -311,9 +343,8 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
     product.image_url.includes("images.pexels.com")
   );
 
-  // Stable social-proof figures — consistent for a given product
   const savedCount  = pseudoRandom(product.id, 1337) % 40 + 8;
-  const ratingTenths = pseudoRandom(product.id, 4242) % 13 + 37; // 3.7–4.9
+  const ratingTenths = pseudoRandom(product.id, 4242) % 13 + 37;
   const rating      = (ratingTenths / 10).toFixed(1);
   const filledStars = Math.floor(ratingTenths / 10);
   const starStr     = "★".repeat(filledStars) + "☆".repeat(5 - filledStars);
@@ -322,7 +353,6 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
 
   return (
     <div className="fp-product">
-      {/* ── Hero image with overlays ── */}
       <div className="fp-img-wrap">
         {usePhoto
           ? <img className="fp-img" src={product.image_url} alt={product.name} loading="lazy" />
@@ -331,25 +361,21 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
             </div>
         }
 
-        {/* Trend / New badge — top-left */}
         {isTrending && <span className="fp-badge fp-badge--hot">🔥 Trending</span>}
         {isNew      && <span className="fp-badge fp-badge--new">✦ New In</span>}
 
-        {/* Heart — top-right */}
         <button
           className={`fp-heart${isLoved ? " is-loved" : ""}`}
           onClick={() => onLove(product)}
           aria-label={isLoved ? "Remove from saved" : "Save"}
         >{isLoved ? "♥" : "♡"}</button>
 
-        {/* Hover-reveal reason (middle layer) */}
         {reason && (
           <div className="fp-img-hover">
             <p className="fp-img-hover-text">"{reason}"</p>
           </div>
         )}
 
-        {/* Persistent bottom bar: price + quick shop */}
         <div className="fp-img-bar">
           <div className="fp-bar-text">
             <p className="fp-bar-name">{product.name}</p>
@@ -365,11 +391,9 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
         </div>
       </div>
 
-      {/* ── Details below image ── */}
       <div className="fp-details">
         <div className="fp-miras-pick">✦ Mira's Pick</div>
 
-        {/* Social proof */}
         <div className="fp-social">
           <span className="fp-stars">{starStr}</span>
           <span className="fp-rating">{rating}</span>
@@ -377,7 +401,6 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
           <span className="fp-saved">{savedCount} saved this week</span>
         </div>
 
-        {/* Why Mira chose this */}
         {reason && (
           <div className="fp-why">
             <p className="fp-why-label">✦ Why Mira chose this</p>
@@ -385,7 +408,6 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
           </div>
         )}
 
-        {/* Main CTA */}
         <a
           className="fp-cta"
           href={product.affiliate_url}
@@ -403,15 +425,14 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
   );
 }
 
-// ─── Full-screen chat view (text mode while connected) ────────────────────────
+// ─── Full-screen chat view (kept for reference; not rendered in main path) ────
 function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
-                    onStop, onSend, error, userName, userEmail, userAvatar, onSignOut,
+                    onStop, onSend, error, userName, userEmail, userAvatar, onSignOut, onDeleteAccount,
                     canShowMore, onShowMore, products, looks, onSaveLook, highlightedId }) {
   const [draft, setDraft] = useState("");
   const threadRef = useRef(null);
   const inputRef = useRef(null);
 
-  // Auto-scroll to bottom on every new message or chunk
   useEffect(() => {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -435,13 +456,11 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
 
   const sendChip = (text) => onSend(text);
 
-  // Find the currently highlighted product for the right panel
   const featuredProduct = useMemo(
     () => products.find((p) => p.id === highlightedId) || null,
     [products, highlightedId]
   );
 
-  // Try to pull out why Mira mentioned the featured product from her last message
   const featuredReason = useMemo(() => {
     if (!featuredProduct) return null;
     for (let i = messages.length - 1; i >= 0; i--) {
@@ -461,7 +480,6 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
 
   return (
     <div className="chat-layout">
-      {/* ── Header ── */}
       <div className="chat-header">
         <MiniAvatar state={state} mood={mood} />
         <div className="chat-header-info">
@@ -473,13 +491,11 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
             <span className="chat-saved-badge">💜 {savedProducts.length}</span>
           )}
           <button className="chat-end-btn" onClick={onStop}>⏹ End</button>
-          <UserMenu userName={userName} userEmail={userEmail} userAvatar={userAvatar} onSignOut={onSignOut} />
+          <UserMenu userName={userName} userEmail={userEmail} userAvatar={userAvatar} onSignOut={onSignOut} onDeleteAccount={onDeleteAccount} />
         </div>
       </div>
 
-      {/* ── Two-panel body ── */}
       <div className="chat-body">
-        {/* ── LEFT: conversation thread ── */}
         <div className="chat-left">
           <div className="chat-thread" ref={threadRef}>
             <LookDeck looks={looks} loved={loved} onLove={onLove} onBuy={onBuy} onSaveLook={onSaveLook} />
@@ -508,7 +524,6 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
             ))}
           </div>
 
-          {/* ── Show more ── */}
           {canShowMore && (
             <div className="show-more-bar">
               <button className="show-more-btn" onClick={onShowMore}>
@@ -517,7 +532,6 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
             </div>
           )}
 
-          {/* ── Input ── */}
           <div className="chat-input-area">
             {error && <p className="chat-error">{error}</p>}
             <div className="chat-input-bar">
@@ -544,7 +558,6 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
           </div>
         </div>
 
-        {/* ── RIGHT: featured product spotlight ── */}
         <div className="chat-right">
           <FeaturedProduct
             key={featuredProduct?.id || "empty"}
@@ -561,31 +574,202 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
   );
 }
 
+// ─── Small pulsing Mira dot — expands when talking ───────────────────────────
+function MiraDot({ state, mood, audioActive }) {
+  const isTalking = state === "talking";
+  return (
+    <div className={`mira-dot ${state} ${audioActive ? "audio-on" : ""} ${isTalking ? "expanded" : ""}`}
+      aria-label={`Mira is ${state}`}>
+      <span className="mira-dot-inner" />
+    </div>
+  );
+}
+
+// ─── Mode toggle — compact, lives in header ───────────────────────────────────
+function ModeToggle({ textMode, connected, quality, onVoice, onText }) {
+  const isSlow = quality === "slow" || quality === "datasaver";
+  return (
+    <div className="mode-toggle-compact" role="group" aria-label="Input mode">
+      <button className={`mtc-btn${!textMode ? " active" : ""}`} onClick={onVoice}
+        title={isSlow ? "Slow connection" : "Voice mode"}>
+        🎙️{!textMode && connected && <SignalBars quality={quality} />}
+      </button>
+      <button className={`mtc-btn${textMode ? " active" : ""}`} onClick={onText}>
+        ⌨️
+      </button>
+    </div>
+  );
+}
+
+// ─── Chat welcome / empty state — shown before first message ─────────────────
+function ChatWelcome({ onEventBrief, textMode }) {
+  return (
+    <div className="chat-welcome">
+      <p className="chat-welcome-title">Hi, I'm Mira ✦</p>
+      <p className="chat-welcome-sub">
+        {textMode ? "Type to ask me anything about style." : "Tap Start talking and ask me anything."}
+      </p>
+      <button className="event-brief-chip" onClick={onEventBrief}>
+        ✦ Plan an outfit for an event
+      </button>
+    </div>
+  );
+}
+
+// ─── Message bubble — user or Mira, with inline product cards ────────────────
+function MessageBubble({ msg, loved, onLove, onBuy, highlightedId }) {
+  const isMira = msg.role === "mira";
+  return (
+    <div className={`msg-row ${isMira ? "mira" : "you"}`}>
+      {isMira && <span className="msg-avatar-dot" />}
+      <div className="msg-bubble-wrap">
+        <div className={`msg-bubble ${isMira ? "mira" : "you"}`}>
+          {isMira ? <MiraBubbleContent text={msg.text} /> : msg.text}
+        </div>
+        {isMira && (
+          <ProductGrid
+            products={msg.products}
+            loved={loved}
+            onLove={onLove}
+            onBuy={onBuy}
+            highlightedId={highlightedId}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Typing/thinking indicator ────────────────────────────────────────────────
+function ThinkingBubble() {
+  return (
+    <div className="msg-row mira">
+      <span className="msg-avatar-dot" />
+      <div className="msg-bubble mira thinking-bubble">
+        <span /><span /><span />
+      </div>
+    </div>
+  );
+}
+
+// ─── Text input row (silent mode) ────────────────────────────────────────────
+function TextInputRow({ onSend, onStop }) {
+  const [draft, setDraft] = useState("");
+  const send = () => { if (draft.trim()) { onSend(draft.trim()); setDraft(""); } };
+  return (
+    <div className="text-input-row">
+      <input className="chat-input" value={draft} onChange={(e) => setDraft(e.target.value)}
+        onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
+        placeholder="Message Mira…" autoFocus />
+      <button className="send-btn" onClick={send} disabled={!draft.trim()}>Send</button>
+      <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
+    </div>
+  );
+}
+
+// ─── Voice active bar — shows waveform level + stop ──────────────────────────
+function VoiceActiveBar({ level, onStop, captions }) {
+  return (
+    <div className="voice-active-bar">
+      <span className="voice-listening-dot" />
+      <span className="voice-caption">{captions.you || "Listening…"}</span>
+      <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
+    </div>
+  );
+}
+
 // ─── Main App ────────────────────────────────────────────────────────────────
 export default function App() {
   const {
     user, loading,
     userId, userName, userAvatar,
-    signInWithGoogle, signInWithFacebook, signInWithGithub, signOut,
+    signInWithGoogle, signInWithFacebook, signInWithGithub, signOut, deleteAccount,
   } = useAuth();
 
   const { needsOnboarding, prefs, completeOnboarding, updatePrefs } = useOnboarding(userId);
   const { showWarning, countdown, staySignedIn } = useIdleTimeout({ onSignOut: signOut, enabled: !!user });
   const history = useChatHistory(userId);
 
-  const [textMode, setTextMode]     = useState(false);
-  const [showSaved, setShowSaved]   = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
+  const { isSlow, isRecovered, quality }  = useNetworkMode();
+  const autoSwitchedRef                   = useRef(false);
+  const threadRef                         = useRef(null);
+  const [isGuest, setIsGuest]             = useState(false);
+  const [textMode, setTextMode]           = useState(false);
+  const [networkToast, setNetworkToast]   = useState(null);
+  const [showSaved, setShowSaved]         = useState(false);
+  const [showHistory, setShowHistory]     = useState(false);
   const [showEventBrief, setShowEventBrief] = useState(false);
-  const [eventBrief, setEventBrief] = useState(null);
+  const [eventBrief, setEventBrief]       = useState(null);
   const [startRequested, setStartRequested] = useState(false);
+  const [showPrivacy, setShowPrivacy]     = useState(false);
+  const [showDeleteModal, setShowDelete]  = useState(false);
 
   const {
     connected, state, mood, captions, messages,
-    products, looks, savedProducts, loved, highlightedId, error,
+    products, looks, savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
-    start, stop, sendText, wouldBuy, getLevel, buyClick, showMore,
+    productTimeline, switchAudio,
+    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
   } = useMiraVoice({ userId, userName, userPrefs: prefs, eventBrief, textMode });
+
+  // Auto-scroll thread on new messages
+  useEffect(() => {
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages]);
+
+  // ── Mode switch functions (no stop/restart — switchAudio handles it) ────────
+  const switchToVoice = async () => {
+    const q = checkNetworkNow();
+    if (q === "slow" || q === "datasaver") {
+      const warn = q === "datasaver"
+        ? "Data Saver is on. Voice will use mobile data."
+        : "Connection is slow. Voice may be choppy.";
+      setNetworkToast({
+        message: warn,
+        action: "Use voice anyway",
+        onAction: async () => {
+          setTextMode(false);
+          if (connected) await switchAudio(true);
+          setNetworkToast(null);
+        },
+      });
+    } else {
+      setTextMode(false);
+      if (connected) await switchAudio(true);
+    }
+  };
+
+  const switchToSilent = async () => {
+    setTextMode(true);
+    if (connected) await switchAudio(false);
+  };
+
+  // Network degradation — auto-switch to text
+  useEffect(() => {
+    if (!isSlow) return;
+    const msg = quality === "datasaver"
+      ? "Data Saver is on — switched to text mode to save your data."
+      : "Connection is slow — switched to text mode.";
+    autoSwitchedRef.current = true;
+    setNetworkToast({ message: msg, action: null });
+    switchToSilent();
+  }, [isSlow]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Connection recovered — offer to go back to voice
+  useEffect(() => {
+    if (isRecovered && autoSwitchedRef.current && !connected) {
+      setNetworkToast({
+        message: "Connection improved!",
+        action: "Switch to voice",
+        onAction: () => {
+          setTextMode(false);
+          autoSwitchedRef.current = false;
+          setNetworkToast(null);
+        },
+      });
+    }
+  }, [isRecovered]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (startRequested && eventBrief && !connected) {
@@ -612,13 +796,14 @@ export default function App() {
     return <div className="auth-loading"><span>✦</span></div>;
   }
 
-  // Not signed in → show login screen
-  if (!user) {
+  // Not signed in → show login screen (unless guest mode chosen)
+  if (!user && !isGuest) {
     return (
       <LoginScreen
         onGoogle={signInWithGoogle}
         onFacebook={signInWithFacebook}
         onGithub={signInWithGithub}
+        onGuest={() => setIsGuest(true)}
       />
     );
   }
@@ -632,42 +817,9 @@ export default function App() {
     return <EventBriefFlow onStart={startEventEdit} onCancel={() => setShowEventBrief(false)} />;
   }
 
-  // Text mode while connected → full-screen chat UI
-  if (textMode && connected) {
-    return (
-      <>
-        {showWarning && (
-          <SessionWarning countdown={countdown} onStay={staySignedIn} onLeave={signOut} />
-        )}
-        <ChatView
-          state={state}
-          mood={mood}
-          messages={messages}
-          loved={loved}
-          savedProducts={savedProducts}
-          onLove={wouldBuy}
-          onBuy={buyClick}
-          onStop={stop}
-          onSend={sendText}
-          error={error}
-          userName={userName}
-          userEmail={user?.email}
-          userAvatar={userAvatar}
-          onSignOut={signOut}
-          canShowMore={canShowMore}
-          onShowMore={showMore}
-          products={products}
-          looks={looks}
-          onSaveLook={saveLook}
-          highlightedId={highlightedId}
-        />
-      </>
-    );
-  }
-
-  // ── Default layout (voice mode, or text mode before connecting) ──
+  // ── Unified chat-first layout ────────────────────────────────────────────────
   return (
-    <div className="app">
+    <>
       {showWarning && (
         <SessionWarning countdown={countdown} onStay={staySignedIn} onLeave={signOut} />
       )}
@@ -677,108 +829,107 @@ export default function App() {
           onClose={() => setShowHistory(false)}
         />
       )}
-      <header className="app-header">
-        <div className="app-header-top">
-          <h1>Mira</h1>
-          <div style={{ display: "flex", alignItems: "center", gap: ".5rem" }}>
-            <button className="ch-history-btn" onClick={() => setShowHistory(true)} title="Chat history">
-              🕐
+
+      <div className="app-chat">
+        <header className="chat-header">
+          <MiraDot state={state} mood={mood} audioActive={!textMode && connected} />
+          <span className="chat-title">Mira</span>
+          <div className="chat-header-right">
+            <ModeToggle textMode={textMode} connected={connected} quality={quality}
+              onVoice={switchToVoice} onText={switchToSilent} />
+            {savedProducts.length > 0 && (
+              <button
+                className="mtc-btn"
+                onClick={() => setShowSaved((v) => !v)}
+                title={showSaved ? "Hide saved" : `Saved items (${savedProducts.length})`}
+              >
+                💜{savedProducts.length > 0 && <span style={{ fontSize: ".75rem" }}>{savedProducts.length}</span>}
+              </button>
+            )}
+            {user && (
+              <button className="mtc-btn" onClick={() => setShowHistory(true)} title="Chat history">
+                🕐
+              </button>
+            )}
+            {user ? (
+              <UserMenu userName={userName} userEmail={user?.email}
+                userAvatar={userAvatar} onSignOut={signOut}
+                onDeleteAccount={() => setShowDelete(true)} />
+            ) : (
+              <button className="guest-signin-btn" onClick={() => setIsGuest(false)}>Sign in</button>
+            )}
+          </div>
+        </header>
+
+        {/* Saved products shelf — collapsible */}
+        {showSaved && savedProducts.length > 0 && (
+          <div className="shelf saved-shelf" style={{ flexShrink: 0, borderBottom: "1px solid var(--surface-2)", padding: ".75rem 1rem" }}>
+            <p className="shelf-title">💜 Your saved items</p>
+            <div className="grid">
+              {savedProducts.map((p) => (
+                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} />
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="chat-thread" ref={threadRef}>
+          {/* Look deck at the top of thread */}
+          {looks.length > 0 && (
+            <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook} />
+          )}
+
+          {messages.length === 0 && !connected && (
+            <ChatWelcome onEventBrief={() => setShowEventBrief(true)} textMode={textMode} />
+          )}
+          {messages.map((msg) => (
+            <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} />
+          ))}
+          {state === "thinking" && <ThinkingBubble />}
+
+          {/* Show more products button */}
+          {canShowMore && connected && (
+            <div style={{ textAlign: "center", padding: ".5rem 0" }}>
+              <button className="show-more-btn" onClick={showMore}>Show 10 more →</button>
+            </div>
+          )}
+        </div>
+
+        <div className="chat-input-bar">
+          {!connected ? (
+            <button className="chat-start-btn" onClick={start}>
+              {textMode ? "Start chatting →" : "Start talking →"}
             </button>
-            <UserMenu
-              userName={userName} userEmail={user?.email}
-              userAvatar={userAvatar} onSignOut={signOut}
-            />
-          </div>
+          ) : textMode ? (
+            <TextInputRow onSend={sendText} onStop={stop} />
+          ) : (
+            <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} />
+          )}
+          {error && <ConnectionError retryCount={retryCount} onRetry={retry} />}
         </div>
-        <p className="tagline">Your personal AI stylist</p>
-        {!connected && (
-          <button className="event-edit-cta" onClick={() => setShowEventBrief(true)}>
-            ✦ Plan an event look
-          </button>
-        )}
-        {savedProducts.length > 0 && (
-          <button className="saved-toggle" onClick={() => setShowSaved((v) => !v)}>
-            {showSaved ? "Hide saves" : `💜 Saved (${savedProducts.length})`}
-          </button>
-        )}
-      </header>
-
-      {showSaved && savedProducts.length > 0 && (
-        <div className="shelf saved-shelf">
-          <p className="shelf-title">💜 Your saved items</p>
-          <div className="grid">
-            {savedProducts.map((p) => (
-              <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      <RiveAvatar state={state} mood={mood} getLevel={getLevel} />
-
-      {/* Voice mode captions */}
-      {!textMode && (
-        <div className="captions">
-          {captions.you && <p className="cap you">{captions.you}</p>}
-          {captions.mira && <p className="cap mira">{captions.mira}</p>}
-        </div>
-      )}
-
-      {products.length > 0 && (
-        <div className="shelf">
-          <p className="shelf-title">Mira's picks for you</p>
-          <div className="grid">
-            {products.map((p) => (
-              <ProductCard
-                key={p.id} product={p}
-                loved={loved.has(p.id)} highlighted={p.id === highlightedId}
-                onLove={wouldBuy} onBuy={buyClick}
-              />
-            ))}
-          </div>
-          <p className="disclosure">
-            Mira earns a small commission when you buy through these links — it never
-            changes your price, and it keeps Mira free.
-          </p>
-        </div>
-      )}
-
-      <div className="controls">
-        {/* Mode toggle — only before connecting */}
-        {!connected && (
-          <div className="mode-toggle" role="group" aria-label="Input mode">
-            <button className={`mode-btn${!textMode ? " active" : ""}`} onClick={() => setTextMode(false)}>
-              🎙️ Voice
-            </button>
-            <button className={`mode-btn${textMode ? " active" : ""}`} onClick={() => setTextMode(true)}>
-              ⌨️ Silent
-            </button>
-          </div>
-        )}
-
-        {!connected ? (
-          <button className="primary" onClick={start}>
-            {textMode ? "💬 Chat with Mira" : "🎙️ Talk to Mira"}
-          </button>
-        ) : (
-          <button className="primary stop" onClick={stop}>⏹ End conversation</button>
-        )}
-
-        {error && <p className="error">{error}</p>}
-
-        {!connected && (
-          <p className="controls-hint">
-            {textMode
-              ? "Silent mode — Mira replies as text. No mic or speaker needed."
-              : <><code>.venv/bin/python prototype/live_server.py</code> must be running.</>}
-          </p>
-        )}
       </div>
 
-      <footer className="app-footer">
+      {networkToast && (
+        <NetworkToast
+          message={networkToast.message}
+          action={networkToast.action}
+          onAction={networkToast.onAction}
+          onDismiss={() => setNetworkToast(null)}
+        />
+      )}
+      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+      {showDeleteModal && (
+        <DeleteAccountModal
+          onConfirm={deleteAccount}
+          onCancel={() => setShowDelete(false)}
+        />
+      )}
+
+      <footer className="app-footer" style={{ textAlign: "center", padding: ".5rem", fontSize: ".75rem", color: "var(--ink-3)" }}>
         state: <code>{state}</code> · mood: <code>{mood}</code> ·{" "}
-        {connected ? (textMode ? "text" : "live") : "offline"}
+        {connected ? (textMode ? "text" : "live") : "offline"} ·{" "}
+        <button className="privacy-link" onClick={() => setShowPrivacy(true)}>Privacy</button>
       </footer>
-    </div>
+    </>
   );
 }
