@@ -250,28 +250,33 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
 
           case "products": {
             const items = msg.items || [];
-            // Show the button whenever server says more exist, OR any product arrives
             const serverSaysMore = msg.show_more === true;
             const serverSaysNoMore = msg.show_more === false;
             if (serverSaysMore || (!serverSaysNoMore && items.length > 0)) setCanShowMore(true);
+            if (serverSaysNoMore) setCanShowMore(false);
 
-            // Always attach products to the current Mira bubble
-            const bubId = miraBubbleId.current;
+            // Ensure there's a bubble to attach products to.
+            // If no active Mira bubble (e.g. show_more fired between turns),
+            // create a lightweight synthetic message so cards appear in the thread.
+            let bubId = miraBubbleId.current;
+            if (!bubId && items.length) {
+              bubId = _addMsg("mira", "Here are a few more picks for you ✦");
+              miraBubbleId.current = bubId;
+            }
             if (bubId) _attachProducts(bubId, items);
 
-            // Always update top-level products list and highlighted item
+            // Update top-level products list and highlighted card
             setProducts((prev) => {
               const seen = new Set(prev.map((p) => p.id));
               return [...prev, ...items.filter((p) => !seen.has(p.id))];
             });
             if (items.length) setHighlightedId(items[items.length - 1].id);
 
-            // Append to product timeline with bubble reference
+            // Product timeline for context lookups ("that red dress from earlier")
             if (items.length) {
-              const bubbleId = miraBubbleId.current;
               setProductTimeline((prev) => [
                 ...prev,
-                ...items.map((p) => ({ ...p, messageId: bubbleId, ts: Date.now() })),
+                ...items.map((p) => ({ ...p, messageId: bubId, ts: Date.now() })),
               ]);
             }
             break;

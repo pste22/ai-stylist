@@ -527,7 +527,7 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
           {canShowMore && (
             <div className="show-more-bar">
               <button className="show-more-btn" onClick={onShowMore}>
-                Show 10 more →
+                Show 3 more →
               </button>
             </div>
           )}
@@ -890,7 +890,7 @@ export default function App() {
           {/* Show more products button */}
           {canShowMore && connected && (
             <div style={{ textAlign: "center", padding: ".5rem 0" }}>
-              <button className="show-more-btn" onClick={showMore}>Show 10 more →</button>
+              <button className="show-more-btn" onClick={showMore}>Show 3 more →</button>
             </div>
           )}
         </div>

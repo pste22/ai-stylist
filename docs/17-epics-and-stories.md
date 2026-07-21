@@ -610,25 +610,242 @@ _Last updated: July 2026. India-first MVP strategy, affiliate + subscription rev
 | E3 Onboarding & Style Profile | 5 | ✅ Done | — | ✅ |
 | E4 Recommendations | 9 | ✅ Done | — | ✅ |
 | E5 Session & Cost Controls | 4 | ✅ Done | — | ✅ |
-| E6 Error States & Privacy | 4 | 🔴 P0 | S | ⬜ |
-| E7 VCommission India Feed | 3 | 🟠 P1 | M | ⬜ |
-| E8 Pinterest OAuth | 3 | 🟠 P1 | M | ⬜ |
-| E9 First Look — New Launches | 3 | 🟠 P1 | M | ⬜ |
-| E10 Subscription Paywall | 2 | 🟡 P2 | M | ⬜ |
-| E11 Analytics & Influencer | 3 | 🟡 P2 | M | ⬜ |
-| E12 Mobile PWA | 3 | 🟢 P3 | S | ⬜ |
-| E13 Email CRM | 2 | 🟢 P3 | M | ⬜ |
-| E14 Outfit Engine | 2 | 🟢 P3 | M | ⬜ |
-| E15 White-Label | 1 | 🔵 P4 | L | ⬜ |
-| E16 Brand Sponsorships | 1 | 🔵 P4 | S | ⬜ |
+| E6 Error States & Privacy | 4 | ✅ Done | — | ✅ |
+| E7 Chat-First UI & Mode Switching | 5 | ✅ Done | — | ✅ |
+| E8 Cart & Try On | 3 | 🔴 P0 | S | ⬜ |
+| E9 AI Product Videos | 2 | 🔴 P0 | S | ⬜ |
+| E10 VCommission India Feed | 4 | 🟠 P1 | M | ⬜ |
+| E11 Amazon PA-API + Reviews | 3 | 🟠 P1 | M | ⬜ |
+| E12 Network Quality (Safari fix) | 1 | 🟠 P1 | XS | ⬜ |
+| E13 EventBrief UI Redesign | 2 | 🟡 P2 | S | ⬜ |
+| E14 Subscription Paywall | 2 | 🟡 P2 | M | ⬜ |
+| E15 Analytics & Influencer | 3 | 🟡 P2 | M | ⬜ |
+| E16 Mobile PWA | 3 | 🟢 P3 | S | ⬜ |
+| E17 Email CRM | 2 | 🟢 P3 | M | ⬜ |
+| E18 Outfit Completion Engine | 2 | 🟢 P3 | M | ⬜ |
+| E19 Pinterest OAuth | 3 | 🟢 P3 | M | ⬜ |
+| E20 Rewards / Loyalty | 2 | 🟢 P3 | M | ⬜ |
+| E21 White-Label | 1 | 🔵 P4 | L | ⬜ |
+| E22 Brand Sponsorships | 1 | 🔵 P4 | S | ⬜ |
+| E23 Meta AI Glasses | 1 | 🔵 P4 | XL | ⬜ |
 
-**Total remaining stories: ~31 · Estimated effort (solo dev): ~10 weeks**
+**Total remaining stories: ~44 · Estimated effort (solo dev): ~13 weeks**
 
 ---
 
-## Immediate next actions (this week)
+## E8 · Cart & Try On
 
-1. **E6-2** — Add rate limiting to live_server.py (2 hours, P0 blocker)
-2. **E7** — Sign up for VCommission, get API credentials, write feed importer
-3. **E8** — Pinterest OAuth (2 days, biggest personalisation unlock)
-4. **E6-1** — Friendly error UI in the frontend (half a day)
+> **Why P0**: The shop-in-India mental model — browse 3 → shortlist → fitting room → buy. Currently users can save products but there's no "fitting room" moment.
+
+### Story E8-1 · Cart panel (fitting room)
+**As a** shopper  
+**I want** to see my shortlisted items side-by-side in a dedicated view  
+**So that** I can compare them and decide what to try on
+
+**Acceptance criteria**
+- [ ] Max 3 items in cart; prompt to remove one before adding a 4th
+- [ ] Cart panel shows bigger cards (image, name, price, reason saved)
+- [ ] "Remove" per item, "Clear all" button
+- [ ] Accessible from a persistent cart icon in the header showing item count
+
+**Priority**: 🔴 P0 · **Effort**: S · **Value**: 9/10
+
+---
+
+### Story E8-2 · Try On button (MVP: fullscreen viewer)
+**As a** shopper  
+**I want** to see a product fullscreen before buying  
+**So that** I can inspect it closely without leaving the app
+
+**Acceptance criteria**
+- [ ] "Try On" button on each cart item
+- [ ] Opens fullscreen image viewer with product details overlay
+- [ ] "Buy →" affiliate link visible in viewer
+- [ ] Falls back gracefully if no image available
+
+**Priority**: 🔴 P0 · **Effort**: XS · **Value**: 8/10
+
+---
+
+### Story E8-3 · Try On V2 (AI product video)
+**As a** shopper  
+**I want** to see the product in motion on a model  
+**So that** I can judge fit and drape better than a static image
+
+**Acceptance criteria**
+- [ ] Runway or Kling AI API generates a 5s showcase video per product
+- [ ] Video URL cached in `products.video_url` column (one-time generation)
+- [ ] Video plays in the fullscreen viewer when available
+- [ ] Fallback to static image if no video generated yet
+- [ ] Cost target: under ₹400 for first 50 products
+
+**Priority**: 🔴 P0 (once API key obtained) · **Effort**: S · **Value**: 9/10
+
+---
+
+## E9 · AI Product Videos
+
+### Story E9-1 · Video generation pipeline
+**As a** developer  
+**I want** a script that generates showcase videos for catalog products  
+**So that** the Try On experience has motion content from day one
+
+**Acceptance criteria**
+- [ ] Script reads products without `video_url` from Supabase
+- [ ] Sends `image_url` + prompt to Runway Gen-4 or Kling AI
+- [ ] Stores returned video URL in `products.video_url`
+- [ ] Runs idempotently (skip products that already have a video)
+- [ ] Rate-limited to avoid API quota exhaustion
+
+**Priority**: 🔴 P0 · **Effort**: S · **Value**: 9/10
+
+---
+
+### Story E9-2 · `video_url` column in products schema
+**As a** developer  
+**I want** a `video_url` column on the `products` table  
+**So that** generated videos persist and aren't regenerated on every run
+
+**Acceptance criteria**
+- [ ] `alter table products add column if not exists video_url text;` run in Supabase
+- [ ] `product_source.py` returns `video_url` in product dicts
+- [ ] Frontend `ProductCard` renders video if `video_url` present
+
+**Priority**: 🔴 P0 · **Effort**: XS · **Value**: 8/10
+
+---
+
+## E10 · VCommission India Feed
+
+### Story E10-1 · Publisher signup (user action)
+**As a** founder  
+**I want** a VCommission publisher account  
+**So that** I can access affiliate feeds for Myntra, Ajio, SNITCH, Bewakoof, Cord
+
+**Acceptance criteria**
+- [ ] Signed up at vcommission.com with publisher ID obtained
+- [ ] Approved for: Myntra, Ajio, Amazon India, SNITCH, Bewakoof
+- [ ] API credentials stored in `prototype/.env` as `VCOMMISSION_API_KEY`
+
+**Priority**: 🟠 P1 · **Effort**: XS (user action) · **Value**: 10/10
+
+---
+
+### Story E10-2 · Feed importer script
+**As a** developer  
+**I want** a daily import script that pulls VCommission product feeds  
+**So that** the catalog grows automatically with real Indian affiliate products
+
+**Acceptance criteria**
+- [ ] Fetches product feed (XML/CSV) from VCommission API
+- [ ] Maps to Supabase `products` schema (name, price, image_url, affiliate_url, category, brand)
+- [ ] Deduplicates by product ID before inserting
+- [ ] Filters to emerging/mid-tier brands (SNITCH, Bewakoof, Cord, Urbanic, Indya)
+- [ ] Runs on a cron (daily refresh)
+- [ ] Logs import count and errors
+
+**Priority**: 🟠 P1 · **Effort**: M · **Value**: 9/10
+
+---
+
+### Story E10-3 · Brand context seeding
+**As a** content manager  
+**I want** curated brand context notes in the product catalog  
+**So that** Mira can speak about brand reputation without fetching live reviews
+
+**Acceptance criteria**
+- [ ] `brand_notes` column added to `products` table
+- [ ] 10 emerging brands seeded with notes (e.g. "SNITCH: rated for quality basics under ₹1,500, true to size, strong community reviews")
+- [ ] Notes injected into Mira's grounding prompt alongside product data
+
+**Priority**: 🟠 P1 · **Effort**: XS · **Value**: 8/10
+
+---
+
+### Story E10-4 · Commission disclosure
+**As a** legal requirement  
+**I want** affiliate disclosure language visible to users  
+**So that** we comply with ASA / ASCI India advertising guidelines
+
+**Acceptance criteria**
+- [ ] "Mira earns a small commission on purchases — your price is never affected" visible near product cards
+- [ ] Disclosure in privacy policy (already done in E6)
+- [ ] Affiliate links use `rel="noopener noreferrer nofollow sponsored"`
+
+**Priority**: 🟠 P1 · **Effort**: XS · **Value**: 7/10
+
+---
+
+## E11 · Amazon PA-API + Reviews
+
+### Story E11-1 · PA-API integration
+**As a** developer  
+**I want** Amazon Product Advertising API wired up  
+**So that** Amazon India products have real pricing, images, and availability
+
+**Acceptance criteria**
+- [ ] `AMAZON_ACCESS_KEY`, `AMAZON_SECRET_KEY`, `AMAZON_PARTNER_TAG` in .env
+- [ ] `product_source.py` Amazon source queries PA-API for search + ASIN lookup
+- [ ] Products saved to Supabase with `source: "amazon"`
+- [ ] Affiliate URLs use correct partner tag
+
+**Priority**: 🟠 P1 · **Effort**: M · **Value**: 9/10
+
+---
+
+### Story E11-2 · Reviews in product data
+**As a** shopper  
+**I want** Mira to mention real customer feedback when recommending products  
+**So that** I can make more confident purchase decisions
+
+**Acceptance criteria**
+- [ ] PA-API review data (rating, review count, top review snippet) stored in `products` table
+- [ ] Injected into Mira's per-product context in the grounding prompt
+- [ ] Mira says "4.3 stars from 1,200 reviews — customers love the fit" naturally
+- [ ] Only for Amazon-sourced products (honest fallback: no mention if no data)
+
+**Priority**: 🟠 P1 · **Effort**: S · **Value**: 9/10
+
+---
+
+### Story E11-3 · Mira's own rating layer
+**As a** shopper  
+**I want** to rate products I've bought through Mira  
+**So that** future recommendations improve and other users benefit
+
+**Acceptance criteria**
+- [ ] "Rate this" prompt appears 7 days after a `buy_click` event
+- [ ] 1–5 star rating stored in `user_history` with `action: "rated"`
+- [ ] Aggregate rating shown on `ProductCard` when ≥3 ratings exist
+- [ ] Mira can reference these ratings in conversation
+
+**Priority**: 🟡 P2 · **Effort**: M · **Value**: 8/10
+
+---
+
+## E12 · Network Quality (Safari/iOS fix)
+
+### Story E12-1 · Latency-based network probe
+**As a** mobile user on Safari/iOS  
+**I want** network quality detection to actually work on my device  
+**So that** the auto-switch to silent mode fires correctly (not just on Chrome/Android)
+
+**Acceptance criteria**
+- [ ] `navigator.connection` replaced with WebSocket ping probe
+- [ ] On session start, send `{type:"ping"}` and measure round-trip time
+- [ ] RTT > 800ms → treat as "slow", show warning before voice
+- [ ] RTT > 2000ms → auto-switch to silent
+- [ ] Works on Safari 16+, Chrome, Firefox
+
+**Priority**: 🟠 P1 · **Effort**: XS · **Value**: 8/10
+
+---
+
+## Immediate next actions (this sprint)
+
+1. **Run `migrate_user_preferences.sql`** in Supabase SQL Editor — 10 seconds, unblocks preferences saving _(user action)_
+2. **E8-1** — Cart panel (fitting room UI) — half a day
+3. **E8-2** — Try On fullscreen viewer — 2 hours
+4. **E10-1** — VCommission signup _(user action — need publisher ID before E10-2 can start)_
+5. **E9-2** — `video_url` column in Supabase + E9-1 video generation script _(once Runway/Kling API key obtained)_
+6. **E12-1** — Network latency probe (Safari fix) — 2 hours
