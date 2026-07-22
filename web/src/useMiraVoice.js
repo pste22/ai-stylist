@@ -152,6 +152,14 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     }
   }, []);
 
+  // Send a mid-session location update without restarting the session
+  const updateLocation = useCallback((pinCode) => {
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ type: "update_location", pin_code: pinCode }));
+    }
+  }, []);
+
   // Switch audio on/off mid-session without restarting the WebSocket
   const switchAudio = useCallback(async (enableAudio) => {
     if (enableAudio && !micRef.current) {
@@ -193,6 +201,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             top_size:       userPrefs?.top_size       ?? null,
             bottom_size:    userPrefs?.bottom_size    ?? null,
             budget:         userPrefs?.budget         ?? null,
+            pin_code:       userPrefs?.pin_code       ?? null,
             event_brief:    eventBrief,
           }));
         setConnected(true);
@@ -316,7 +325,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     connected, state, mood, captions, messages,
     products, looks, savedProducts, loved, highlightedId, error, retryCount, miraText,
     canShowMore, setCanShowMore,
-    productTimeline, switchAudio,
+    productTimeline, switchAudio, updateLocation,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
   };
 }

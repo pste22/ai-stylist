@@ -144,7 +144,28 @@ def _personalized_top_picks(
     return picks[:n]
 
 
-def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None) -> str:
+def _resolve_pincode_sync(pin_code: str) -> dict | None:
+    """Resolve an Indian PIN code to city/state using India Post API (blocking)."""
+    import urllib.request
+    try:
+        url = f"https://api.postalpincode.in/pincode/{pin_code}"
+        with urllib.request.urlopen(url, timeout=4) as resp:
+            import json as _json
+            data = _json.loads(resp.read())
+            if data and data[0].get("Status") == "Success":
+                po = (data[0].get("PostOffice") or [{}])[0]
+                return {
+                    "pin_code": pin_code,
+                    "city":     po.get("District", ""),
+                    "state":    po.get("State", ""),
+                    "division": po.get("Division", ""),
+                }
+    except Exception:
+        pass
+    return None
+
+
+def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None, location_info: dict | None = None) -> str:
     """Persona + optional user memory + curated product spotlight as grounding."""
     parts = [SYSTEM_PROMPT]
 
@@ -162,6 +183,13 @@ def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: st
             profile.append(f"Budget: {_BUDGET_LABELS.get(prefs['budget'], prefs['budget'])} per piece")
         if taste:
             profile.append(f"Taste from saves: {taste}")
+        if location_info:
+            profile.append(
+                f"Location: {location_info['city']}, {location_info['state']} (PIN {location_info['pin_code']}) — "
+                f"prioritise products deliverable here; reference local weather and occasions naturally"
+            )
+        elif prefs.get("pin_code"):
+            profile.append(f"PIN code: {prefs['pin_code']} (location not resolved)")
         if profile:
             parts.append(
                 "USER PROFILE (weave this into recommendations naturally — never recite it):\n"
@@ -336,17 +364,13 @@ def _match_products(transcript: str) -> list[dict]:
     return hits
 
 
-def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None):
+def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None, location_info: dict | None = None):
     from google import genai
     from google.genai import types
 
     config = types.LiveConnectConfig(
-        # This model is audio-only (TEXT modality → 1007). We keep AUDIO out but DON'T
-        # play it — instead we read Mira's words off output_transcription and forward the
-        # full turn text to the browser, which tells LiveAvatar to speak it (LITE mode,
-        # session.repeat(text)). LiveAvatar's avatar voice does the TTS + lip-sync.
         response_modalities=["AUDIO"],
-        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief))]),
+        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info))]),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         speech_config=types.SpeechConfig(
@@ -426,6 +450,8 @@ async def handle(ws) -> None:
     top_size: str | None = None
     bottom_size: str | None = None
     budget: str | None = None
+    pin_code: str | None = None
+    location_info: dict | None = None
     event_brief: dict = {}
     memory = ""
     taste: str | None = None   # derived from saved products
@@ -456,7 +482,15 @@ async def handle(ws) -> None:
                 top_size       = data.get("top_size")
                 bottom_size    = data.get("bottom_size")
                 budget         = data.get("budget")
+                pin_code       = data.get("pin_code")
                 event_brief    = data.get("event_brief") or {}
+                if pin_code and len(pin_code) == 6 and pin_code.isdigit():
+                    try:
+                        location_info = await asyncio.to_thread(_resolve_pincode_sync, pin_code)
+                        if location_info:
+                            print(f"  📍 location: {location_info['city']}, {location_info['state']}")
+                    except Exception:
+                        pass
                 if user_id:
                     try:
                         memory, is_returning = await asyncio.to_thread(
@@ -509,6 +543,7 @@ async def handle(ws) -> None:
         "top_size":       top_size,
         "bottom_size":    bottom_size,
         "budget":         budget,
+        "pin_code":       pin_code,
     }
     raw_picks = _personalized_top_picks(prefs, exclude_ids=set(session_saved.keys()), n=3)
     top_picks = []
@@ -522,7 +557,7 @@ async def handle(ws) -> None:
     if top_picks:
         await _send_json(ws, type="products", items=top_picks, show_more=True)
 
-    client, config, types = _build(memory, prefs=prefs, taste=taste, event_brief=event_brief)
+    client, config, types = _build(memory, prefs=prefs, taste=taste, event_brief=event_brief, location_info=location_info)
     session_id = events.new_session_id()
     if event_brief.get("occasion"):
         await asyncio.to_thread(user_store.save_event_brief, user_id, session_id, event_brief)
@@ -535,7 +570,7 @@ async def handle(ws) -> None:
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
         nonlocal chat_title, session_shown_ids, show_saved_mode
-        nonlocal last_activity_time
+        nonlocal last_activity_time, location_info, prefs
         try:
             async for msg in ws:
                 if isinstance(msg, bytes):
@@ -665,6 +700,34 @@ async def handle(ws) -> None:
                                 user_id, pid, prod.get("name", ""), "buy_click",
                             )
                         print(f"  buy-click -> retailer: {prod.get('name', pid)}")
+                    elif data.get("type") == "update_location":
+                        new_pin = (data.get("pin_code") or "").strip()
+                        if new_pin and len(new_pin) == 6 and new_pin.isdigit():
+                            try:
+                                new_loc = await asyncio.to_thread(_resolve_pincode_sync, new_pin)
+                                if new_loc:
+                                    location_info = new_loc
+                                    prefs["pin_code"] = new_pin
+                                    city_label = f"{new_loc['city']}, {new_loc['state']}"
+                                    print(f"  📍 location updated: {city_label} ({new_pin})")
+                                    # Inject silently so Mira knows for the NEXT turn
+                                    sess = current["session"]
+                                    if sess is not None:
+                                        try:
+                                            await sess.send_client_content(
+                                                turns=[types.Content(
+                                                    role="user",
+                                                    parts=[types.Part(
+                                                        text=f"[CONTEXT: User has updated their delivery location to {city_label} (PIN {new_pin}). "
+                                                             f"For any new recommendations, consider products deliverable here and relevant local climate and occasions.]"
+                                                    )],
+                                                )],
+                                                turn_complete=False,
+                                            )
+                                        except Exception:
+                                            pass
+                            except Exception as exc:
+                                print(f"  ! pin resolve failed: {exc}")
                     elif data.get("type") == "show_more":
                         # Silent page-forward: push next 3 unseen products.
                         cat_filter = data.get("category")  # optional category hint

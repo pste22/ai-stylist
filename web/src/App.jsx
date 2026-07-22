@@ -574,6 +574,72 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
   );
 }
 
+// ─── Persistent location chip — always visible, always editable ──────────────
+function PinChip({ pinCode, onSave }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft]     = useState(pinCode || "");
+  const [city, setCity]       = useState(null);
+  const [loading, setLoading] = useState(false);
+  const inputRef = useRef(null);
+
+  const resolvePin = async (pin) => {
+    if (!pin || pin.length !== 6) return;
+    setLoading(true);
+    try {
+      const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+      const d = await r.json();
+      if (d?.[0]?.Status === "Success") {
+        const po = d[0].PostOffice?.[0];
+        setCity(po ? po.District : null);
+      } else {
+        setCity(null);
+      }
+    } catch { setCity(null); }
+    setLoading(false);
+  };
+
+  useEffect(() => { if (pinCode) resolvePin(pinCode); }, [pinCode]);
+
+  const save = async () => {
+    const clean = draft.replace(/\D/g, "");
+    if (clean.length !== 6) return;
+    await resolvePin(clean);
+    onSave(clean);
+    setEditing(false);
+  };
+
+  const open = () => { setDraft(pinCode || ""); setEditing(true); setTimeout(() => inputRef.current?.focus(), 0); };
+
+  if (editing) {
+    return (
+      <div className="pin-chip pin-chip--editing">
+        <span className="pin-chip-icon">📍</span>
+        <input
+          ref={inputRef}
+          className="pin-input"
+          value={draft}
+          maxLength={6}
+          inputMode="numeric"
+          placeholder="6-digit PIN"
+          onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+        />
+        <button className="pin-chip-confirm" onClick={save} disabled={draft.replace(/\D/g,"").length !== 6}>✓</button>
+        <button className="pin-chip-cancel" onClick={() => setEditing(false)}>✕</button>
+      </div>
+    );
+  }
+
+  return (
+    <button className="pin-chip" onClick={open} title="Tap to change delivery location">
+      <span className="pin-chip-icon">📍</span>
+      <span className="pin-chip-label">
+        {loading ? "…" : city ? city : pinCode ? pinCode : "Set location"}
+      </span>
+    </button>
+  );
+}
+
 // ─── Small pulsing Mira dot — expands when talking ───────────────────────────
 function MiraDot({ state, mood, audioActive }) {
   const isTalking = state === "talking";
@@ -708,7 +774,7 @@ export default function App() {
     connected, state, mood, captions, messages,
     products, looks, savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
-    productTimeline, switchAudio,
+    productTimeline, switchAudio, updateLocation,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
   } = useMiraVoice({ userId, userName, userPrefs: prefs, eventBrief, textMode });
 
@@ -834,6 +900,13 @@ export default function App() {
         <header className="chat-header">
           <MiraDot state={state} mood={mood} audioActive={!textMode && connected} />
           <span className="chat-title">Mira</span>
+          <PinChip
+            pinCode={prefs?.pin_code || null}
+            onSave={(pin) => {
+              updatePrefs({ pin_code: pin });
+              updateLocation(pin);
+            }}
+          />
           <div className="chat-header-right">
             <ModeToggle textMode={textMode} connected={connected} quality={quality}
               onVoice={switchToVoice} onText={switchToSilent} />

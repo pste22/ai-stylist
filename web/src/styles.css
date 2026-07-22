@@ -1849,3 +1849,58 @@ button.primary.stop { background: var(--accent); }
   flex: 1; font-size: .88rem; color: var(--ink-3);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+
+/* ── Pin code chip ──────────────────────────────────────────────────────────── */
+.pin-chip {
+  display: flex; align-items: center; gap: .3rem;
+  background: var(--surface-2); border: 1px solid var(--border);
+  border-radius: var(--r-pill); padding: .28rem .65rem;
+  font-size: .78rem; color: var(--ink-2); cursor: pointer;
+  white-space: nowrap; transition: background .15s, border-color .15s;
+  flex-shrink: 0;
+}
+.pin-chip:hover { background: var(--surface-3); border-color: var(--border-dark); }
+.pin-chip--editing {
+  display: flex; align-items: center; gap: .3rem;
+  background: var(--surface); border: 1.5px solid var(--accent);
+  border-radius: var(--r-pill); padding: .2rem .5rem;
+  flex-shrink: 0;
+}
+.pin-chip-icon { font-size: .82rem; }
+.pin-chip-label { font-size: .78rem; color: var(--ink-2); max-width: 90px; overflow: hidden; text-overflow: ellipsis; }
+.pin-input {
+  border: none; outline: none; background: transparent;
+  font-size: .8rem; color: var(--ink); width: 72px;
+  font-family: inherit; letter-spacing: .08em;
+}
+.pin-chip-confirm {
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--r-pill); padding: .18rem .45rem;
+  font-size: .75rem; font-weight: 700; cursor: pointer;
+}
+.pin-chip-confirm:disabled { opacity: .4; cursor: default; }
+.pin-chip-cancel {
+  background: none; border: none; color: var(--ink-3);
+  font-size: .8rem; cursor: pointer; padding: .1rem .25rem;
+}
+.pin-chip-cancel:hover { color: var(--ink); }
+
+/* hide pin label on very small screens, show only icon */
+@media (max-width: 380px) {
+  .pin-chip-label { display: none; }
+}
+
+/* ── Onboarding pin code step ───────────────────────────────────────────────── */
+.ob-pin-wrap { display: flex; flex-direction: column; gap: .5rem; align-items: center; width: 100%; }
+.ob-pin-input {
+  width: 100%; max-width: 240px;
+  border: 1.5px solid var(--border-dark); border-radius: var(--r-sm);
+  padding: .7rem 1rem; font-size: 1.25rem; font-weight: 600;
+  letter-spacing: .2em; text-align: center; color: var(--ink);
+  background: var(--surface); font-family: inherit; outline: none;
+  transition: border-color .15s;
+}
+.ob-pin-input:focus { border-color: var(--accent); }
+.ob-pin-status  { font-size: .85rem; color: var(--ink-3); margin: 0; }
+.ob-pin-city    { font-size: .9rem; color: #16a34a; font-weight: 600; margin: 0; }
+.ob-pin-invalid { font-size: .82rem; color: var(--accent); margin: 0; }
