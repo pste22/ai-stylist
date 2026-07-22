@@ -1967,3 +1967,19 @@ button.primary.stop { background: var(--accent); }
 .pin-city-box.resolved { border-color: #16a34a; background: #f0fdf4; color: #15803d; font-weight: 600; }
 .pin-city-box.error    { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
 .pin-city-placeholder  { color: var(--ink-3); font-size: .78rem; }
+
+/* ── Mode-switch event divider ───────────────────────────────────────────────── */
+.event-divider {
+  display: flex; align-items: center; gap: .6rem;
+  padding: .1rem .5rem; margin: .25rem 0;
+}
+.event-divider-line {
+  flex: 1; height: 1px; background: var(--border);
+}
+.event-divider-text {
+  font-size: .72rem; color: var(--ink-3);
+  white-space: nowrap; letter-spacing: .04em;
+  padding: .15rem .5rem;
+  background: var(--surface-2); border-radius: var(--r-pill);
+  border: 1px solid var(--border);
+}

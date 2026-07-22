@@ -759,6 +759,17 @@ function MessageBubble({ msg, loved, onLove, onBuy, highlightedId }) {
   );
 }
 
+// ─── Mode-switch / system event divider ──────────────────────────────────────
+function EventDivider({ text }) {
+  return (
+    <div className="event-divider">
+      <span className="event-divider-line" />
+      <span className="event-divider-text">{text}</span>
+      <span className="event-divider-line" />
+    </div>
+  );
+}
+
 // ─── Typing/thinking indicator ────────────────────────────────────────────────
 function ThinkingBubble() {
   return (
@@ -829,7 +840,7 @@ export default function App() {
     connected, state, mood, captions, messages,
     products, looks, savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
-    productTimeline, switchAudio, updateLocation,
+    productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
   } = useMiraVoice({ userId, userName, userPrefs: prefs, eventBrief, textMode });
 
@@ -852,18 +863,21 @@ export default function App() {
         onAction: async () => {
           setTextMode(false);
           if (connected) await switchAudio(true);
+          addSystemEvent("🎙️ Switched to voice");
           setNetworkToast(null);
         },
       });
     } else {
       setTextMode(false);
       if (connected) await switchAudio(true);
+      if (messages.length > 0) addSystemEvent("🎙️ Switched to voice");
     }
   };
 
   const switchToSilent = async () => {
     setTextMode(true);
     if (connected) await switchAudio(false);
+    if (messages.length > 0) addSystemEvent("⌨️ Switched to text");
   };
 
   // Network degradation — auto-switch to text
@@ -1008,9 +1022,11 @@ export default function App() {
           {messages.length === 0 && !connected && (
             <ChatWelcome onEventBrief={() => setShowEventBrief(true)} textMode={textMode} />
           )}
-          {messages.map((msg) => (
-            <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} />
-          ))}
+          {messages.map((msg) =>
+            msg.role === "event"
+              ? <EventDivider key={msg.id} text={msg.text} />
+              : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} />
+          )}
           {state === "thinking" && <ThinkingBubble />}
 
           {/* Show more products button */}

@@ -177,9 +177,20 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     }
   }, []);
 
+  const addSystemEvent = useCallback((text) => {
+    _addMsg("event", text);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const clearHistory = useCallback(() => {
+    setMessages([]);
+    setLooks([]);
+    setProductTimeline([]);
+    miraBubbleId.current = null;
+  }, []);
+
   const start = useCallback(async () => {
     setError(null);
-    setMessages([]);
     setLooks([]);
     setProductTimeline([]);
     miraBubbleId.current = null;
@@ -325,7 +336,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     connected, state, mood, captions, messages,
     products, looks, savedProducts, loved, highlightedId, error, retryCount, miraText,
     canShowMore, setCanShowMore,
-    productTimeline, switchAudio, updateLocation,
+    productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
   };
 }
