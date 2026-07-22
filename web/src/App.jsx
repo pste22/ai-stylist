@@ -610,22 +610,55 @@ function PinChip({ pinCode, onSave }) {
 
   const open = () => { setDraft(pinCode || ""); setEditing(true); setTimeout(() => inputRef.current?.focus(), 0); };
 
+  const [draftCity, setDraftCity] = useState(null);
+  const [draftLoading, setDraftLoading] = useState(false);
+
+  const resolveDraft = async (pin) => {
+    if (pin.length !== 6) { setDraftCity(null); return; }
+    setDraftLoading(true);
+    try {
+      const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+      const d = await r.json();
+      if (d?.[0]?.Status === "Success") {
+        const po = d[0].PostOffice?.[0];
+        setDraftCity(po ? po.District : null);
+      } else { setDraftCity(null); }
+    } catch { setDraftCity(null); }
+    setDraftLoading(false);
+  };
+
   if (editing) {
     return (
-      <div className="pin-chip pin-chip--editing">
-        <span className="pin-chip-icon">📍</span>
-        <input
-          ref={inputRef}
-          className="pin-input"
-          value={draft}
-          maxLength={6}
-          inputMode="numeric"
-          placeholder="6-digit PIN"
-          onChange={(e) => setDraft(e.target.value.replace(/\D/g, ""))}
-          onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
-        />
-        <button className="pin-chip-confirm" onClick={save} disabled={draft.replace(/\D/g,"").length !== 6}>✓</button>
-        <button className="pin-chip-cancel" onClick={() => setEditing(false)}>✕</button>
+      <div className="pin-edit-popover">
+        <div className="pin-edit-row">
+          <span className="pin-chip-icon">📍</span>
+          <input
+            ref={inputRef}
+            className="pin-input"
+            value={draft}
+            maxLength={6}
+            inputMode="numeric"
+            placeholder="6-digit PIN"
+            onChange={(e) => {
+              const v = e.target.value.replace(/\D/g, "");
+              setDraft(v);
+              resolveDraft(v);
+            }}
+            onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+          />
+          <button className="pin-chip-confirm" onClick={save} disabled={draft.replace(/\D/g,"").length !== 6}>✓</button>
+          <button className="pin-chip-cancel" onClick={() => setEditing(false)}>✕</button>
+        </div>
+        <div className={`pin-city-box ${draftLoading ? "loading" : ""} ${draftCity ? "resolved" : ""} ${draft.length === 6 && !draftCity && !draftLoading ? "error" : ""}`}>
+          {draftLoading
+            ? <><span className="ob-city-spinner" />Looking up…</>
+            : draftCity
+              ? <>{draftCity}</>
+              : draft.length === 6
+                ? <>PIN not found</>
+                : <span className="pin-city-placeholder">City will appear here</span>
+          }
+        </div>
       </div>
     );
   }

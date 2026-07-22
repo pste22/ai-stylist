@@ -197,11 +197,16 @@ export default function OnboardingFlow({ userName, onComplete }) {
               value={pinCode}
               onChange={(e) => handlePinChange(e.target.value)}
             />
-            {pinLoading && <p className="ob-pin-status">Looking up…</p>}
-            {pinCity && !pinLoading && <p className="ob-pin-city">📍 {pinCity}</p>}
-            {pinCode.length === 6 && !pinCity && !pinLoading && (
-              <p className="ob-pin-invalid">PIN not found — double-check it</p>
-            )}
+            <div className={`ob-city-box ${pinLoading ? "loading" : ""} ${pinCity ? "resolved" : ""} ${pinCode.length === 6 && !pinCity && !pinLoading ? "error" : ""}`}>
+              {pinLoading
+                ? <><span className="ob-city-spinner" />Looking up location…</>
+                : pinCity
+                  ? <><span className="ob-city-pin-icon">📍</span>{pinCity}</>
+                  : pinCode.length === 6
+                    ? <><span className="ob-city-pin-icon">❌</span>PIN not found — check and re-enter</>
+                    : <span className="ob-city-placeholder">City / town will appear here</span>
+              }
+            </div>
           </div>
           <button className="ob-btn" disabled={saving} onClick={finish}>
             {saving ? "Setting up…" : "Meet Mira ✦"}

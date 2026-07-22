@@ -1919,3 +1919,51 @@ button.primary.stop { background: var(--accent); }
 .start-row {
   display: flex; align-items: center; gap: .6rem; width: 100%; justify-content: center;
 }
+
+/* ── Onboarding city box ─────────────────────────────────────────────────────── */
+.ob-city-box {
+  display: flex; align-items: center; gap: .5rem;
+  width: 100%; max-width: 240px;
+  border: 1.5px solid var(--border); border-radius: var(--r-sm);
+  padding: .65rem 1rem;
+  font-size: .92rem; color: var(--ink-3);
+  background: var(--surface-2);
+  min-height: 44px;
+  transition: border-color .2s, background .2s, color .2s;
+}
+.ob-city-box.resolved {
+  border-color: #16a34a; background: #f0fdf4; color: #15803d; font-weight: 600;
+}
+.ob-city-box.error {
+  border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark);
+}
+.ob-city-box.loading { color: var(--ink-3); }
+.ob-city-placeholder { color: var(--ink-3); font-size: .85rem; }
+.ob-city-pin-icon { font-size: .9rem; flex-shrink: 0; }
+.ob-city-spinner {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--border-dark); border-top-color: var(--accent);
+  animation: spin .7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Pin edit popover (header chip expanded edit state) ─────────────────────── */
+.pin-edit-popover {
+  display: flex; flex-direction: column; gap: .4rem;
+  background: var(--surface); border: 1.5px solid var(--accent);
+  border-radius: var(--r-card); padding: .5rem .6rem;
+  box-shadow: var(--shadow-md); flex-shrink: 0; min-width: 200px;
+}
+.pin-edit-row {
+  display: flex; align-items: center; gap: .3rem;
+}
+.pin-city-box {
+  display: flex; align-items: center; gap: .4rem;
+  border: 1.5px solid var(--border); border-radius: var(--r-sm);
+  padding: .4rem .7rem; font-size: .8rem; color: var(--ink-3);
+  background: var(--surface-2); min-height: 34px;
+  transition: border-color .2s, background .2s, color .2s;
+}
+.pin-city-box.resolved { border-color: #16a34a; background: #f0fdf4; color: #15803d; font-weight: 600; }
+.pin-city-box.error    { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-dark); }
+.pin-city-placeholder  { color: var(--ink-3); font-size: .78rem; }
