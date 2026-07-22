@@ -161,6 +161,22 @@ function renderInline(str) {
   );
 }
 
+// Returns true for lines that look like a bare product title Mira leaked into text.
+// Heuristic: long (>30 chars), no sentence-ending verb cues, title-case or all-caps words.
+// We drop these so product cards are the only representation of the item.
+function _looksLikeProductTitle(line) {
+  const t = line.trim();
+  if (t.length < 20 || t.length > 200) return false;
+  // Must not contain a verb-y word that makes it a real sentence
+  if (/\b(is|are|was|were|will|would|can|could|should|love|think|feel|looks?|sounds?|perfect|great|amazing|fits?|suits?)\b/i.test(t)) return false;
+  // Looks like a product name: starts with a year, brand word, or Women's/Men's/etc.
+  if (/^(20\d\d\b|women'?s?\b|men'?s?\b|girls?\b|boys?\b)/i.test(t)) return true;
+  // Very long noun phrase (no punctuation, many title-case words)
+  const words = t.split(/\s+/);
+  const titleCaseCount = words.filter(w => /^[A-Z]/.test(w)).length;
+  return words.length >= 4 && titleCaseCount >= words.length * 0.6 && !/[.!?]$/.test(t);
+}
+
 // ─── Integrated bubble: text + product images inline ─────────────────────────
 // Renders Mira's text with markdown-lite formatting — NO product cards.
 // Products always appear in the ProductGrid below the bubble.
@@ -181,16 +197,20 @@ function MiraBubbleContent({ text }) {
   };
 
   lines.forEach((line) => {
-    const bullet = line.match(/^[•\-\*]\s+(.*)/);
+    const bullet = line.match(/^[•\-\*\d+\.]\s+(.*)/);
     if (bullet) {
-      // Strip product-bullet lines that are just name — reason (products shown in grid)
+      // Drop bullet lines that are just product names — cards show below
       const content = bullet[1];
+      if (_looksLikeProductTitle(content)) return;
       const nameOnly = content.split("—")[0].trim();
       pendingBullets.push(renderInline(nameOnly || content));
     } else {
       flushBullets();
       const trimmed = line.trim();
-      if (trimmed) blocks.push(<p key={key++}>{renderInline(trimmed)}</p>);
+      // Drop plain lines that are bare product titles leaked into the text
+      if (trimmed && !_looksLikeProductTitle(trimmed)) {
+        blocks.push(<p key={key++}>{renderInline(trimmed)}</p>);
+      }
     }
   });
   flushBullets();

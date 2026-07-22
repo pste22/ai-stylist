@@ -222,11 +222,16 @@ def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: st
     parts.append(
         f"PRODUCTS you may recommend (curated spotlight — {len(_CATALOG)} total in catalog):\n"
         f"{_SOURCE.render(_SPOTLIGHT)}\n\n"
-        f"RULES: Always say the brand name when recommending (e.g. 'Levi's 501', 'Nike Air Max'). "
-        f"3 curated picks are already on screen when the user opens the app — greet them warmly and invite them to ask anything. "
-        f"Only recommend up to 3 products per turn — quality over quantity. "
-        f"If the user asks to see more than 3 at once, apologise briefly: 'I can only show 3 at a time right now — let me make sure these three are exactly right for you.' "
-        f"When the shopper wants to browse further, say 'tap Show more to see the next 3'."
+        f"RULES:\n"
+        f"- The UI automatically shows product cards when you mention items — NEVER list product names in your reply. "
+        f"No bullet lists, no numbered lists, no repeating the product title. "
+        f"Instead speak about them naturally: 'I love this flowy wrap dress for a wedding — the floral print is perfect for the occasion' "
+        f"rather than naming or listing it.\n"
+        f"- Mention one distinctive detail per item (color, silhouette, why it fits the occasion) so the shopper can picture it.\n"
+        f"- Only recommend up to 3 products per turn — quality over quantity. "
+        f"If the user asks to see more than 3 at once, apologise briefly: 'I can only show 3 at a time — let me make sure these are exactly right for you.'\n"
+        f"- 3 curated picks are already on screen when the user opens the app — greet them warmly and invite them to ask anything.\n"
+        f"- When the shopper wants to browse further, say 'tap Show more to see the next 3'."
     )
     return "\n\n".join(parts)
 
