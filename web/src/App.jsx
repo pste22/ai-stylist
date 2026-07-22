@@ -719,11 +719,12 @@ function ThinkingBubble() {
 }
 
 // ─── Text input row (silent mode) ────────────────────────────────────────────
-function TextInputRow({ onSend, onStop }) {
+function TextInputRow({ onSend, onStop, onSwitchVoice }) {
   const [draft, setDraft] = useState("");
   const send = () => { if (draft.trim()) { onSend(draft.trim()); setDraft(""); } };
   return (
     <div className="text-input-row">
+      <button className="mode-switch-btn" onClick={onSwitchVoice} title="Switch to voice">🎙️</button>
       <input className="chat-input" value={draft} onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
         placeholder="Message Mira…" autoFocus />
@@ -734,11 +735,12 @@ function TextInputRow({ onSend, onStop }) {
 }
 
 // ─── Voice active bar — shows waveform level + stop ──────────────────────────
-function VoiceActiveBar({ level, onStop, captions }) {
+function VoiceActiveBar({ level, onStop, captions, onSwitchText }) {
   return (
     <div className="voice-active-bar">
       <span className="voice-listening-dot" />
       <span className="voice-caption">{captions.you || "Listening…"}</span>
+      <button className="mode-switch-btn" onClick={onSwitchText} title="Switch to text">⌨️</button>
       <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
     </div>
   );
@@ -908,8 +910,6 @@ export default function App() {
             }}
           />
           <div className="chat-header-right">
-            <ModeToggle textMode={textMode} connected={connected} quality={quality}
-              onVoice={switchToVoice} onText={switchToSilent} />
             {savedProducts.length > 0 && (
               <button
                 className="mtc-btn"
@@ -970,13 +970,17 @@ export default function App() {
 
         <div className="chat-input-bar">
           {!connected ? (
-            <button className="chat-start-btn" onClick={start}>
-              {textMode ? "Start chatting →" : "Start talking →"}
-            </button>
+            <div className="start-row">
+              <ModeToggle textMode={textMode} connected={connected} quality={quality}
+                onVoice={switchToVoice} onText={switchToSilent} />
+              <button className="chat-start-btn" onClick={start}>
+                {textMode ? "Start chatting →" : "Start talking →"}
+              </button>
+            </div>
           ) : textMode ? (
-            <TextInputRow onSend={sendText} onStop={stop} />
+            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} />
           ) : (
-            <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} />
+            <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
           )}
           {error && <ConnectionError retryCount={retryCount} onRetry={retry} />}
         </div>

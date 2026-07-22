@@ -1904,3 +1904,18 @@ button.primary.stop { background: var(--accent); }
 .ob-pin-status  { font-size: .85rem; color: var(--ink-3); margin: 0; }
 .ob-pin-city    { font-size: .9rem; color: #16a34a; font-weight: 600; margin: 0; }
 .ob-pin-invalid { font-size: .82rem; color: var(--accent); margin: 0; }
+
+/* ── Mode switch button (inline in input bar) ───────────────────────────────── */
+.mode-switch-btn {
+  background: var(--surface-2); border: 1.5px solid var(--border);
+  border-radius: var(--r-pill); padding: .45rem .6rem;
+  font-size: 1rem; cursor: pointer; flex-shrink: 0;
+  transition: background .15s, border-color .15s;
+  line-height: 1;
+}
+.mode-switch-btn:hover { background: var(--surface-3); border-color: var(--border-dark); }
+
+/* ── Start row (mode toggle + start button side by side) ────────────────────── */
+.start-row {
+  display: flex; align-items: center; gap: .6rem; width: 100%; justify-content: center;
+}
