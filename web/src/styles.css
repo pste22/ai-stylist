@@ -1983,3 +1983,45 @@ button.primary.stop { background: var(--accent); }
   background: var(--surface-2); border-radius: var(--r-pill);
   border: 1px solid var(--border);
 }
+
+/* ── Location bar (full-width strip below header) ───────────────────────────── */
+.location-bar {
+  display: flex; align-items: center; gap: .5rem;
+  width: 100%; padding: .45rem 1rem;
+  background: var(--gold-soft); border-bottom: 1px solid #e8d9b0;
+  font-size: .82rem; color: var(--ink-2); cursor: pointer;
+  text-align: left; border: none; border-bottom: 1px solid #e8d9b0;
+  flex-shrink: 0; transition: background .15s;
+}
+.location-bar:hover { background: #f9efce; }
+.location-bar--editing {
+  background: var(--surface); border-bottom: 1px solid var(--accent);
+  cursor: default; gap: .4rem;
+}
+.location-bar-icon { font-size: .9rem; flex-shrink: 0; }
+.location-bar-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.location-bar-text strong { color: var(--ink); font-weight: 600; }
+.location-bar-pin { color: var(--ink-3); font-size: .75rem; }
+.location-bar-prompt { color: var(--ink-3); font-style: italic; }
+.location-bar-edit {
+  font-size: .72rem; color: var(--gold); font-weight: 600;
+  text-transform: uppercase; letter-spacing: .06em; flex-shrink: 0;
+}
+.location-bar-input {
+  flex: 1; border: none; outline: none; background: transparent;
+  font-size: .85rem; color: var(--ink); font-family: inherit;
+  letter-spacing: .1em; min-width: 0;
+}
+.location-bar-resolving { font-size: .78rem; color: var(--ink-3); flex-shrink: 0; }
+.location-bar-city-preview { font-size: .82rem; color: #16a34a; font-weight: 600; flex-shrink: 0; }
+.location-bar-confirm {
+  background: var(--accent); color: #fff; border: none;
+  border-radius: var(--r-pill); padding: .25rem .7rem;
+  font-size: .78rem; font-weight: 700; cursor: pointer; flex-shrink: 0;
+}
+.location-bar-confirm:disabled { opacity: .4; cursor: default; }
+.location-bar-cancel {
+  background: none; border: none; color: var(--ink-3);
+  font-size: .85rem; cursor: pointer; padding: .1rem .25rem; flex-shrink: 0;
+}
+.location-bar-cancel:hover { color: var(--ink); }

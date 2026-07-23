@@ -647,46 +647,44 @@ function PinChip({ pinCode, onSave }) {
 
   if (editing) {
     return (
-      <div className="pin-edit-popover">
-        <div className="pin-edit-row">
-          <span className="pin-chip-icon">📍</span>
-          <input
-            ref={inputRef}
-            className="pin-input"
-            value={draft}
-            maxLength={6}
-            inputMode="numeric"
-            placeholder="6-digit PIN"
-            onChange={(e) => {
-              const v = e.target.value.replace(/\D/g, "");
-              setDraft(v);
-              resolveDraft(v);
-            }}
-            onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
-          />
-          <button className="pin-chip-confirm" onClick={save} disabled={draft.replace(/\D/g, "").length !== 6}>✓</button>
-          <button className="pin-chip-cancel" onClick={() => setEditing(false)}>✕</button>
-        </div>
-        <div className={`pin-city-box${draftLoading ? " loading" : ""}${draftCity ? " resolved" : ""}${draft.length === 6 && !draftCity && !draftLoading ? " error" : ""}`}>
-          {draftLoading
-            ? <><span className="ob-city-spinner" />Looking up…</>
-            : draftCity
-              ? draftCity
-              : draft.length === 6
-                ? "PIN not found"
-                : <span className="pin-city-placeholder">City will appear here</span>
-          }
-        </div>
+      <div className="location-bar location-bar--editing">
+        <span className="location-bar-icon">📍</span>
+        <input
+          ref={inputRef}
+          className="location-bar-input"
+          value={draft}
+          maxLength={6}
+          inputMode="numeric"
+          placeholder="Enter 6-digit PIN code"
+          onChange={(e) => {
+            const v = e.target.value.replace(/\D/g, "");
+            setDraft(v);
+            resolveDraft(v);
+          }}
+          onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
+        />
+        {draftLoading && <span className="location-bar-resolving">Looking up…</span>}
+        {draftCity && !draftLoading && <span className="location-bar-city-preview">{draftCity}</span>}
+        <button className="location-bar-confirm" onClick={save} disabled={draft.replace(/\D/g, "").length !== 6}>Save</button>
+        <button className="location-bar-cancel" onClick={() => setEditing(false)}>✕</button>
       </div>
     );
   }
 
   return (
-    <button className="pin-chip" onClick={open} title="Tap to change delivery location">
-      <span className="pin-chip-icon">📍</span>
-      <span className="pin-chip-label">
-        {cityLoading ? "…" : city || pinCode || "Set location"}
+    <button className="location-bar" onClick={open}>
+      <span className="location-bar-icon">📍</span>
+      <span className="location-bar-text">
+        {cityLoading
+          ? "Locating…"
+          : city
+            ? <><strong>{city}</strong><span className="location-bar-pin"> · {pinCode}</span></>
+            : pinCode
+              ? pinCode
+              : <span className="location-bar-prompt">Tap to set your location for better recommendations</span>
+        }
       </span>
+      <span className="location-bar-edit">Edit</span>
     </button>
   );
 }
@@ -968,13 +966,6 @@ export default function App() {
           <MiraDot state={state} mood={mood} audioActive={!textMode && connected} />
           <span className="chat-title">Mira</span>
           <div className="chat-header-right">
-          <PinChip
-            pinCode={prefs?.pin_code || null}
-            onSave={(pin) => {
-              updatePrefs({ pin_code: pin });
-              updateLocation(pin);
-            }}
-          />
             {savedProducts.length > 0 && (
               <button
                 className="mtc-btn"
@@ -998,6 +989,15 @@ export default function App() {
             )}
           </div>
         </header>
+
+        {/* Location bar — always visible below header */}
+        <PinChip
+          pinCode={prefs?.pin_code || null}
+          onSave={(pin) => {
+            updatePrefs({ pin_code: pin });
+            updateLocation(pin);
+          }}
+        />
 
         {/* Saved products shelf — collapsible */}
         {showSaved && savedProducts.length > 0 && (
