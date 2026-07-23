@@ -1655,12 +1655,16 @@ button.primary.stop { background: var(--accent); }
 /* ── Chat header ─────────────────────────────────────────────────────────────── */
 .chat-header {
   display: flex; align-items: center; gap: .6rem;
-  padding: .6rem 1rem;
+  padding: .5rem .75rem .5rem 1rem;
   background: var(--surface); border-bottom: 1px solid var(--surface-2);
   flex-shrink: 0; position: sticky; top: 0; z-index: 10;
 }
-.chat-title { font-weight: 700; font-size: 1rem; flex: 1; }
-.chat-header-right { display: flex; align-items: center; gap: .5rem; }
+.chat-title { font-weight: 700; font-size: 1rem; flex: 1; min-width: 0; }
+/* right side never shrinks — profile always visible at top-right */
+.chat-header-right {
+  display: flex; align-items: center; gap: .4rem;
+  flex-shrink: 0; margin-left: auto;
+}
 
 /* ── Mira dot ────────────────────────────────────────────────────────────────── */
 .mira-dot {
