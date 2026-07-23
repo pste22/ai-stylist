@@ -287,28 +287,34 @@ function LookDeck({ looks, loved, onLove, onBuy, onSaveLook }) {
   return (
     <section className="look-deck" aria-label="Mira's complete look drafts">
       <div className="look-deck-heading">
-        <p className="look-deck-eyebrow">Mira Event Edit</p>
+        <p className="look-deck-eyebrow">✦ Mira Event Edit</p>
         <h2>Three ways to make it yours</h2>
       </div>
       <div className="look-grid">
-        {looks.map((look) => (
-          <article className="look-card" key={look.id}>
-            <div className="look-card-head">
-              <h3>{look.name}</h3>
-              <strong>${Number(look.total_price || 0).toFixed(2)}</strong>
-            </div>
-            <p>{look.rationale}</p>
-            <div className="look-items">
-              {look.items.map((product) => (
-                <ProductCard key={product.id} product={product} compact
-                  loved={loved.has(product.id)} onLove={onLove} onBuy={onBuy} />
-              ))}
-            </div>
-            <button className="look-save" onClick={() => onSaveLook(look.items)}>
-              ♡ Save this look
-            </button>
-          </article>
-        ))}
+        {looks.map((look) => {
+          const allSaved = look.items.every((p) => loved.has(p.id));
+          return (
+            <article className="look-card" key={look.id}>
+              <div className="look-card-head">
+                <h3>{look.name}</h3>
+                <strong className="look-total">${Number(look.total_price || 0).toFixed(2)}</strong>
+              </div>
+              <p className="look-rationale">{look.rationale}</p>
+              <div className="look-items">
+                {look.items.map((product) => (
+                  <ProductCard key={product.id} product={product} compact
+                    loved={loved.has(product.id)} onLove={onLove} onBuy={onBuy} />
+                ))}
+              </div>
+              <button
+                className={`look-save${allSaved ? " look-save--saved" : ""}`}
+                onClick={() => !allSaved && onSaveLook(look.items)}
+              >
+                {allSaved ? "♥ Saved to your wishlist" : "♡ Save this look"}
+              </button>
+            </article>
+          );
+        })}
       </div>
     </section>
   );

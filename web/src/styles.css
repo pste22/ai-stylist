@@ -879,8 +879,15 @@ button.primary.stop { background: var(--accent); }
 .look-save {
   width: 100%; margin-top: .75rem; background: transparent; border: 1px solid var(--border);
   border-radius: var(--r-sm); padding: .5rem; color: var(--ink); cursor: pointer; font-weight: 700;
+  transition: border-color .15s, color .15s, background .15s;
 }
 .look-save:hover { border-color: var(--accent); color: var(--accent); }
+.look-save--saved {
+  background: var(--accent); border-color: var(--accent); color: #fff; cursor: default;
+}
+.look-save--saved:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+.look-rationale { color: var(--ink-2); font-size: .78rem; line-height: 1.5; margin: .35rem 0 .6rem; }
+.look-total { color: var(--accent); white-space: nowrap; font-size: .85rem; }
 @media (max-width: 800px) {
   .look-grid { grid-template-columns: 1fr; }
   .event-brief-card { padding: 1.5rem; }
