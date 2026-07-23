@@ -1,17 +1,19 @@
 #!/bin/bash
 # Start the Mira dev environment.
 # Usage: ./dev.sh
-# Runs both servers in background and tails their logs.
 
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+VENV="$ROOT/.venv/bin/python"
 LOG_DIR="/tmp/mira-dev"
 mkdir -p "$LOG_DIR"
 
-# Kill any previous instances
-pkill -f "python live_server.py" 2>/dev/null || true
+# Kill previous instances — watchmedo parent AND python child AND anything on port 8765
+pkill -f "watchmedo" 2>/dev/null || true
+pkill -f "live_server.py" 2>/dev/null || true
 pkill -f "vite" 2>/dev/null || true
+fuser -k 8765/tcp 2>/dev/null || true
 sleep 1
 
 echo "→ Starting Python voice bridge (auto-restarts on .py changes)..."
@@ -20,7 +22,7 @@ nohup watchmedo auto-restart \
   --patterns="*.py" \
   --recursive \
   --debounce-interval=1 \
-  -- python live_server.py > "$LOG_DIR/live_server.log" 2>&1 &
+  -- "$VENV" live_server.py > "$LOG_DIR/live_server.log" 2>&1 &
 echo "  PID $! — logs: $LOG_DIR/live_server.log"
 
 echo "→ Starting Vite dev server..."
