@@ -404,7 +404,10 @@ def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None
 
 
 async def _send_json(ws, **payload) -> None:
-    await ws.send(json.dumps(payload))
+    try:
+        await ws.send(json.dumps(payload))
+    except Exception:
+        pass  # connection already closed — silently drop
 
 
 def _log_session_cost(

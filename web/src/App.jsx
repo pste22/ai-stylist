@@ -831,6 +831,11 @@ export default function App() {
   const [startRequested, setStartRequested] = useState(false);
   const [showPrivacy, setShowPrivacy]     = useState(false);
   const [showDeleteModal, setShowDelete]  = useState(false);
+  const [guestPinCode, setGuestPinCode]   = useState(null);
+  const effectivePrefs = useMemo(
+    () => user ? prefs : { ...(prefs || {}), pin_code: guestPinCode },
+    [user, prefs, guestPinCode]
+  );
 
   const {
     connected, state, mood, captions, messages,
@@ -838,7 +843,7 @@ export default function App() {
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
-  } = useMiraVoice({ userId, userName, userPrefs: prefs, eventBrief, textMode });
+  } = useMiraVoice({ userId, userName, userPrefs: effectivePrefs, eventBrief, textMode });
 
   // Auto-scroll thread on new messages
   useEffect(() => {
@@ -992,9 +997,10 @@ export default function App() {
 
         {/* Location bar — always visible below header */}
         <PinChip
-          pinCode={prefs?.pin_code || null}
+          pinCode={effectivePrefs?.pin_code || null}
           onSave={(pin) => {
-            updatePrefs({ pin_code: pin });
+            if (user) updatePrefs({ pin_code: pin });
+            else setGuestPinCode(pin);
             updateLocation(pin);
           }}
         />

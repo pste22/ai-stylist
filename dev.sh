@@ -5,9 +5,25 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
-VENV="$ROOT/.venv/bin/python"
+VENV_DIR="$ROOT/prototype/.venv"
+VENV="$VENV_DIR/bin/python"
 LOG_DIR="/tmp/mira-dev"
 mkdir -p "$LOG_DIR"
+
+rm -rf "$ROOT/web/node_modules/.vite" "$ROOT/web/.vite"
+
+if [ ! -x "$VENV" ]; then
+  echo "→ Creating Python virtualenv..."
+  python3 -m venv "$VENV_DIR"
+fi
+
+echo "→ Installing Python dependencies..."
+"$VENV" -m pip install -r "$ROOT/prototype/requirements.txt" >/tmp/mira-dev/pip-install.log 2>&1
+
+if [ ! -d "$ROOT/web/node_modules" ]; then
+  echo "→ Installing web dependencies..."
+  (cd "$ROOT/web" && npm install) >/tmp/mira-dev/npm-install.log 2>&1
+fi
 
 # Kill previous instances — watchmedo parent AND python child AND anything on port 8765
 pkill -f "watchmedo" 2>/dev/null || true
@@ -22,7 +38,7 @@ nohup watchmedo auto-restart \
   --patterns="*.py" \
   --recursive \
   --debounce-interval=1 \
-  -- "$VENV" live_server.py > "$LOG_DIR/live_server.log" 2>&1 &
+  -- env PYTHONUNBUFFERED=1 "$VENV" live_server.py > "$LOG_DIR/live_server.log" 2>&1 &
 echo "  PID $! — logs: $LOG_DIR/live_server.log"
 
 echo "→ Starting Vite dev server..."

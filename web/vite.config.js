@@ -7,6 +7,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
+    headers: {
+      "Cache-Control": "no-store, max-age=0",
+    },
     // host:true binds 0.0.0.0 so GitHub Codespaces can forward the port; allow the
     // forwarded *.app.github.dev origin (Vite blocks unknown hosts by default).
     host: true,

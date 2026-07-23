@@ -6,7 +6,8 @@ alter table user_preferences
   add column if not exists shopping_focus text,
   add column if not exists top_size       text,
   add column if not exists bottom_size    text,
-  add column if not exists budget         text;
+  add column if not exists budget         text,
+  add column if not exists pin_code       text;
 
 -- Old columns (safe to drop after verifying nothing reads them)
 alter table user_preferences
