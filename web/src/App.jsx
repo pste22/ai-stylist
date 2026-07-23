@@ -595,56 +595,54 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
 }
 
 // ─── Persistent location chip — always visible, always editable ──────────────
+async function _fetchCity(pin) {
+  try {
+    const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+    const d = await r.json();
+    if (d?.[0]?.Status === "Success") {
+      const po = d[0].PostOffice?.[0];
+      return po ? po.District : null;
+    }
+  } catch { /* ignore */ }
+  return null;
+}
+
 function PinChip({ pinCode, onSave }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft]     = useState(pinCode || "");
-  const [city, setCity]       = useState(null);
-  const [loading, setLoading] = useState(false);
+  // All hooks at the top — no hooks after conditionals
+  const [editing, setEditing]       = useState(false);
+  const [draft, setDraft]           = useState(pinCode || "");
+  const [city, setCity]             = useState(null);
+  const [cityLoading, setCityLoading] = useState(false);
+  const [draftCity, setDraftCity]   = useState(null);
+  const [draftLoading, setDraftLoading] = useState(false);
   const inputRef = useRef(null);
 
-  const resolvePin = async (pin) => {
-    if (!pin || pin.length !== 6) return;
-    setLoading(true);
-    try {
-      const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
-      const d = await r.json();
-      if (d?.[0]?.Status === "Success") {
-        const po = d[0].PostOffice?.[0];
-        setCity(po ? po.District : null);
-      } else {
-        setCity(null);
-      }
-    } catch { setCity(null); }
-    setLoading(false);
+  // Resolve saved pin code → city on mount / when pinCode prop changes
+  useEffect(() => {
+    if (!pinCode) return;
+    setCityLoading(true);
+    _fetchCity(pinCode).then(c => { setCity(c); setCityLoading(false); });
+  }, [pinCode]);
+
+  const resolveDraft = (pin) => {
+    if (pin.length !== 6) { setDraftCity(null); return; }
+    setDraftLoading(true);
+    _fetchCity(pin).then(c => { setDraftCity(c); setDraftLoading(false); });
   };
 
-  useEffect(() => { if (pinCode) resolvePin(pinCode); }, [pinCode]);
+  const open = () => {
+    setDraft(pinCode || "");
+    setDraftCity(null);
+    setEditing(true);
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
 
   const save = async () => {
     const clean = draft.replace(/\D/g, "");
     if (clean.length !== 6) return;
-    await resolvePin(clean);
     onSave(clean);
+    setCity(draftCity);
     setEditing(false);
-  };
-
-  const open = () => { setDraft(pinCode || ""); setEditing(true); setTimeout(() => inputRef.current?.focus(), 0); };
-
-  const [draftCity, setDraftCity] = useState(null);
-  const [draftLoading, setDraftLoading] = useState(false);
-
-  const resolveDraft = async (pin) => {
-    if (pin.length !== 6) { setDraftCity(null); return; }
-    setDraftLoading(true);
-    try {
-      const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
-      const d = await r.json();
-      if (d?.[0]?.Status === "Success") {
-        const po = d[0].PostOffice?.[0];
-        setDraftCity(po ? po.District : null);
-      } else { setDraftCity(null); }
-    } catch { setDraftCity(null); }
-    setDraftLoading(false);
   };
 
   if (editing) {
@@ -666,16 +664,16 @@ function PinChip({ pinCode, onSave }) {
             }}
             onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setEditing(false); }}
           />
-          <button className="pin-chip-confirm" onClick={save} disabled={draft.replace(/\D/g,"").length !== 6}>✓</button>
+          <button className="pin-chip-confirm" onClick={save} disabled={draft.replace(/\D/g, "").length !== 6}>✓</button>
           <button className="pin-chip-cancel" onClick={() => setEditing(false)}>✕</button>
         </div>
-        <div className={`pin-city-box ${draftLoading ? "loading" : ""} ${draftCity ? "resolved" : ""} ${draft.length === 6 && !draftCity && !draftLoading ? "error" : ""}`}>
+        <div className={`pin-city-box${draftLoading ? " loading" : ""}${draftCity ? " resolved" : ""}${draft.length === 6 && !draftCity && !draftLoading ? " error" : ""}`}>
           {draftLoading
             ? <><span className="ob-city-spinner" />Looking up…</>
             : draftCity
-              ? <>{draftCity}</>
+              ? draftCity
               : draft.length === 6
-                ? <>PIN not found</>
+                ? "PIN not found"
                 : <span className="pin-city-placeholder">City will appear here</span>
           }
         </div>
@@ -687,7 +685,7 @@ function PinChip({ pinCode, onSave }) {
     <button className="pin-chip" onClick={open} title="Tap to change delivery location">
       <span className="pin-chip-icon">📍</span>
       <span className="pin-chip-label">
-        {loading ? "…" : city ? city : pinCode ? pinCode : "Set location"}
+        {cityLoading ? "…" : city || pinCode || "Set location"}
       </span>
     </button>
   );
@@ -969,6 +967,7 @@ export default function App() {
         <header className="chat-header">
           <MiraDot state={state} mood={mood} audioActive={!textMode && connected} />
           <span className="chat-title">Mira</span>
+          <div className="chat-header-right">
           <PinChip
             pinCode={prefs?.pin_code || null}
             onSave={(pin) => {
@@ -976,7 +975,6 @@ export default function App() {
               updateLocation(pin);
             }}
           />
-          <div className="chat-header-right">
             {savedProducts.length > 0 && (
               <button
                 className="mtc-btn"
