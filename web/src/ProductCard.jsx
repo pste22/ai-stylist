@@ -79,7 +79,7 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
             <span className="card-color-swatch" style={{ background: swatchHex(product.color) }} />
             {product.color}
           </p>
-          <p className="card-price">${product.price}</p>
+          <p className="card-price">{product.currency === "INR" ? "₹" : "$"}{product.price}</p>
           <div className="card-actions">
             <button
               className={`love${loved ? " is-loved" : ""}`}

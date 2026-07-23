@@ -405,7 +405,7 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
         <div className="fp-img-bar">
           <div className="fp-bar-text">
             <p className="fp-bar-name">{product.name}</p>
-            <p className="fp-bar-price">${product.price}</p>
+            <p className="fp-bar-price">{product.currency === "INR" ? "₹" : "$"}{product.price}</p>
           </div>
           <a
             className="fp-bar-cta"
