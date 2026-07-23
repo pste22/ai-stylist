@@ -17,8 +17,8 @@ primary_region = "iad"   # US East — lowest latency to Gemini's US endpoints
 [http_service]
   internal_port       = 8080
   force_https         = true
-  auto_stop_machines  = "stop"    # scale to zero when idle (saves cost)
-  auto_start_machines = true      # cold-start on first request
+  auto_stop_machines  = "suspend"  # suspend (not stop) — resumes in ~1s vs ~10s
+  auto_start_machines = true
   min_machines_running = 0
 
   [http_service.concurrency]
