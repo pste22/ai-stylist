@@ -628,28 +628,39 @@ button.primary.stop { background: var(--accent); }
    PRODUCT CARDS
 ══════════════════════════════════════════════════════════ */
 
+/* ════════════════════════════════════════════════════════════
+   PRODUCT CARD — redesigned for Mira v4
+   Portrait editorial style (Myntra / NNNOW energy)
+════════════════════════════════════════════════════════════ */
+
 /* ── Non-compact (grid / shelf): portrait editorial card ── */
 .card {
   background: var(--surface);
-  border-radius: var(--r-card);
+  border-radius: 14px;
   border: 1px solid var(--border);
   overflow: hidden;
   display: flex; flex-direction: column;
-  transition: transform .2s ease, box-shadow .2s ease, border-color .2s;
+  box-shadow: 0 2px 8px rgba(26,20,16,.06), 0 1px 2px rgba(26,20,16,.04);
+  transition: transform .22s cubic-bezier(.25,.46,.45,.94),
+              box-shadow .22s cubic-bezier(.25,.46,.45,.94),
+              border-color .2s;
 }
 .card:hover {
-  transform: translateY(-7px);
-  box-shadow: 0 16px 36px rgba(26,20,16,.13), 0 4px 8px rgba(26,20,16,.06);
-  border-color: var(--border-dark);
+  transform: translateY(-8px);
+  box-shadow: 0 20px 48px rgba(26,20,16,.14), 0 6px 14px rgba(26,20,16,.07);
+  border-color: var(--accent);
 }
-.card.loved    { border-color: var(--accent); }
+.card.loved {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 4px 16px rgba(232,38,74,.10);
+}
 .card.highlighted {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow-md);
   transform: translateY(-5px) scale(1.01);
 }
 
-/* Portrait thumb — 2:3 ratio like Zalando */
+/* ── Portrait thumb — 2:3 ratio ── */
 .card-thumb {
   position: relative;
   aspect-ratio: 2 / 3;
@@ -659,61 +670,148 @@ button.primary.stop { background: var(--accent); }
 .card-img {
   width: 100%; height: 100%;
   object-fit: cover;
-  transition: transform .4s ease;
+  transition: transform .5s cubic-bezier(.25,.46,.45,.94);
 }
-.card:hover .card-img { transform: scale(1.04); }
+.card:hover .card-img { transform: scale(1.07); }
 
-/* Heart overlay button — top right corner of image */
-.card-heart {
-  position: absolute; top: .55rem; right: .55rem;
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  background: rgba(255,255,255,.92);
-  backdrop-filter: blur(6px);
-  border: none; box-shadow: var(--shadow-sm);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 1rem; line-height: 1;
-  cursor: pointer; color: var(--ink-3);
-  transition: transform .12s, color .12s, background .12s;
-  padding: 0;
+/* Gradient veil — fades in on hover, anchors the image bottom */
+.card-img-overlay {
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    to top,
+    rgba(26,20,16,.52) 0%,
+    rgba(26,20,16,.10) 45%,
+    transparent 70%
+  );
+  opacity: 0;
+  transition: opacity .35s ease;
+  pointer-events: none;
 }
-.card-heart:hover { transform: scale(1.12); color: var(--accent); background: #fff; }
+.card:hover .card-img-overlay { opacity: 1; }
+
+/* ── Heart button — glassmorphism pill ── */
+.card-heart {
+  position: absolute; top: .6rem; right: .6rem;
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,.88);
+  backdrop-filter: blur(10px) saturate(180%);
+  -webkit-backdrop-filter: blur(10px) saturate(180%);
+  border: 1px solid rgba(255,255,255,.6);
+  box-shadow: 0 2px 10px rgba(26,20,16,.14);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.05rem; line-height: 1;
+  cursor: pointer; color: var(--ink-3);
+  transition: transform .14s cubic-bezier(.34,1.56,.64,1), color .12s, background .12s;
+  padding: 0;
+  z-index: 2;
+}
+.card-heart:hover {
+  transform: scale(1.18);
+  color: var(--accent);
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(232,38,74,.2);
+}
 .card-heart.is-loved {
   color: var(--accent); background: #fff;
+  box-shadow: 0 4px 16px rgba(232,38,74,.25);
   animation: heartPop .3s cubic-bezier(.36,.07,.19,.97);
 }
 
-/* Product badge — top-left corner of card image */
+/* ── Badge — top-left corner of image ── */
 .card-badge {
-  position: absolute; top: .5rem; left: .5rem;
-  font-size: .64rem; font-weight: 800; letter-spacing: .04em;
-  padding: .22rem .6rem; border-radius: var(--r-pill);
-  backdrop-filter: blur(8px); line-height: 1.4; pointer-events: none;
+  position: absolute; top: .55rem; left: .55rem;
+  font-size: .68rem; font-weight: 800; letter-spacing: .05em;
+  padding: .28rem .72rem; border-radius: var(--r-pill);
+  backdrop-filter: blur(10px) saturate(200%);
+  -webkit-backdrop-filter: blur(10px) saturate(200%);
+  line-height: 1.4; pointer-events: none; z-index: 2;
+  box-shadow: 0 2px 8px rgba(0,0,0,.18);
 }
-.card-badge--hot { background: rgba(232,38,74,.88); color: #fff; }
-.card-badge--new { background: rgba(26,20,16,.80); color: #fff; }
+.card-badge--hot {
+  background: rgba(232,38,74,.92); color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
+.card-badge--new {
+  background: rgba(26,20,16,.82); color: #fff;
+  text-shadow: 0 1px 2px rgba(0,0,0,.2);
+}
 
-/* Category thumbnail (emoji fallback) */
+/* ── Category thumbnail (emoji fallback) ── */
 .card-cat-thumb {
   width: 100%; height: 100%;
   background: linear-gradient(160deg,
-    color-mix(in srgb, var(--swatch) 20%, #fff),
-    color-mix(in srgb, var(--swatch) 50%, var(--bg)));
+    color-mix(in srgb, var(--swatch) 18%, #fff),
+    color-mix(in srgb, var(--swatch) 48%, var(--bg)));
   display: flex; align-items: center; justify-content: center;
 }
 .card-cat-emoji {
-  font-size: 3rem; line-height: 1;
-  filter: drop-shadow(0 2px 6px rgba(0,0,0,.12));
+  font-size: 3.2rem; line-height: 1;
+  filter: drop-shadow(0 3px 8px rgba(0,0,0,.14));
 }
 
-/* Card body — text below image */
-.card-body { padding: .65rem .7rem .3rem; }
+/* ── Card body — info panel below image ── */
+.card-body {
+  padding: .75rem .8rem .8rem;
+  display: flex; flex-direction: column; gap: .38rem;
+  flex: 1;
+}
+
+/* Category chip — "👗 Dresses" */
+.card-cat-chip {
+  display: inline-flex; align-items: center; gap: .28rem;
+  font-size: .66rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-2);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: .2rem .6rem;
+  width: fit-content;
+  line-height: 1.5;
+}
+
+/* Product name */
 .card-name {
-  margin: 0 0 .2rem; font-size: .8rem; font-weight: 600;
-  color: var(--ink); line-height: 1.35;
+  margin: 0;
+  font-size: .875rem; font-weight: 600;
+  color: var(--ink); line-height: 1.38;
   display: -webkit-box; -webkit-line-clamp: 2;
   -webkit-box-orient: vertical; overflow: hidden;
 }
+
+/* Colour swatch pill + price — same line */
+.card-meta-row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: .5rem;
+}
+.card-swatch-pill {
+  display: inline-flex; align-items: center; gap: .32rem;
+  font-size: .71rem; color: var(--ink-3); text-transform: capitalize;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-pill);
+  padding: .18rem .55rem;
+  min-width: 0;
+}
+.card-color-dot {
+  display: inline-block;
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  border: 1.5px solid rgba(255,255,255,.7);
+  outline: 1px solid rgba(26,20,16,.12);
+}
+.card-color-label {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 68px;
+}
+
+/* Price — big, bold, brand */
+.card-price {
+  font-size: 1rem; font-weight: 800;
+  color: var(--ink);
+  letter-spacing: -.02em; white-space: nowrap;
+  flex-shrink: 0;
+}
+
+/* Backwards-compat: compact card uses .card-meta + .card-color-swatch */
 .card-meta {
   margin: 0; font-size: .72rem; color: var(--ink-3); text-transform: capitalize;
   display: flex; align-items: center; gap: .35rem;
@@ -722,22 +820,51 @@ button.primary.stop { background: var(--accent); }
   display: inline-block; width: 10px; height: 10px; border-radius: 50%;
   flex-shrink: 0; border: 1px solid rgba(26,20,16,.12);
 }
-.card-price {
-  margin: .35rem 0 0; font-size: .92rem; font-weight: 700; color: var(--ink);
+
+/* ── CTA row: [Try On ✨] [Shop →] ── */
+.card-ctas {
+  display: flex; gap: .5rem; align-items: stretch; margin-top: .1rem;
 }
 
-/* Full-width "Shop Now" CTA at card bottom */
+/* Ghost "Try On" button */
+.card-try-btn {
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: .74rem; font-weight: 700; letter-spacing: .03em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1.5px solid rgba(232,38,74,.22);
+  border-radius: var(--r-pill);
+  padding: .52rem .5rem;
+  cursor: pointer; white-space: nowrap;
+  transition: background .14s, border-color .14s, transform .12s;
+}
+.card-try-btn:hover {
+  background: rgba(232,38,74,.12);
+  border-color: var(--accent);
+  transform: none;
+}
+
+/* Filled "Shop →" anchor */
 .card-buy-btn {
-  display: block; text-align: center; text-decoration: none;
-  font-size: .72rem; font-weight: 700; letter-spacing: .07em;
-  text-transform: uppercase; color: var(--ink);
-  background: var(--bg); border-top: 1px solid var(--border);
-  padding: .6rem;
-  transition: background .15s, color .15s;
+  flex: 1;
+  display: flex; align-items: center; justify-content: center;
+  text-decoration: none;
+  font: inherit; font-size: .74rem; font-weight: 800; letter-spacing: .04em;
+  color: #fff;
+  background: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r-pill);
+  padding: .52rem .5rem;
+  white-space: nowrap;
+  transition: background .14s, border-color .14s;
 }
-.card-buy-btn:hover { background: var(--ink); color: #fff; }
+.card-buy-btn:hover {
+  background: var(--accent);
+  border-color: var(--accent);
+}
 
-/* Legacy .card-actions / .love / .buy — used by compact cards + product-lines */
+/* ── Legacy .card-actions / .love / .buy — compact cards + product-lines ── */
 .card-actions {
   display: flex; gap: .4rem; align-items: center;
   margin: .55rem .6rem .6rem;
@@ -779,23 +906,201 @@ button.primary.stop { background: var(--accent); }
 }
 .card.compact .card-thumb {
   width: 105px; min-width: 105px; height: 105px;
-  aspect-ratio: unset;   /* override portrait — square for compact */
+  aspect-ratio: unset;
   border-radius: 0; flex-shrink: 0; overflow: hidden;
 }
 .card.compact .card-cat-emoji { font-size: 2.5rem; }
 .card.compact .card-body {
-  flex: 1; padding: .7rem .8rem .4rem;
+  flex: 1; padding: .7rem .8rem .4rem; gap: 0;
   min-width: 0; display: flex; flex-direction: column; justify-content: center;
 }
 .card.compact .card-name {
   font-size: .85rem; font-weight: 700; line-height: 1.35;
   margin: 0 0 .2rem; -webkit-line-clamp: 3;
 }
-.card.compact .card-meta { font-size: .76rem; margin: 0; }
-.card.compact .card-price { font-size: .88rem; margin: .2rem 0 0; }
+.card.compact .card-meta  { font-size: .76rem; margin: 0; }
+.card.compact .card-price { font-size: .88rem; font-weight: 700; margin: .2rem 0 0; }
 .card.compact .card-actions { margin: .5rem 0 0; gap: .45rem; }
 .card.compact .love { font-size: .78rem; padding: .32rem .55rem; }
 .card.compact .buy  { font-size: .78rem; padding: .34rem .7rem; }
+/* Compact cards have no Try-On / cat-chip */
+.card.compact .card-ctas   { display: none; }
+.card.compact .card-cat-chip { display: none; }
+.card.compact .card-meta-row { display: none; }
+
+/* ════════════════════════════════════════════════════════════
+   VIRTUAL TRY-ON MODAL
+════════════════════════════════════════════════════════════ */
+@keyframes tryonIn {
+  from { opacity: 0; transform: translateY(24px) scale(.97); }
+  to   { opacity: 1; transform: translateY(0)   scale(1);   }
+}
+@keyframes tryonShimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+.tryon-overlay {
+  position: fixed; inset: 0;
+  background: rgba(26,20,16,.58);
+  backdrop-filter: blur(6px) saturate(160%);
+  -webkit-backdrop-filter: blur(6px) saturate(160%);
+  z-index: 1100;
+  display: flex; align-items: center; justify-content: center;
+  padding: 1rem;
+  overflow-y: auto;
+}
+
+.tryon-modal {
+  background: var(--surface);
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  box-shadow: 0 32px 80px rgba(26,20,16,.22), 0 8px 24px rgba(26,20,16,.10);
+  max-width: 520px; width: 100%;
+  padding: 1.75rem 1.75rem 2rem;
+  position: relative;
+  animation: tryonIn .3s cubic-bezier(.25,.46,.45,.94) both;
+  display: flex; flex-direction: column; gap: 1.25rem;
+}
+
+/* Close button */
+.tryon-close {
+  position: absolute; top: 1rem; right: 1rem;
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--bg); border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .8rem; color: var(--ink-2);
+  cursor: pointer; font-family: inherit;
+  transition: background .12s, color .12s;
+}
+.tryon-close:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+
+/* Header */
+.tryon-header { text-align: center; }
+.tryon-badge {
+  display: inline-flex; align-items: center;
+  font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border: 1px solid rgba(232,38,74,.2);
+  border-radius: var(--r-pill);
+  padding: .22rem .75rem;
+  margin-bottom: .6rem;
+}
+.tryon-title {
+  margin: 0 0 .35rem;
+  font-size: 1.35rem; font-weight: 800; letter-spacing: -.03em; color: var(--ink);
+}
+.tryon-subtitle {
+  margin: 0; font-size: .88rem; color: var(--ink-2); line-height: 1.5;
+}
+
+/* Stage — product preview + connector + silhouette */
+.tryon-stage {
+  display: flex; align-items: center; justify-content: center; gap: .75rem;
+  background: var(--bg);
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  padding: 1.25rem .75rem;
+  overflow: hidden;
+}
+
+/* Product image pane */
+.tryon-product-preview {
+  display: flex; flex-direction: column; align-items: center; gap: .5rem;
+  flex-shrink: 0;
+}
+.tryon-product-img {
+  width: 110px; height: 148px;
+  object-fit: cover; border-radius: 10px;
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+.tryon-product-emoji-wrap {
+  width: 110px; height: 148px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, var(--bg), var(--bg-alt));
+  border: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 3.5rem;
+}
+.tryon-product-label {
+  font-size: .68rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--ink-3);
+}
+
+/* Connector arrows */
+.tryon-connector {
+  display: flex; flex-direction: column; align-items: center; gap: .25rem;
+  color: var(--ink-3); flex-shrink: 0;
+}
+.tryon-connector svg { width: 28px; opacity: .5; }
+.tryon-connector span { font-size: 1rem; color: var(--ink-3); font-weight: 700; opacity: .4; }
+
+/* Silhouette pane */
+.tryon-silhouette-wrap {
+  display: flex; flex-direction: column; align-items: center; gap: .5rem;
+  position: relative; flex-shrink: 0;
+}
+.tryon-silhouette {
+  width: 90px; height: 210px;
+  color: var(--ink-2);
+}
+/* Shimmer bar across the silhouette — suggests AI processing */
+.tryon-shimmer-bar {
+  position: absolute; inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 25%, rgba(255,255,255,.55) 50%, transparent 75%
+  );
+  background-size: 200% 100%;
+  animation: tryonShimmer 2.4s linear infinite;
+  pointer-events: none; border-radius: 8px;
+}
+
+/* CTA copy area */
+.tryon-cta-area { text-align: center; }
+.tryon-magic-text {
+  margin: 0 0 .4rem;
+  font-size: 1rem; font-weight: 700; color: var(--ink);
+  letter-spacing: -.015em;
+}
+.tryon-desc {
+  margin: 0 0 1.1rem;
+  font-size: .84rem; color: var(--ink-2); line-height: 1.55;
+  max-width: 380px; margin-left: auto; margin-right: auto;
+}
+.tryon-actions {
+  display: flex; flex-direction: column; gap: .55rem; align-items: center;
+}
+.tryon-notify-btn {
+  width: 100%; max-width: 280px;
+  padding: .8rem 1.5rem;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: var(--r-pill);
+  font: inherit; font-size: .9rem; font-weight: 800; letter-spacing: .02em;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(232,38,74,.3);
+  transition: opacity .14s, transform .12s;
+}
+.tryon-notify-btn:hover { opacity: .88; transform: translateY(-1px); }
+.tryon-skip-btn {
+  background: transparent; border: none;
+  font: inherit; font-size: .8rem; color: var(--ink-3);
+  cursor: pointer; padding: .25rem .5rem;
+  transition: color .12s;
+}
+.tryon-skip-btn:hover { color: var(--ink); }
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+  .tryon-modal { padding: 1.25rem 1.1rem 1.5rem; border-radius: 16px; }
+  .tryon-title { font-size: 1.15rem; }
+  .tryon-product-img,
+  .tryon-product-emoji-wrap { width: 90px; height: 120px; }
+  .tryon-silhouette { width: 72px; height: 168px; }
+  .tryon-stage { gap: .5rem; padding: 1rem .5rem; }
+}
 
 /* Saved shelf */
 .saved-shelf { background: var(--bg); border-radius: var(--r-card); padding: 1rem; border: 1px solid var(--border); }

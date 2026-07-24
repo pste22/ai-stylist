@@ -1,3 +1,6 @@
+import { useState } from "react";
+import TryOnModal from "./TryOnModal";
+
 const CATEGORY_EMOJI = {
   dresses:     "👗",
   tops:        "👚",
@@ -37,8 +40,16 @@ function isRealProductPhoto(url) {
   );
 }
 
+/* Format price with proper INR grouping: ₹1,23,499 or $1,234 */
+function formatPrice(price, currency) {
+  const isINR = (currency || "INR") === "INR";
+  const num   = Number(price) || 0;
+  if (isINR) return "₹" + num.toLocaleString("en-IN");
+  return "$" + num.toLocaleString("en-US");
+}
+
 function CategoryThumbnail({ category, color }) {
-  const base = swatchHex(color);
+  const base  = swatchHex(color);
   const emoji = CATEGORY_EMOJI[category] || "🛍️";
   return (
     <div className="card-cat-thumb" style={{ "--swatch": base }}>
@@ -47,8 +58,18 @@ function CategoryThumbnail({ category, color }) {
   );
 }
 
+/* ── Category label for chip below the image ── */
+function categoryLabel(cat) {
+  return cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : "Fashion";
+}
+
 export default function ProductCard({ product, loved, highlighted, onLove, onBuy, compact }) {
-  const usePhoto = isRealProductPhoto(product.image_url);
+  const [tryOnOpen, setTryOnOpen] = useState(false);
+
+  const usePhoto   = isRealProductPhoto(product.image_url);
+  const isTrending = pseudoRandom(product.id, 7777) % 6 === 0;
+  const isNew      = pseudoRandom(product.id, 9999) % 9 === 0 && !isTrending;
+  const priceStr   = formatPrice(product.price, product.currency);
 
   const thumbnail = usePhoto ? (
     <img
@@ -61,10 +82,6 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
   ) : (
     <CategoryThumbnail category={product.category} color={product.color} />
   );
-
-  // Deterministic badges — stable per product id
-  const isTrending = pseudoRandom(product.id, 7777) % 6 === 0;
-  const isNew      = pseudoRandom(product.id, 9999) % 9 === 0 && !isTrending;
 
   /* ── Compact card: horizontal layout for in-chat display ── */
   if (compact) {
@@ -79,7 +96,7 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
             <span className="card-color-swatch" style={{ background: swatchHex(product.color) }} />
             {product.color}
           </p>
-          <p className="card-price">{product.currency === "INR" ? "₹" : "$"}{product.price}</p>
+          <p className="card-price">{priceStr}</p>
           <div className="card-actions">
             <button
               className={`love${loved ? " is-loved" : ""}`}
@@ -101,38 +118,82 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
 
   /* ── Portrait card: full editorial grid card ── */
   return (
-    <div className={`card${loved ? " loved" : ""}${highlighted ? " highlighted" : ""}`}>
-      <div className="card-thumb">
-        {thumbnail}
-        {/* Trend / New badge — top-left */}
-        {isTrending && <span className="card-badge card-badge--hot">🔥 Trending</span>}
-        {isNew      && <span className="card-badge card-badge--new">✦ New</span>}
-        {/* Heart — top-right */}
-        <button
-          className={`card-heart${loved ? " is-loved" : ""}`}
-          onClick={() => onLove(product)}
-          aria-label={loved ? "Remove from saved" : "Save item"}
-        >
-          {loved ? "♥" : "♡"}
-        </button>
+    <>
+      <div className={`card${loved ? " loved" : ""}${highlighted ? " highlighted" : ""}`}>
+
+        {/* ── Image area ── */}
+        <div className="card-thumb">
+          {thumbnail}
+
+          {/* Gradient overlay — fades in on hover */}
+          <div className="card-img-overlay" aria-hidden="true" />
+
+          {/* Trend / New badge — top-left */}
+          {isTrending && <span className="card-badge card-badge--hot">🔥 Trending</span>}
+          {isNew      && <span className="card-badge card-badge--new">✦ New</span>}
+
+          {/* Heart — top-right */}
+          <button
+            className={`card-heart${loved ? " is-loved" : ""}`}
+            onClick={() => onLove(product)}
+            aria-label={loved ? "Remove from saved" : "Save item"}
+          >
+            {loved ? "♥" : "♡"}
+          </button>
+        </div>
+
+        {/* ── Info panel ── */}
+        <div className="card-body">
+
+          {/* Category chip */}
+          <span className="card-cat-chip">
+            {CATEGORY_EMOJI[product.category] || "🛍️"}
+            {" "}{categoryLabel(product.category)}
+          </span>
+
+          {/* Product name */}
+          <p className="card-name">{product.name}</p>
+
+          {/* Colour swatch pill + price — same row */}
+          <div className="card-meta-row">
+            <span className="card-swatch-pill">
+              <span
+                className="card-color-dot"
+                style={{ background: swatchHex(product.color) }}
+              />
+              <span className="card-color-label">{product.color}</span>
+            </span>
+            <strong className="card-price">{priceStr}</strong>
+          </div>
+
+          {/* CTAs */}
+          <div className="card-ctas">
+            <button
+              className="card-try-btn"
+              type="button"
+              onClick={() => setTryOnOpen(true)}
+            >
+              Try On ✨
+            </button>
+            <a
+              className="card-buy-btn"
+              href={product.affiliate_url}
+              target="_blank"
+              rel="noopener noreferrer nofollow sponsored"
+              onClick={() => onBuy?.(product)}
+            >
+              Shop →
+            </a>
+          </div>
+        </div>
       </div>
-      <div className="card-body">
-        <p className="card-name">{product.name}</p>
-        <p className="card-meta">
-          <span className="card-color-swatch" style={{ background: swatchHex(product.color) }} />
-          {product.color}
-        </p>
-        <p className="card-price">${product.price}</p>
-      </div>
-      <a
-        className="card-buy-btn"
-        href={product.affiliate_url}
-        target="_blank"
-        rel="noopener noreferrer nofollow sponsored"
-        onClick={() => onBuy?.(product)}
-      >
-        Shop Now
-      </a>
-    </div>
+
+      {tryOnOpen && (
+        <TryOnModal
+          product={product}
+          onClose={() => setTryOnOpen(false)}
+        />
+      )}
+    </>
   );
 }
