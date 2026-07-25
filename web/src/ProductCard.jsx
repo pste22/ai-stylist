@@ -175,8 +175,14 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
               className="card-try-btn"
               type="button"
               onClick={(e) => { e.stopPropagation(); setTryOnOpen(true); }}
+              aria-label="Virtual try on"
+              title="Virtual Try On"
             >
-              Try On ✨
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                {/* Person silhouette */}
+                <circle cx="12" cy="5" r="2.5"/>
+                <path d="M8 10 Q8 8 12 8 Q16 8 16 10 L17.5 17 H14 L13 14 H11 L10 17 H6.5 Z"/>
+              </svg>
             </button>
             <button
               className={`card-cart-btn${inCart ? " in-cart" : ""}`}

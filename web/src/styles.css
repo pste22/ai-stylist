@@ -826,23 +826,21 @@ button.primary.stop { background: var(--accent); }
   display: flex; gap: .5rem; align-items: stretch; margin-top: .1rem;
 }
 
-/* Ghost "Try On" button */
+/* Try On icon button */
 .card-try-btn {
-  flex: 1;
   display: flex; align-items: center; justify-content: center;
-  font: inherit; font-size: .74rem; font-weight: 700; letter-spacing: .03em;
   color: var(--accent);
   background: var(--accent-soft);
   border: 1.5px solid rgba(232,38,74,.22);
   border-radius: var(--r-pill);
-  padding: .52rem .5rem;
-  cursor: pointer; white-space: nowrap;
-  transition: background .14s, border-color .14s, transform .12s;
+  padding: .52rem .65rem;
+  cursor: pointer;
+  transition: background .14s, border-color .14s;
+  flex-shrink: 0;
 }
 .card-try-btn:hover {
   background: rgba(232,38,74,.12);
   border-color: var(--accent);
-  transform: none;
 }
 
 /* Cart button — icon-only pill */
