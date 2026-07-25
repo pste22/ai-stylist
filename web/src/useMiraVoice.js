@@ -213,6 +213,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             bottom_size:    userPrefs?.bottom_size    ?? null,
             budget:         userPrefs?.budget         ?? null,
             pin_code:       userPrefs?.pin_code       ?? null,
+            text_mode:      textMode,
             event_brief:    eventBrief,
           }));
         setConnected(true);

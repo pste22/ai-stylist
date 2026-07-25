@@ -369,33 +369,34 @@ def _match_products(transcript: str) -> list[dict]:
     return hits
 
 
-def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None, location_info: dict | None = None):
+def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None, location_info: dict | None = None, text_mode: bool = False):
     from google import genai
     from google.genai import types
 
-    config = types.LiveConnectConfig(
-        response_modalities=["AUDIO"],
-        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info))]),
-        input_audio_transcription=types.AudioTranscriptionConfig(),
-        output_audio_transcription=types.AudioTranscriptionConfig(),
-        speech_config=types.SpeechConfig(
-            voice_config=types.VoiceConfig(
-                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=_VOICE)
-            )
-        ),
-        # Ask the server to emit resumption handles so we can reopen a DROPPED Live
-        # session with its conversation context intact (Gemini closes sessions on its
-        # own limits, e.g. 1008). Without this, every reconnect = amnesia — Mira forgets
-        # what the shopper just said (e.g. "sneakers"). The handle is replayed in run_live.
-        session_resumption=types.SessionResumptionConfig(),
-        # Keep long voice chats alive. A continuous audio session fills the context
-        # window fast; once it's full Gemini aborts the socket (1008 "operation was
-        # aborted") — the frequent mid-conversation drops we saw. A sliding-window
-        # compression lets the session run indefinitely instead of being cut off.
-        context_window_compression=types.ContextWindowCompressionConfig(
-            sliding_window=types.SlidingWindow(),
-        ),
-    )
+    if text_mode:
+        # Silent/typing mode — respond with text directly; no audio pipeline needed.
+        config = types.LiveConnectConfig(
+            response_modalities=["TEXT"],
+            system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info))]),
+        )
+    else:
+        config = types.LiveConnectConfig(
+            response_modalities=["AUDIO"],
+            system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info))]),
+            input_audio_transcription=types.AudioTranscriptionConfig(),
+            output_audio_transcription=types.AudioTranscriptionConfig(),
+            speech_config=types.SpeechConfig(
+                voice_config=types.VoiceConfig(
+                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=_VOICE)
+                )
+            ),
+            # Resumption handles keep conversation context across Gemini-side reconnects.
+            session_resumption=types.SessionResumptionConfig(),
+            # Sliding-window compression prevents 1008 abort on long voice sessions.
+            context_window_compression=types.ContextWindowCompressionConfig(
+                sliding_window=types.SlidingWindow(),
+            ),
+        )
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY missing — add it to prototype/.env")
@@ -453,6 +454,7 @@ async def handle(ws) -> None:
     # system prompt can be personalised for this shopper.
     user_id: str | None = None
     user_name = "there"
+    text_mode: bool = False   # True → use TEXT modality (silent/typing mode)
     style_vibe: str | None = None
     shopping_focus: str | None = None
     top_size: str | None = None
@@ -491,6 +493,7 @@ async def handle(ws) -> None:
                 bottom_size    = data.get("bottom_size")
                 budget         = data.get("budget")
                 pin_code       = data.get("pin_code")
+                text_mode      = bool(data.get("text_mode"))
                 event_brief    = data.get("event_brief") or {}
                 if pin_code and len(pin_code) == 6 and pin_code.isdigit():
                     try:
@@ -565,7 +568,7 @@ async def handle(ws) -> None:
     if top_picks:
         await _send_json(ws, type="products", items=top_picks, show_more=True)
 
-    client, config, types = _build(memory, prefs=prefs, taste=taste, event_brief=event_brief, location_info=location_info)
+    client, config, types = _build(memory, prefs=prefs, taste=taste, event_brief=event_brief, location_info=location_info, text_mode=text_mode)
     session_id = events.new_session_id()
     if event_brief.get("occasion"):
         await asyncio.to_thread(user_store.save_event_brief, user_id, session_id, event_brief)
