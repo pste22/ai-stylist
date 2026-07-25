@@ -12,6 +12,8 @@ import { useIdleTimeout } from "./useIdleTimeout.js";
 import { useChatHistory } from "./useChatHistory.js";
 import PrivacyPolicy from "./PrivacyPolicy.jsx";
 import ProductQuickView from "./ProductQuickView.jsx";
+import CartPanel from "./CartPanel.jsx";
+import { useCart } from "./useCart.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 
 // ─── User avatar menu (dropdown) ─────────────────────────────────────────────
@@ -283,7 +285,7 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
   );
 }
 
-function LookDeck({ looks, loved, onLove, onBuy, onSaveLook }) {
+function LookDeck({ looks, loved, onLove, onBuy, onSaveLook, onAddAllToCart }) {
   if (!looks?.length) return null;
   return (
     <section className="look-deck" aria-label="Mira's complete look drafts">
@@ -294,11 +296,12 @@ function LookDeck({ looks, loved, onLove, onBuy, onSaveLook }) {
       <div className="look-grid">
         {looks.map((look) => {
           const allSaved = look.items.every((p) => loved.has(p.id));
+          const total = look.items.reduce((s, p) => s + (Number(p.price) || 0), 0);
           return (
             <article className="look-card" key={look.id}>
               <div className="look-card-head">
                 <h3>{look.name}</h3>
-                <strong className="look-total">${Number(look.total_price || 0).toFixed(2)}</strong>
+                <strong className="look-total">₹{total.toLocaleString("en-IN")}</strong>
               </div>
               <p className="look-rationale">{look.rationale}</p>
               <div className="look-items">
@@ -307,12 +310,20 @@ function LookDeck({ looks, loved, onLove, onBuy, onSaveLook }) {
                     loved={loved.has(product.id)} onLove={onLove} onBuy={onBuy} />
                 ))}
               </div>
-              <button
-                className={`look-save${allSaved ? " look-save--saved" : ""}`}
-                onClick={() => !allSaved && onSaveLook(look.items)}
-              >
-                {allSaved ? "♥ Saved to your wishlist" : "♡ Save this look"}
-              </button>
+              <div className="look-actions">
+                <button
+                  className={`look-save${allSaved ? " look-save--saved" : ""}`}
+                  onClick={() => !allSaved && onSaveLook(look.items)}
+                >
+                  {allSaved ? "♥ Saved" : "♡ Save"}
+                </button>
+                <button
+                  className="look-cart-btn"
+                  onClick={() => onAddAllToCart?.(look.items)}
+                >
+                  🛒 Add look to cart
+                </button>
+              </div>
             </article>
           );
         })}
@@ -841,6 +852,8 @@ export default function App() {
   const [showDeleteModal, setShowDelete]  = useState(false);
   const [guestPinCode, setGuestPinCode]   = useState(null);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
+  const [showCart, setShowCart]           = useState(false);
+  const { items: cartItems, addItem: addToCart, addItems: addAllToCart, removeItem: removeFromCart, clearCart, inCart } = useCart();
   const effectivePrefs = useMemo(
     () => user ? prefs : { ...(prefs || {}), pin_code: guestPinCode },
     [user, prefs, guestPinCode]
@@ -980,6 +993,13 @@ export default function App() {
           <MiraDot state={state} mood={mood} audioActive={!textMode && connected} />
           <span className="chat-title">Mira</span>
           <div className="chat-header-right">
+            {/* Cart icon */}
+            <button className="cart-icon-btn" onClick={() => setShowCart(true)} title={`Cart (${cartItems.length})`}>
+              🛒
+              {cartItems.length > 0 && (
+                <span className="cart-icon-badge">{cartItems.length}</span>
+              )}
+            </button>
             {savedProducts.length > 0 && (
               <button
                 className="mtc-btn"
@@ -1029,7 +1049,7 @@ export default function App() {
         <div className="chat-thread" ref={threadRef}>
           {/* Look deck at the top of thread */}
           {looks.length > 0 && (
-            <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook} />
+            <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook} onAddAllToCart={addAllToCart} />
           )}
 
           {messages.length === 0 && !connected && (
@@ -1080,9 +1100,19 @@ export default function App() {
         <ProductQuickView
           product={quickViewProduct}
           loved={loved.has(quickViewProduct.id)}
+          inCart={inCart(quickViewProduct.id)}
           onLove={wouldBuy}
           onBuy={buyClick}
+          onAddToCart={addToCart}
           onClose={() => setQuickViewProduct(null)}
+        />
+      )}
+      {showCart && (
+        <CartPanel
+          items={cartItems}
+          onRemove={removeFromCart}
+          onClear={clearCart}
+          onClose={() => setShowCart(false)}
         />
       )}
       {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}

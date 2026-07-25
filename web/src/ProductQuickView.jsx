@@ -41,7 +41,7 @@ function hiResUrl(url) {
   return url.replace(/\._SL\d+_/, "._SL1200_");
 }
 
-export default function ProductQuickView({ product, loved, onLove, onBuy, onClose }) {
+export default function ProductQuickView({ product, loved, inCart, onLove, onBuy, onAddToCart, onClose }) {
   const [cropIdx, setCropIdx] = useState(0);
   const [zoomed, setZoomed]   = useState(false);
   const panelRef = useRef(null);
@@ -143,16 +143,22 @@ export default function ProductQuickView({ product, loved, onLove, onBuy, onClos
             >
               {loved ? "♥ Saved" : "♡ Save"}
             </button>
-            <a
-              className="qv-shop-btn"
-              href={product.affiliate_url}
-              target="_blank"
-              rel="noopener noreferrer nofollow sponsored"
-              onClick={() => onBuy?.(product)}
+            <button
+              className={`qv-cart-btn${inCart ? " in-cart" : ""}`}
+              onClick={() => !inCart && onAddToCart?.(product)}
             >
-              Shop on Amazon →
-            </a>
+              {inCart ? "🛒 In cart" : "🛒 Add to cart"}
+            </button>
           </div>
+          <a
+            className="qv-shop-btn qv-shop-btn--full"
+            href={product.affiliate_url}
+            target="_blank"
+            rel="noopener noreferrer nofollow sponsored"
+            onClick={() => onBuy?.(product)}
+          >
+            Shop on Amazon →
+          </a>
         </div>
       </div>
     </div>
