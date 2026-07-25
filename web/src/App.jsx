@@ -222,14 +222,15 @@ function MiraBubbleContent({ text }) {
 
 // Unified 3-column product grid — single source of truth for product display.
 const PRODUCTS_PER_TURN = 3;
-function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect }) {
+function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart }) {
   if (!products?.length) return null;
   const shown = products.slice(0, PRODUCTS_PER_TURN);
   return (
     <div className="product-grid">
       {shown.map((p) => (
         <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
-          onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect} />
+          onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect}
+          inCart={inCart?.(p.id)} onAddToCart={onAddToCart} />
       ))}
     </div>
   );
@@ -750,7 +751,7 @@ function ChatWelcome({ onEventBrief, textMode }) {
 }
 
 // ─── Message bubble — user or Mira, with inline product cards ────────────────
-function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect }) {
+function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart }) {
   const isMira = msg.role === "mira";
   return (
     <div className={`msg-row ${isMira ? "mira" : "you"}`}>
@@ -767,6 +768,8 @@ function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect }) {
             onBuy={onBuy}
             highlightedId={highlightedId}
             onSelect={onSelect}
+            inCart={inCart}
+            onAddToCart={onAddToCart}
           />
         )}
       </div>
@@ -1040,7 +1043,7 @@ export default function App() {
             <p className="shelf-title">💜 Your saved items</p>
             <div className="grid">
               {savedProducts.map((p) => (
-                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} onSelect={setQuickViewProduct} />
+                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} onSelect={setQuickViewProduct} inCart={inCart(p.id)} onAddToCart={addToCart} />
               ))}
             </div>
           </div>
@@ -1058,7 +1061,7 @@ export default function App() {
           {messages.map((msg) =>
             msg.role === "event"
               ? <EventDivider key={msg.id} text={msg.text} />
-              : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} onSelect={setQuickViewProduct} />
+              : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} />
           )}
           {state === "thinking" && <ThinkingBubble />}
 

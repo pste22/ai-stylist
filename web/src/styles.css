@@ -845,6 +845,30 @@ button.primary.stop { background: var(--accent); }
   transform: none;
 }
 
+/* Cart button — icon-only pill */
+.card-cart-btn {
+  display: flex; align-items: center; justify-content: center;
+  font: inherit; font-size: .8rem;
+  color: var(--ink);
+  background: #f4f0eb;
+  border: 1.5px solid #ddd;
+  border-radius: var(--r-pill);
+  padding: .52rem .6rem;
+  cursor: pointer; white-space: nowrap;
+  transition: background .14s, border-color .14s, color .14s;
+  flex-shrink: 0;
+}
+.card-cart-btn:hover {
+  background: #ffe8b0;
+  border-color: #e0a020;
+}
+.card-cart-btn.in-cart {
+  background: #e6f5e6;
+  border-color: #5aaa5a;
+  color: #2a7a2a;
+  cursor: default;
+}
+
 /* Filled "Shop →" anchor */
 .card-buy-btn {
   flex: 1;

@@ -63,7 +63,7 @@ function categoryLabel(cat) {
   return cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : "Fashion";
 }
 
-export default function ProductCard({ product, loved, highlighted, onLove, onBuy, onSelect, compact }) {
+export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact }) {
   const [tryOnOpen, setTryOnOpen] = useState(false);
 
   const usePhoto   = isRealProductPhoto(product.image_url);
@@ -177,6 +177,14 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
               onClick={(e) => { e.stopPropagation(); setTryOnOpen(true); }}
             >
               Try On ✨
+            </button>
+            <button
+              className={`card-cart-btn${inCart ? " in-cart" : ""}`}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (!inCart) onAddToCart?.(product); }}
+              aria-label={inCart ? "In cart" : "Add to cart"}
+            >
+              {inCart ? "🛒✓" : "🛒"}
             </button>
             <a
               className="card-buy-btn"
