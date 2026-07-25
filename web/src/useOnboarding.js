@@ -16,7 +16,7 @@ export function useOnboarding(userId) {
     if (!userId) return;
     supabase
       .from("user_preferences")
-      .select("style_vibe, shopping_focus, top_size, bottom_size, budget, budget_min, budget_max, vibes, pin_code")
+      .select("style_vibe, shopping_focus, top_size, bottom_size, budget, pin_code")
       .eq("user_id", userId)
       .maybeSingle()
       .then(({ data, error }) => {

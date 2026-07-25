@@ -11,6 +11,7 @@ import { useOnboarding } from "./useOnboarding.js";
 import { useIdleTimeout } from "./useIdleTimeout.js";
 import { useChatHistory } from "./useChatHistory.js";
 import PrivacyPolicy from "./PrivacyPolicy.jsx";
+import ProductQuickView from "./ProductQuickView.jsx";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 
 // ─── User avatar menu (dropdown) ─────────────────────────────────────────────
@@ -219,14 +220,14 @@ function MiraBubbleContent({ text }) {
 
 // Unified 3-column product grid — single source of truth for product display.
 const PRODUCTS_PER_TURN = 3;
-function ProductGrid({ products, loved, onLove, onBuy, highlightedId }) {
+function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect }) {
   if (!products?.length) return null;
   const shown = products.slice(0, PRODUCTS_PER_TURN);
   return (
     <div className="product-grid">
       {shown.map((p) => (
         <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
-          onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} />
+          onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect} />
       ))}
     </div>
   );
@@ -738,7 +739,7 @@ function ChatWelcome({ onEventBrief, textMode }) {
 }
 
 // ─── Message bubble — user or Mira, with inline product cards ────────────────
-function MessageBubble({ msg, loved, onLove, onBuy, highlightedId }) {
+function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect }) {
   const isMira = msg.role === "mira";
   return (
     <div className={`msg-row ${isMira ? "mira" : "you"}`}>
@@ -754,6 +755,7 @@ function MessageBubble({ msg, loved, onLove, onBuy, highlightedId }) {
             onLove={onLove}
             onBuy={onBuy}
             highlightedId={highlightedId}
+            onSelect={onSelect}
           />
         )}
       </div>
@@ -838,6 +840,7 @@ export default function App() {
   const [showPrivacy, setShowPrivacy]     = useState(false);
   const [showDeleteModal, setShowDelete]  = useState(false);
   const [guestPinCode, setGuestPinCode]   = useState(null);
+  const [quickViewProduct, setQuickViewProduct] = useState(null);
   const effectivePrefs = useMemo(
     () => user ? prefs : { ...(prefs || {}), pin_code: guestPinCode },
     [user, prefs, guestPinCode]
@@ -1017,7 +1020,7 @@ export default function App() {
             <p className="shelf-title">💜 Your saved items</p>
             <div className="grid">
               {savedProducts.map((p) => (
-                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} />
+                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} onSelect={setQuickViewProduct} />
               ))}
             </div>
           </div>
@@ -1035,7 +1038,7 @@ export default function App() {
           {messages.map((msg) =>
             msg.role === "event"
               ? <EventDivider key={msg.id} text={msg.text} />
-              : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} />
+              : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} onSelect={setQuickViewProduct} />
           )}
           {state === "thinking" && <ThinkingBubble />}
 
@@ -1071,6 +1074,15 @@ export default function App() {
           action={networkToast.action}
           onAction={networkToast.onAction}
           onDismiss={() => setNetworkToast(null)}
+        />
+      )}
+      {quickViewProduct && (
+        <ProductQuickView
+          product={quickViewProduct}
+          loved={loved.has(quickViewProduct.id)}
+          onLove={wouldBuy}
+          onBuy={buyClick}
+          onClose={() => setQuickViewProduct(null)}
         />
       )}
       {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}

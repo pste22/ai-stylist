@@ -63,7 +63,7 @@ function categoryLabel(cat) {
   return cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : "Fashion";
 }
 
-export default function ProductCard({ product, loved, highlighted, onLove, onBuy, compact }) {
+export default function ProductCard({ product, loved, highlighted, onLove, onBuy, onSelect, compact }) {
   const [tryOnOpen, setTryOnOpen] = useState(false);
 
   const usePhoto   = isRealProductPhoto(product.image_url);
@@ -119,7 +119,10 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
   /* ── Portrait card: full editorial grid card ── */
   return (
     <>
-      <div className={`card${loved ? " loved" : ""}${highlighted ? " highlighted" : ""}`}>
+      <div
+        className={`card${loved ? " loved" : ""}${highlighted ? " highlighted" : ""}`}
+        onClick={() => onSelect?.(product)}
+      >
 
         {/* ── Image area ── */}
         <div className="card-thumb">
@@ -135,7 +138,7 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
           {/* Heart — top-right */}
           <button
             className={`card-heart${loved ? " is-loved" : ""}`}
-            onClick={() => onLove(product)}
+            onClick={(e) => { e.stopPropagation(); onLove(product); }}
             aria-label={loved ? "Remove from saved" : "Save item"}
           >
             {loved ? "♥" : "♡"}
@@ -171,7 +174,7 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
             <button
               className="card-try-btn"
               type="button"
-              onClick={() => setTryOnOpen(true)}
+              onClick={(e) => { e.stopPropagation(); setTryOnOpen(true); }}
             >
               Try On ✨
             </button>
@@ -180,7 +183,7 @@ export default function ProductCard({ product, loved, highlighted, onLove, onBuy
               href={product.affiliate_url}
               target="_blank"
               rel="noopener noreferrer nofollow sponsored"
-              onClick={() => onBuy?.(product)}
+              onClick={(e) => { e.stopPropagation(); onBuy?.(product); }}
             >
               Shop →
             </a>
