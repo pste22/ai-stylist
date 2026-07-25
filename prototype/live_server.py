@@ -577,6 +577,36 @@ async def handle(ws) -> None:
     stop = asyncio.Event()       # set when the browser disconnects
     # Suppress the echo of the kick-off message from appearing in the "you:" caption.
     suppress_input_transcript = {"once": False}
+    # Last product IDs pushed to the browser — used for cart-add intent resolution.
+    last_shown_ids: list[str] = []
+
+    _CART_INTENTS = (
+        "add to cart", "add to my cart", "add it to cart", "add this to cart",
+        "put in cart", "put it in cart", "cart it", "cart this", "cart them",
+        "add all to cart", "add these to cart", "add them to cart",
+    )
+
+    async def _maybe_add_to_cart(text: str) -> bool:
+        """If text expresses a cart-add intent, push matching products and return True."""
+        tl = text.lower()
+        if not any(phrase in tl for phrase in _CART_INTENTS):
+            return False
+        # Try to match named products, fall back to last shown
+        hits = _match_products(text)
+        if not hits:
+            hits = [_BY_ID[pid] for pid in last_shown_ids if pid in _BY_ID]
+        if hits:
+            items = [{
+                "id": p["id"], "name": p["name"], "category": p.get("category"),
+                "color": p.get("color"), "price": p.get("price"),
+                "currency": p.get("currency", "INR"),
+                "image_url": p.get("image_url"),
+                "affiliate_url": _affiliate_url(p),
+            } for p in hits]
+            await _send_json(ws, type="add_to_cart", items=items)
+            names = ", ".join(p["name"][:30] for p in hits[:3])
+            print(f"  🛒 add_to_cart: {names}")
+        return True
 
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
@@ -645,6 +675,10 @@ async def handle(ws) -> None:
                     elif data.get("type") == "text_input":
                         text = (data.get("text") or "").strip()
                         if text:
+                            # Detect cart-add intent first — handle before passing to Gemini.
+                            if await _maybe_add_to_cart(text):
+                                # Still pass to Gemini so Mira can confirm verbally
+                                pass
                             # Detect "show my saved/liked/wishlist" intent — push saved
                             # cards directly so _match_products can't mix in unsaved items.
                             _tl = text.lower()
@@ -814,13 +848,12 @@ async def handle(ws) -> None:
                     continue
                 # user started speaking → Mira is listening/thinking.
                 if sc and sc.input_transcription and sc.input_transcription.text:
+                    user_speech = sc.input_transcription.text
+                    await _maybe_add_to_cart(user_speech)
                     if suppress_input_transcript["once"]:
                         suppress_input_transcript["once"] = False  # eat the kick-off echo
                     else:
-                        await _send_json(
-                            ws, type="transcript", who="you",
-                            text=sc.input_transcription.text,
-                        )
+                        await _send_json(ws, type="transcript", who="you", text=user_speech)
                     if not talking:
                         await _send_json(ws, type="state", state="thinking", mood=mood)
                 # Forward Gemini audio bytes directly to the browser so PcmPlayer
@@ -857,6 +890,7 @@ async def handle(ws) -> None:
                                         user_store.log_product_event,
                                         user_id, p["id"], p["name"], "shown",
                                     )
+                            last_shown_ids[:] = [p["id"] for p in fresh]
                             await _send_json(ws, type="products", items=fresh, show_more=True)
                 # turn done → brief react, then back to idle. Break to await the NEXT
                 # turn on this same session (keeps context alive).

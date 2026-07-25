@@ -865,7 +865,7 @@ export default function App() {
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
-  } = useMiraVoice({ userId, userName, userPrefs: effectivePrefs, eventBrief, textMode });
+  } = useMiraVoice({ userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart });
 
   // Auto-scroll thread on new messages
   useEffect(() => {

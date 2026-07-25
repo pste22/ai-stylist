@@ -20,7 +20,7 @@ const WS_URL = resolveWsUrl();
 let _msgId = 0;
 const mkId = () => ++_msgId;
 
-export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = null, textMode = false } = {}) {
+export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = null, textMode = false, onAddToCart = null } = {}) {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(AvatarState.IDLE);
   const [mood, setMood] = useState(Mood.NEUTRAL);
@@ -304,6 +304,10 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
           }
           case "looks":
             setLooks(msg.items || []);
+            break;
+
+          case "add_to_cart":
+            if (onAddToCart && msg.items?.length) msg.items.forEach(onAddToCart);
             break;
 
           case "restore_loved":
