@@ -373,30 +373,26 @@ def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None
     from google import genai
     from google.genai import types
 
-    if text_mode:
-        # Silent/typing mode — respond with text directly; no audio pipeline needed.
-        config = types.LiveConnectConfig(
-            response_modalities=["TEXT"],
-            system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info))]),
-        )
-    else:
-        config = types.LiveConnectConfig(
-            response_modalities=["AUDIO"],
-            system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info))]),
-            input_audio_transcription=types.AudioTranscriptionConfig(),
-            output_audio_transcription=types.AudioTranscriptionConfig(),
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=_VOICE)
-                )
-            ),
-            # Resumption handles keep conversation context across Gemini-side reconnects.
-            session_resumption=types.SessionResumptionConfig(),
-            # Sliding-window compression prevents 1008 abort on long voice sessions.
-            context_window_compression=types.ContextWindowCompressionConfig(
-                sliding_window=types.SlidingWindow(),
-            ),
-        )
+    # Always use AUDIO modality — gemini-3.1-flash-live-preview dropped TEXT support.
+    # In text/silent mode the browser's playerRef is null so audio frames are silently
+    # dropped; the transcript still flows via output_audio_transcription.
+    config = types.LiveConnectConfig(
+        response_modalities=["AUDIO"],
+        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info))]),
+        input_audio_transcription=types.AudioTranscriptionConfig(),
+        output_audio_transcription=types.AudioTranscriptionConfig(),
+        speech_config=types.SpeechConfig(
+            voice_config=types.VoiceConfig(
+                prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=_VOICE)
+            )
+        ),
+        # Resumption handles keep conversation context across Gemini-side reconnects.
+        session_resumption=types.SessionResumptionConfig(),
+        # Sliding-window compression prevents 1008 abort on long voice sessions.
+        context_window_compression=types.ContextWindowCompressionConfig(
+            sliding_window=types.SlidingWindow(),
+        ),
+    )
     api_key = os.environ.get("GEMINI_API_KEY")
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY missing — add it to prototype/.env")
