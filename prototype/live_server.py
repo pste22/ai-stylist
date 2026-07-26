@@ -910,24 +910,41 @@ async def handle(ws) -> None:
                                 print(f"  ! pin resolve failed: {exc}")
                     elif data.get("type") == "show_more":
                         # Silent page-forward: push next 3 unseen products.
+                        # If the whole catalog has been shown, cycle back to the
+                        # start (keeping only the last 3 shown to avoid instant
+                        # repeats) so the button always delivers something.
                         cat_filter = data.get("category")  # optional category hint
-                        batch = []
-                        for p in _CATALOG:
-                            if p["id"] in session_shown_ids:
-                                continue
-                            if cat_filter and p.get("category") != cat_filter:
-                                continue
-                            batch.append({
-                                "id": p["id"],
-                                "name": p["name"],
-                                "category": p["category"],
-                                "color": p["color"],
-                                "price": p["price"],
-                                "image_url": p.get("image_url"),
-                                "affiliate_url": _affiliate_url(p),
-                            })
-                            if len(batch) >= 3:
-                                break
+
+                        def _pick_batch(exclude: set) -> list:
+                            pool = []
+                            for p in _CATALOG:
+                                if p["id"] in exclude:
+                                    continue
+                                if cat_filter and p.get("category") != cat_filter:
+                                    continue
+                                pool.append({
+                                    "id": p["id"],
+                                    "name": p["name"],
+                                    "category": p["category"],
+                                    "color": p["color"],
+                                    "price": p["price"],
+                                    "image_url": p.get("image_url"),
+                                    "affiliate_url": _affiliate_url(p),
+                                })
+                                if len(pool) >= 3:
+                                    break
+                            return pool
+
+                        batch = _pick_batch(session_shown_ids)
+
+                        if not batch:
+                            # Catalog fully cycled — reset, keep last 3 to avoid repeats
+                            last_three = set(list(session_shown_ids)[-3:])
+                            session_shown_ids.clear()
+                            session_shown_ids.update(last_three)
+                            batch = _pick_batch(session_shown_ids)
+                            print("  show_more → catalog cycled, restarting")
+
                         if batch:
                             for p in batch:
                                 session_shown_ids.add(p["id"])
@@ -940,10 +957,10 @@ async def handle(ws) -> None:
                                              show_more=has_more)
                             print(f"  show_more → pushed {len(batch)} products")
                         else:
-                            # Catalog exhausted — tell the client to hide the button
+                            # Fewer than 3 products in the entire catalog
                             await _send_json(ws, type="products", items=[],
                                              show_more=False)
-                            print("  show_more → catalog exhausted")
+                            print("  show_more → catalog has < 3 products, cannot page")
                     elif data.get("type") == "visual_search":
                         img = data.get("image", "")
                         mime = data.get("mime", "image/jpeg")

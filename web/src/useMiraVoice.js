@@ -144,15 +144,20 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
       ws.send(JSON.stringify({ type: "buy_click", product_id: product.id }));
   }, []);
 
+  const showMoreTimeoutRef = useRef(null);
+
   const showMore = useCallback(() => {
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN) {
       setCanShowMore(false);
       ws.send(JSON.stringify({ type: "show_more" }));
-      // Safety: re-enable after 5s if server never responds
-      setTimeout(() => setCanShowMore((v) => v === false ? true : v), 5000);
-    } else {
-      // WS not open — don't hide the button, just ignore the click
+      // Safety: re-enable after 5s ONLY if server never responds at all.
+      // Cleared immediately when any products message arrives so server's
+      // explicit show_more:false isn't overridden by this timeout.
+      showMoreTimeoutRef.current = setTimeout(() => {
+        showMoreTimeoutRef.current = null;
+        setCanShowMore(true);
+      }, 5000);
     }
   }, []);
 
@@ -277,6 +282,12 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             const items = msg.items || [];
             const serverSaysMore = msg.show_more === true;
             const serverSaysNoMore = msg.show_more === false;
+            // Cancel the show_more safety timeout — server responded, so
+            // whatever it says about show_more is authoritative.
+            if (showMoreTimeoutRef.current) {
+              clearTimeout(showMoreTimeoutRef.current);
+              showMoreTimeoutRef.current = null;
+            }
             if (serverSaysMore || (!serverSaysNoMore && items.length > 0)) setCanShowMore(true);
             if (serverSaysNoMore) setCanShowMore(false);
 
