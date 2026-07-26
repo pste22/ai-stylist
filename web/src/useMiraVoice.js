@@ -149,6 +149,10 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     if (ws && ws.readyState === WebSocket.OPEN) {
       setCanShowMore(false);
       ws.send(JSON.stringify({ type: "show_more" }));
+      // Safety: re-enable after 5s if server never responds
+      setTimeout(() => setCanShowMore((v) => v === false ? true : v), 5000);
+    } else {
+      // WS not open — don't hide the button, just ignore the click
     }
   }, []);
 
@@ -315,6 +319,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             if (msg.products?.length) setSavedProducts(msg.products);
             break;
           case "visual_search_results":
+            setVsLoading(false);
             if (onVisualSearchResults) onVisualSearchResults(msg.items || [], msg.query || "");
             break;
           case "interrupted":
@@ -340,10 +345,15 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     start();
   }, [start]);
 
+  const [vsLoading, setVsLoading] = useState(false);
+
   const sendVisualSearch = useCallback((imageBase64, mime = "image/jpeg") => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type: "visual_search", image: imageBase64, mime }));
-    }
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    setVsLoading(true);
+    ws.send(JSON.stringify({ type: "visual_search", image: imageBase64, mime }));
+    // Safety timeout — clear loading after 20s if no response
+    setTimeout(() => setVsLoading(false), 20000);
   }, []);
 
   return {
@@ -351,6 +361,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     products, looks, savedProducts, loved, highlightedId, error, retryCount, miraText,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
-    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch,
+    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
+    sendVisualSearch, vsLoading, setVsLoading,
   };
 }

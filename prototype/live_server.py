@@ -666,7 +666,7 @@ async def handle(ws) -> None:
             img_bytes = base64.b64decode(image_b64)
             response = await asyncio.to_thread(
                 _client.models.generate_content,
-                model="gemini-2.0-flash",
+                model="gemini-1.5-flash",
                 contents=[
                     _types.Part.from_bytes(data=img_bytes, mime_type=mime),
                     (

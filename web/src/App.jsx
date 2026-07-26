@@ -918,7 +918,7 @@ function ThinkingBubble() {
 }
 
 // ─── Text input row (silent mode) ────────────────────────────────────────────
-function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch }) {
+function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, vsLoading }) {
   const [draft, setDraft] = useState("");
   const send = () => { if (draft.trim()) { onSend(draft.trim()); setDraft(""); } };
   return (
@@ -928,32 +928,39 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch }) {
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
         placeholder="Message Mira…" autoFocus />
       <button className="send-btn" onClick={send} disabled={!draft.trim()}>Send</button>
-      <>
-        <input
-          type="file"
-          accept="image/*"
-          capture="environment"
-          id="vs-file-input"
-          style={{ display: "none" }}
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = () => {
-              const b64 = reader.result.split(",")[1];
-              onVisualSearch?.(b64, file.type);
-            };
-            reader.readAsDataURL(file);
-            e.target.value = "";
-          }}
-        />
-        <label htmlFor="vs-file-input" className="chat-camera-btn" title="Search by photo" aria-label="Visual search">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-            <circle cx="12" cy="13" r="4"/>
-          </svg>
-        </label>
-      </>
+      <input
+        type="file"
+        accept="image/*"
+        id="vs-file-input"
+        style={{ display: "none" }}
+        disabled={vsLoading}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = () => {
+            const b64 = reader.result.split(",")[1];
+            onVisualSearch?.(b64, file.type);
+          };
+          reader.readAsDataURL(file);
+          e.target.value = "";
+        }}
+      />
+      <label
+        htmlFor="vs-file-input"
+        className={`chat-camera-btn${vsLoading ? " vs-loading-btn" : ""}`}
+        title={vsLoading ? "Analysing…" : "Search by photo"}
+        aria-label="Visual search"
+        style={vsLoading ? { pointerEvents: "none", opacity: 0.5 } : {}}
+      >
+        {vsLoading
+          ? <span className="vs-loading-spinner" style={{ width: 14, height: 14 }} />
+          : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+        }
+      </label>
       <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
     </div>
   );
@@ -1012,10 +1019,10 @@ export default function App() {
     products, looks, savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
-    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch,
+    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch, vsLoading, setVsLoading,
   } = useMiraVoice({
     userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
-    onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); },
+    onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); setVsLoading(false); },
   });
 
   // Auto-scroll thread on new messages
@@ -1198,12 +1205,18 @@ export default function App() {
         )}
 
         <div className="chat-thread" ref={threadRef}>
-          {/* Visual search results */}
-          {vsResults.length > 0 && (
+          {/* Visual search — loading / results / empty */}
+          {vsLoading && (
+            <div className="vs-loading">
+              <span className="vs-loading-spinner" />
+              <span>Analysing your photo…</span>
+            </div>
+          )}
+          {!vsLoading && vsResults.length > 0 && (
             <div className="vs-results">
               <div className="vs-results-head">
-                <p className="vs-results-title">🔍 Similar to your photo — {vsQuery}</p>
-                <button className="vs-results-close" onClick={() => setVsResults([])}>✕</button>
+                <p className="vs-results-title">🔍 {vsQuery || "Similar to your photo"}</p>
+                <button className="vs-results-close" onClick={() => { setVsResults([]); setVsQuery(""); }}>✕</button>
               </div>
               <ProductGrid products={vsResults} loved={loved} onLove={wouldBuy} onBuy={buyClick}
                 onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} />
@@ -1244,7 +1257,7 @@ export default function App() {
               </button>
             </div>
           ) : textMode ? (
-            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} />
+            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} vsLoading={vsLoading} />
           ) : (
             <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
           )}

@@ -1851,6 +1851,20 @@ button.primary.stop { background: var(--accent); }
 }
 .show-more-btn:hover { background: var(--ink); border-color: var(--ink); color: #fff; }
 
+/* ── Visual search loading ── */
+.vs-loading {
+  display: flex; align-items: center; gap: .5rem;
+  padding: .6rem .9rem; font-size: .78rem; color: var(--ink-2);
+  background: var(--surface-2); border-radius: var(--r-sm);
+  margin-bottom: .5rem;
+}
+.vs-loading-spinner {
+  display: inline-block; width: 14px; height: 14px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
 /* ── Input area ── */
 .chat-input-area {
   flex-shrink: 0; padding: .75rem 1rem;
