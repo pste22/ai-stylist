@@ -7,11 +7,15 @@ const PRICE_TIERS = [
   { max: Infinity, label: "Luxury feel" },
 ];
 
-const STOP = new Set(["the","a","an","and","or","for","with","in","on","at","by","of","to"]);
+const STOP = new Set(["the","a","an","and","or","for","with","in","on","at","by","of","to",
+  "knee","length","short","long","high","low","plus","size","dress","dresses","top","tops",
+  "bag","bags","shoes","boot","boots","style","styles","look","women","mens","unisex"]);
 
 function extractBrand(name) {
   if (!name) return null;
   for (const word of name.split(/\s+/)) {
+    // Skip words that start with digits (e.g. "72styles") — not a real brand name
+    if (/^\d/.test(word)) continue;
     const clean = word.replace(/[^a-zA-Z]/g, "");
     if (clean.length >= 3 && !STOP.has(clean.toLowerCase())) return clean;
   }

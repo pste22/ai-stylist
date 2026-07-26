@@ -811,26 +811,32 @@ async def handle(ws) -> None:
                         pname   = prod.get("name", pid)
                         reason_text = ", ".join(reasons) if reasons else "general appeal"
                         print(f"  ♥ like_reason: {pname!r} → {reason_text}")
+                        # Suppress this product from appearing again — user already has it saved
+                        session_shown_ids.add(pid)
                         # Send quick-reply options to the client immediately (before Mira speaks)
                         await _send_json(ws, type="quick_replies", options=[
                             "Yes, show me more like this",
                             "Try a different style",
                             "Show me something new",
                         ])
-                        # Inject preference context silently into Gemini
+                        # Build preference context — injected silently, never spoken
+                        cat   = prod.get("category", "item")
+                        color = prod.get("color", "")
                         context_msg = (
-                            f"[PREFERENCE: The user just saved '{pname}' to their wishlist "
+                            f"[PREFERENCE: The user saved a {color} {cat} to their wishlist "
                             f"because of: {reason_text}. "
                             f"Keep this in mind for future recommendations — "
-                            f"prioritise items with similar {reason_text}.]"
+                            f"prioritise items with similar {reason_text}. "
+                            f"IMPORTANT: Do NOT mention or show the same item again.]"
                         )
-                        # Trigger Mira to ask a natural follow-up question
+                        # Trigger Mira follow-up — deliberately omit the product name so
+                        # _match_products cannot re-surface the same card.
                         follow_up = (
                             f"{context_msg}\n\n"
-                            f"The user liked '{pname}' for: {reason_text}. "
-                            f"Ask them in one warm, short sentence what they'd like to explore next — "
-                            f"more items like this, a different style, or fresh new picks. "
-                            f"Don't list options as bullet points — just ask naturally."
+                            f"The user just saved a {color} {cat} they loved (reason: {reason_text}). "
+                            f"Ask them in one warm, short sentence what to explore next — "
+                            f"more items with similar qualities, a different style, or fresh picks. "
+                            f"Do NOT say the product name. Do NOT list options — just ask naturally."
                         )
                         sess = current["session"]
                         if sess is not None:

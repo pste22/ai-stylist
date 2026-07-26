@@ -1126,11 +1126,13 @@ export default function App() {
     const wasLoved = loved.has(product.id);
     wouldBuy(product);
     if (!wasLoved) {
-      // Newly liked — show the reason picker inline
-      setReasonPickerProductId(product.id);
+      // Always clear previous picker first so no two pickers are visible at once,
+      // then set the new one in the next tick so React re-mounts it fresh.
+      setReasonPickerProductId(null);
+      setTimeout(() => setReasonPickerProductId(product.id), 0);
     } else {
-      // Unliked — dismiss picker if it was showing for this product
-      if (reasonPickerProductId === product.id) setReasonPickerProductId(null);
+      // Unliked — dismiss picker
+      setReasonPickerProductId(null);
     }
   };
 
