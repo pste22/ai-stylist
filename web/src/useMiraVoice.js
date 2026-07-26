@@ -97,6 +97,9 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     _addMsg("you", trimmed);
     ws.send(JSON.stringify({ type: "text_input", text: trimmed }));
     setState(AvatarState.THINKING);
+    // Clear quick-replies — user is typing a real answer
+    setQuickReplies([]);
+    if (quickReplyTimerRef.current) { clearTimeout(quickReplyTimerRef.current); quickReplyTimerRef.current = null; }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -351,6 +354,9 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             setVsLoading(false);
             if (onVisualSearchResults) onVisualSearchResults(msg.items || [], msg.query || "");
             break;
+          case "quick_replies":
+            setQuickReplies(msg.options || []);
+            break;
           case "interrupted":
             break;
           case "error":
@@ -379,6 +385,25 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   }, [start]);
 
   const [vsLoading, setVsLoading] = useState(false);
+  const [quickReplies, setQuickReplies] = useState([]);
+  const quickReplyTimerRef = useRef(null);
+
+  const sendLikeReason = useCallback((product, reasons) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ type: "like_reason", product_id: product.id, reasons }));
+    // Auto-clear quick replies after 12s if user ignores them
+    if (quickReplyTimerRef.current) clearTimeout(quickReplyTimerRef.current);
+    quickReplyTimerRef.current = setTimeout(() => {
+      setQuickReplies([]);
+      quickReplyTimerRef.current = null;
+    }, 12000);
+  }, []);
+
+  const dismissQuickReplies = useCallback(() => {
+    if (quickReplyTimerRef.current) clearTimeout(quickReplyTimerRef.current);
+    setQuickReplies([]);
+  }, []);
 
   const sendVisualSearch = useCallback((imageBase64, mime = "image/jpeg") => {
     const ws = wsRef.current;
@@ -396,5 +421,6 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
     sendVisualSearch, vsLoading, setVsLoading,
+    sendLikeReason, quickReplies, dismissQuickReplies,
   };
 }

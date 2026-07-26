@@ -17,6 +17,7 @@ import { useCart } from "./useCart.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { install as installWatcher } from "./SessionWatcher.js";
 import { SessionWatcherPanel } from "./SessionWatcherPanel.jsx";
+import { ReasonPicker } from "./ReasonPicker.jsx";
 
 // Activate in dev mode or when ?debug appears in the URL
 const DEBUG_MODE = import.meta.env.DEV || new URLSearchParams(location.search).has("debug");
@@ -874,8 +875,15 @@ function ChatWelcome({ onEventBrief, textMode }) {
 }
 
 // ─── Message bubble — user or Mira, with inline product cards ────────────────
-function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart }) {
+function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart,
+                         reasonPickerProductId, onReasonDone }) {
   const isMira = msg.role === "mira";
+  const showPicker = isMira && reasonPickerProductId &&
+    msg.products?.some(p => p.id === reasonPickerProductId);
+  const pickerProduct = showPicker
+    ? msg.products.find(p => p.id === reasonPickerProductId)
+    : null;
+
   return (
     <div className={`msg-row ${isMira ? "mira" : "you"}`}>
       {isMira && <span className="msg-avatar-dot" />}
@@ -894,6 +902,9 @@ function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inC
             inCart={inCart}
             onAddToCart={onAddToCart}
           />
+        )}
+        {pickerProduct && (
+          <ReasonPicker product={pickerProduct} onDone={onReasonDone} />
         )}
       </div>
     </div>
@@ -1021,12 +1032,15 @@ export default function App() {
     [user, prefs, guestPinCode]
   );
 
+  const [reasonPickerProductId, setReasonPickerProductId] = useState(null);
+
   const {
     connected, state, mood, captions, messages,
     products, looks, savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch, vsLoading, setVsLoading,
+    sendLikeReason, quickReplies, dismissQuickReplies,
   } = useMiraVoice({
     userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
     onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); setVsLoading(false); },
@@ -1106,6 +1120,24 @@ export default function App() {
     setTextMode(true);
     setShowEventBrief(false);
     setStartRequested(true);
+  };
+
+  const handleLove = (product) => {
+    const wasLoved = loved.has(product.id);
+    wouldBuy(product);
+    if (!wasLoved) {
+      // Newly liked — show the reason picker inline
+      setReasonPickerProductId(product.id);
+    } else {
+      // Unliked — dismiss picker if it was showing for this product
+      if (reasonPickerProductId === product.id) setReasonPickerProductId(null);
+    }
+  };
+
+  const handleReasonDone = (reasons) => {
+    const product = products.find(p => p.id === reasonPickerProductId);
+    setReasonPickerProductId(null);
+    if (product) sendLikeReason(product, reasons);
   };
 
   const saveLook = (items) => {
@@ -1242,7 +1274,9 @@ export default function App() {
           {messages.map((msg) =>
             msg.role === "event"
               ? <EventDivider key={msg.id} text={msg.text} />
-              : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} />
+              : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={handleLove} onBuy={buyClick}
+                  highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart}
+                  reasonPickerProductId={reasonPickerProductId} onReasonDone={handleReasonDone} />
           )}
           {state === "thinking" && <ThinkingBubble />}
           {/* Scroll anchor — always at the very bottom of thread content */}
@@ -1258,6 +1292,18 @@ export default function App() {
         {canShowMore && connected && (
           <div className="show-more-strip">
             <button className="show-more-btn" onClick={showMore}>Show 3 more →</button>
+          </div>
+        )}
+
+        {quickReplies.length > 0 && connected && (
+          <div className="quick-reply-bar">
+            {quickReplies.map((opt) => (
+              <button key={opt} className="quick-reply-chip"
+                onClick={() => { sendText(opt); dismissQuickReplies(); }}>
+                {opt}
+              </button>
+            ))}
+            <button className="quick-reply-dismiss" onClick={dismissQuickReplies} title="Dismiss">✕</button>
           </div>
         )}
 

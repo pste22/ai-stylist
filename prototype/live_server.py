@@ -804,6 +804,46 @@ async def handle(ws) -> None:
                             )
                         session_saved.pop(pid, None)
                         print(f"  ♡ unlike: {prod.get('name', pid)}")
+                    elif data.get("type") == "like_reason":
+                        pid     = data.get("product_id", "")
+                        reasons = data.get("reasons", [])
+                        prod    = _BY_ID.get(pid, {})
+                        pname   = prod.get("name", pid)
+                        reason_text = ", ".join(reasons) if reasons else "general appeal"
+                        print(f"  ♥ like_reason: {pname!r} → {reason_text}")
+                        # Send quick-reply options to the client immediately (before Mira speaks)
+                        await _send_json(ws, type="quick_replies", options=[
+                            "Yes, show me more like this",
+                            "Try a different style",
+                            "Show me something new",
+                        ])
+                        # Inject preference context silently into Gemini
+                        context_msg = (
+                            f"[PREFERENCE: The user just saved '{pname}' to their wishlist "
+                            f"because of: {reason_text}. "
+                            f"Keep this in mind for future recommendations — "
+                            f"prioritise items with similar {reason_text}.]"
+                        )
+                        # Trigger Mira to ask a natural follow-up question
+                        follow_up = (
+                            f"{context_msg}\n\n"
+                            f"The user liked '{pname}' for: {reason_text}. "
+                            f"Ask them in one warm, short sentence what they'd like to explore next — "
+                            f"more items like this, a different style, or fresh new picks. "
+                            f"Don't list options as bullet points — just ask naturally."
+                        )
+                        sess = current["session"]
+                        if sess is not None:
+                            try:
+                                await sess.send_client_content(
+                                    turns=[types.Content(
+                                        role="user",
+                                        parts=[types.Part(text=follow_up)],
+                                    )],
+                                    turn_complete=True,
+                                )
+                            except Exception as exc:
+                                print(f"  ! like_reason session inject failed: {exc}")
                     elif data.get("type") == "text_input":
                         text = (data.get("text") or "").strip()
                         if text:

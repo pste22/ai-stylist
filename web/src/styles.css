@@ -1859,6 +1859,83 @@ button.primary.stop { background: var(--accent); }
 }
 .show-more-btn:hover { background: var(--ink); border-color: var(--ink); color: #fff; }
 
+/* ── Reason picker — inline below liked product card ── */
+.reason-picker {
+  margin-top: .6rem;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: .65rem .75rem .55rem;
+  animation: msg-in .18s ease;
+}
+.reason-picker-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: .5rem;
+}
+.reason-picker-label {
+  font-size: .75rem; font-weight: 600; color: var(--ink-2);
+}
+.reason-picker-timer {
+  font-size: .7rem; color: var(--ink-3);
+  background: var(--surface); border-radius: 99px;
+  padding: .1rem .4rem;
+}
+.reason-picker-chips {
+  display: flex; flex-wrap: wrap; gap: .35rem;
+  margin-bottom: .55rem;
+}
+.reason-chip {
+  font-size: .73rem; font-family: inherit;
+  border: 1.5px solid var(--border);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink-2);
+  padding: .25rem .65rem; cursor: pointer;
+  transition: all .12s;
+}
+.reason-chip:hover { border-color: var(--accent); color: var(--accent); }
+.reason-chip.selected {
+  background: var(--accent); border-color: var(--accent);
+  color: #fff; font-weight: 600;
+}
+.reason-picker-footer { display: flex; justify-content: flex-end; }
+.reason-done-btn {
+  font-size: .75rem; font-family: inherit; font-weight: 600;
+  background: var(--ink); color: #fff;
+  border: none; border-radius: var(--r-pill);
+  padding: .3rem .9rem; cursor: pointer;
+  transition: opacity .12s;
+}
+.reason-done-btn:hover { opacity: .8; }
+
+/* ── Quick-reply bar — above input, below show-more ── */
+.quick-reply-bar {
+  flex-shrink: 0;
+  display: flex; align-items: center; flex-wrap: wrap; gap: .35rem;
+  padding: .45rem .9rem;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+  animation: msg-in .18s ease;
+}
+.quick-reply-chip {
+  font-size: .78rem; font-family: inherit; font-weight: 600;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: var(--r-pill);
+  color: var(--accent);
+  padding: .3rem .85rem; cursor: pointer;
+  transition: background .12s, color .12s;
+  white-space: nowrap;
+}
+.quick-reply-chip:hover { background: var(--accent); color: #fff; }
+.quick-reply-dismiss {
+  margin-left: auto;
+  font-size: .75rem; font-family: inherit;
+  background: none; border: none;
+  color: var(--ink-3); cursor: pointer; padding: .2rem .4rem;
+}
+.quick-reply-dismiss:hover { color: var(--ink); }
+
 /* ── Visual search loading ── */
 .vs-loading {
   display: flex; align-items: center; gap: .5rem;
