@@ -32,101 +32,119 @@ sys.path.insert(0, os.path.dirname(__file__))
 # 60 queries × 10 items ≈ 600 unique products per run.
 # 100 queries × 10 items ≈ 1 000 unique products.
 QUERIES: list[tuple[str, str, str]] = [
-    # Women — dresses
-    ("women summer casual dress",        "dresses",     "women"),
-    ("women floral maxi dress",          "dresses",     "women"),
-    ("women wrap midi dress",            "dresses",     "women"),
-    ("women bodycon mini dress",         "dresses",     "women"),
-    ("women boho sundress",              "dresses",     "women"),
-    ("women satin slip dress",           "dresses",     "women"),
-    ("women cocktail party dress",       "dresses",     "women"),
-    ("women smocked tiered dress",       "dresses",     "women"),
-    ("women sweater dress fall",         "dresses",     "women"),
-    ("women shirt dress belted",         "dresses",     "women"),
-    # Women — tops
-    ("women chiffon blouse work",        "tops",        "women"),
-    ("women crop top casual",            "tops",        "women"),
-    ("women ribbed tank top",            "tops",        "women"),
-    ("women oversized sweatshirt",       "tops",        "women"),
-    ("women lace trim camisole",         "tops",        "women"),
-    ("women knit sweater pullover",      "tops",        "women"),
-    ("women off shoulder top",           "tops",        "women"),
-    ("women peplum top work",            "tops",        "women"),
-    # Women — bottoms
-    ("women high waist skinny jeans",    "bottoms",     "women"),
-    ("women wide leg trousers",          "bottoms",     "women"),
-    ("women yoga leggings high waist",   "bottoms",     "women"),
-    ("women pleated midi skirt",         "bottoms",     "women"),
-    ("women denim shorts",               "bottoms",     "women"),
-    ("women cargo pants women",          "bottoms",     "women"),
-    ("women flare jeans",                "bottoms",     "women"),
-    ("women linen wide pants",           "bottoms",     "women"),
-    # Women — outerwear
-    ("women trench coat classic",        "outerwear",   "women"),
-    ("women puffer jacket winter",       "outerwear",   "women"),
-    ("women blazer work office",         "outerwear",   "women"),
-    ("women faux leather jacket",        "outerwear",   "women"),
-    ("women longline cardigan",          "outerwear",   "women"),
-    ("women shacket shirt jacket",       "outerwear",   "women"),
-    # Women — shoes
-    ("women white sneakers fashion",     "shoes",       "women"),
-    ("women block heel sandals",         "shoes",       "women"),
-    ("women ankle boots heeled",         "shoes",       "women"),
-    ("women pointed toe pumps",          "shoes",       "women"),
-    ("women platform sneakers",          "shoes",       "women"),
-    ("women slip on loafers",            "shoes",       "women"),
-    ("women running shoes lightweight",  "shoes",       "women"),
-    ("women knee high boots",            "shoes",       "women"),
-    ("women mule heels",                 "shoes",       "women"),
-    # Women — bags
-    ("women leather shoulder tote bag",  "bags",        "women"),
-    ("women mini crossbody bag",         "bags",        "women"),
-    ("women clutch evening bag",         "bags",        "women"),
-    ("women canvas tote bag",            "bags",        "women"),
-    ("women backpack fashion leather",   "bags",        "women"),
-    ("women satchel handbag",            "bags",        "women"),
-    # Women — accessories
-    ("women gold hoop earrings",         "accessories", "women"),
-    ("women oversized sunglasses uv",    "accessories", "women"),
-    ("women silk scarf hair",            "accessories", "women"),
-    ("women dainty layered necklace",    "accessories", "women"),
-    ("women wide brim hat",              "accessories", "women"),
-    ("women leather belt",               "accessories", "women"),
-    # Women — activewear
-    ("women sports bra medium support",  "activewear",  "women"),
-    ("women bike shorts high waist",     "activewear",  "women"),
-    ("women zip up hoodie gym",          "activewear",  "women"),
-    ("women athletic tank top",          "activewear",  "women"),
-    # Men — tops
-    ("men slim fit polo shirt",          "men_tops",    "men"),
-    ("men oxford button down shirt",     "men_tops",    "men"),
-    ("men pullover hoodie",              "men_tops",    "men"),
-    ("men graphic tee",                  "men_tops",    "men"),
-    ("men linen shirt summer",           "men_tops",    "men"),
-    ("men henley long sleeve",           "men_tops",    "men"),
-    ("men merino wool sweater",          "men_tops",    "men"),
-    # Men — bottoms
-    ("men slim chino pants",             "men_bottoms", "men"),
-    ("men slim fit dark jeans",          "men_bottoms", "men"),
-    ("men jogger pants tapered",         "men_bottoms", "men"),
-    ("men dress trousers",               "men_bottoms", "men"),
-    ("men swim shorts",                  "men_bottoms", "men"),
-    # Men — outerwear
-    ("men bomber jacket",                "outerwear",   "men"),
-    ("men puffer vest",                  "outerwear",   "men"),
-    ("men wool blend overcoat",          "outerwear",   "men"),
-    ("men denim jacket",                 "outerwear",   "men"),
-    ("men windbreaker jacket",           "outerwear",   "men"),
-    # Men — shoes
-    ("men white leather sneakers",       "shoes",       "men"),
-    ("men chelsea boots leather",        "shoes",       "men"),
-    ("men loafers casual",               "shoes",       "men"),
-    ("men running shoes",                "shoes",       "men"),
-    ("men oxford dress shoes",           "shoes",       "men"),
-    # Men — activewear
-    ("men gym shorts dry fit",           "activewear",  "men"),
-    ("men compression shirt",            "activewear",  "men"),
-    ("men athletic jogger",              "activewear",  "men"),
+    # ── Women — dresses (premium brands) ─────────────────────────────────────
+    ("Mango women midi dress",                    "dresses",    "women"),
+    ("Vero Moda women dress",                     "dresses",    "women"),
+    ("Only women bodycon dress",                  "dresses",    "women"),
+    ("W for woman ethnic dress",                  "dresses",    "women"),
+    ("Biba women anarkali dress",                 "dresses",    "women"),
+    ("H&M women wrap dress",                      "dresses",    "women"),
+    ("Marks Spencer women dress",                 "dresses",    "women"),
+    ("Tommy Hilfiger women dress",                "dresses",    "women"),
+    ("Calvin Klein women dress",                  "dresses",    "women"),
+    ("AND women cocktail dress",                  "dresses",    "women"),
+    # ── Women — tops (premium) ────────────────────────────────────────────────
+    ("Van Heusen women formal shirt",             "tops",       "women"),
+    ("Allen Solly women top",                     "tops",       "women"),
+    ("Vero Moda women blouse",                    "tops",       "women"),
+    ("Mango women silk blouse",                   "tops",       "women"),
+    ("H&M women premium top",                     "tops",       "women"),
+    ("Only women printed top",                    "tops",       "women"),
+    ("Marks Spencer women shirt",                 "tops",       "women"),
+    ("Global Desi women kurti",                   "tops",       "women"),
+    ("Libas women embroidered kurti",             "tops",       "women"),
+    ("W for woman women kurti",                   "tops",       "women"),
+    # ── Women — bottoms (premium) ─────────────────────────────────────────────
+    ("Levi's women skinny jeans",                 "bottoms",    "women"),
+    ("Pepe Jeans women jeans",                    "bottoms",    "women"),
+    ("Lee Cooper women jeans",                    "bottoms",    "women"),
+    ("Vero Moda women trousers",                  "bottoms",    "women"),
+    ("Only women wide leg pants",                 "bottoms",    "women"),
+    ("H&M women palazzo pants",                   "bottoms",    "women"),
+    ("Marks Spencer women trousers",              "bottoms",    "women"),
+    # ── Women — outerwear (premium) ───────────────────────────────────────────
+    ("Mango women trench coat",                   "outerwear",  "women"),
+    ("Tommy Hilfiger women jacket",               "outerwear",  "women"),
+    ("Superdry women jacket",                     "outerwear",  "women"),
+    ("H&M women blazer",                          "outerwear",  "women"),
+    ("Vero Moda women blazer",                    "outerwear",  "women"),
+    ("United Colors Benetton women jacket",       "outerwear",  "women"),
+    # ── Women — shoes (premium) ───────────────────────────────────────────────
+    ("Steve Madden women heels",                  "shoes",      "women"),
+    ("Carlton London women pumps",                "shoes",      "women"),
+    ("Aldo women ankle boots",                    "shoes",      "women"),
+    ("Mango women leather sandals",               "shoes",      "women"),
+    ("Tommy Hilfiger women sneakers",             "shoes",      "women"),
+    ("Clarks women formal shoes",                 "shoes",      "women"),
+    ("Charles Keith women heels",                 "shoes",      "women"),
+    ("Catwalk women block heels",                 "shoes",      "women"),
+    # ── Women — bags (premium) ────────────────────────────────────────────────
+    ("Lavie women handbag",                       "bags",       "women"),
+    ("Hidesign women leather bag",                "bags",       "women"),
+    ("Fossil women crossbody bag",                "bags",       "women"),
+    ("Caprese women tote bag",                    "bags",       "women"),
+    ("Aldo women shoulder bag",                   "bags",       "women"),
+    ("Charles Keith women clutch",                "bags",       "women"),
+    ("Tommy Hilfiger women handbag",              "bags",       "women"),
+    # ── Women — accessories (premium) ─────────────────────────────────────────
+    ("Fossil women watch",                        "accessories","women"),
+    ("Titan women watch",                         "accessories","women"),
+    ("Michael Kors women sunglasses",             "accessories","women"),
+    ("Ray-Ban women sunglasses",                  "accessories","women"),
+    ("Guess women jewellery",                     "accessories","women"),
+    ("Swarovski women bracelet",                  "accessories","women"),
+    # ── Women — activewear (premium) ──────────────────────────────────────────
+    ("Nike women sports bra",                     "activewear", "women"),
+    ("Adidas women leggings",                     "activewear", "women"),
+    ("Puma women gym top",                        "activewear", "women"),
+    ("Under Armour women activewear",             "activewear", "women"),
+    ("Reebok women training shoes",               "activewear", "women"),
+    # ── Men — tops (premium) ──────────────────────────────────────────────────
+    ("Tommy Hilfiger men polo shirt",             "tops",       "men"),
+    ("Calvin Klein men t-shirt",                  "tops",       "men"),
+    ("Van Heusen men formal shirt",               "tops",       "men"),
+    ("Arrow men shirt",                           "tops",       "men"),
+    ("Allen Solly men shirt",                     "tops",       "men"),
+    ("Peter England men formal shirt",            "tops",       "men"),
+    ("Raymond men shirt",                         "tops",       "men"),
+    ("Superdry men t-shirt",                      "tops",       "men"),
+    ("Marks Spencer men shirt",                   "tops",       "men"),
+    ("United Colors Benetton men shirt",          "tops",       "men"),
+    # ── Men — bottoms (premium) ───────────────────────────────────────────────
+    ("Levi's men slim fit jeans",                 "bottoms",    "men"),
+    ("Pepe Jeans men jeans",                      "bottoms",    "men"),
+    ("Van Heusen men formal trousers",            "bottoms",    "men"),
+    ("Arrow men chinos",                          "bottoms",    "men"),
+    ("Allen Solly men trousers",                  "bottoms",    "men"),
+    ("Lee men jeans",                             "bottoms",    "men"),
+    # ── Men — outerwear (premium) ─────────────────────────────────────────────
+    ("Tommy Hilfiger men jacket",                 "outerwear",  "men"),
+    ("Superdry men bomber jacket",                "outerwear",  "men"),
+    ("United Colors Benetton men jacket",         "outerwear",  "men"),
+    ("Mango men blazer",                          "outerwear",  "men"),
+    ("Van Heusen men blazer",                     "outerwear",  "men"),
+    # ── Men — shoes (premium) ─────────────────────────────────────────────────
+    ("Red Tape men leather shoes",                "shoes",      "men"),
+    ("Clarks men formal shoes",                   "shoes",      "men"),
+    ("Tommy Hilfiger men sneakers",               "shoes",      "men"),
+    ("Adidas men sneakers",                       "shoes",      "men"),
+    ("Nike men running shoes",                    "shoes",      "men"),
+    ("Woodland men boots",                        "shoes",      "men"),
+    ("Hush Puppies men loafers",                  "shoes",      "men"),
+    # ── Men — bags (premium) ──────────────────────────────────────────────────
+    ("Tommy Hilfiger men messenger bag",          "bags",       "men"),
+    ("Fossil men wallet leather",                 "bags",       "men"),
+    ("Hidesign men leather bag",                  "bags",       "men"),
+    # ── Men — accessories (premium) ───────────────────────────────────────────
+    ("Fossil men watch",                          "accessories","men"),
+    ("Titan men watch",                           "accessories","men"),
+    ("Ray-Ban men sunglasses",                    "accessories","men"),
+    ("Tommy Hilfiger men belt",                   "accessories","men"),
+    # ── Men — activewear (premium) ────────────────────────────────────────────
+    ("Nike men dri-fit t-shirt",                  "activewear", "men"),
+    ("Adidas men training shorts",                "activewear", "men"),
+    ("Puma men gym wear",                         "activewear", "men"),
+    ("Under Armour men compression",              "activewear", "men"),
 ]
 
 _COLOR_WORDS = {
@@ -161,10 +179,10 @@ def _detect_backend() -> str:
     return "none"
 
 
-def _fetch(backend: str, query: str) -> list[dict]:
+def _fetch(backend: str, query: str, sort_by: str = "average_review") -> list[dict]:
     if backend == "rainforest":
         from rainforest_products import search_products
-        return search_products(query)
+        return search_products(query, sort_by=sort_by)
     if backend == "paapi":
         from amazon_pa_api import search_items
         return search_items(query)
@@ -225,7 +243,7 @@ Choose one of these options:
             break
         print(f"🔍  {query!r} → {category}/{gender}", flush=True)
         try:
-            items = _fetch(backend, query)
+            items = _fetch(backend, query, sort_by="average_review")
         except EnvironmentError as e:
             print(f"\n❌  {e}")
             sys.exit(1)
@@ -246,7 +264,7 @@ Choose one of these options:
                 skipped += 1
                 continue
             price = item.get("price", 0)
-            if not price or price < 100:   # INR — skip anything under ₹100
+            if not price or price < 1500:  # premium only — skip under ₹1,500
                 skipped += 1
                 continue
 
