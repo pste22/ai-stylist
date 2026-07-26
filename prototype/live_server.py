@@ -939,6 +939,11 @@ async def handle(ws) -> None:
                             await _send_json(ws, type="products", items=batch,
                                              show_more=has_more)
                             print(f"  show_more → pushed {len(batch)} products")
+                        else:
+                            # Catalog exhausted — tell the client to hide the button
+                            await _send_json(ws, type="products", items=[],
+                                             show_more=False)
+                            print("  show_more → catalog exhausted")
                     elif data.get("type") == "visual_search":
                         img = data.get("image", "")
                         mime = data.get("mime", "image/jpeg")

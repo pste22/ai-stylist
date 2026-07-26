@@ -8,6 +8,14 @@
 set -e
 REPO=$(cd "$(dirname "$0")" && pwd)
 
+# ── Kill any stale process on port 8765 ──────────────────────────────────────
+STALE=$(lsof -ti:8765 2>/dev/null || true)
+if [ -n "$STALE" ]; then
+  echo "⚠ Port 8765 already in use — killing stale process ($STALE)"
+  kill "$STALE" 2>/dev/null || true
+  sleep 1
+fi
+
 # ── Backend ───────────────────────────────────────────────────────────────────
 echo "▶ Starting Python backend with auto-reload on :8765"
 cd "$REPO/prototype"

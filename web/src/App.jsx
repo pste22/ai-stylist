@@ -993,6 +993,7 @@ export default function App() {
   const { isSlow, isRecovered, quality }  = useNetworkMode();
   const autoSwitchedRef                   = useRef(false);
   const threadRef                         = useRef(null);
+  const msgsEndRef                        = useRef(null); // sentinel above show-more button
   const [isGuest, setIsGuest]             = useState(false);
   const [textMode, setTextMode]           = useState(false);
   const [networkToast, setNetworkToast]   = useState(null);
@@ -1025,10 +1026,9 @@ export default function App() {
     onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); setVsLoading(false); },
   });
 
-  // Auto-scroll thread on new messages
+  // Auto-scroll to end of messages (above show-more button) on new messages/products
   useEffect(() => {
-    const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    msgsEndRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
 
   // ── Mode switch functions (no stop/restart — switchAudio handles it) ────────
@@ -1238,6 +1238,8 @@ export default function App() {
               : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} />
           )}
           {state === "thinking" && <ThinkingBubble />}
+          {/* Sentinel: auto-scroll lands here so products above are visible */}
+          <div ref={msgsEndRef} style={{ height: 0 }} />
 
           {/* Show more products button */}
           {canShowMore && connected && (
