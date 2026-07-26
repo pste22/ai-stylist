@@ -1032,9 +1032,10 @@ export default function App() {
     onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); setVsLoading(false); },
   });
 
-  // Auto-scroll to end of messages (above show-more button) on new messages/products
+  // Auto-scroll thread to bottom on new messages/products
   useEffect(() => {
-    msgsEndRef.current?.scrollIntoView({ block: "end" });
+    const el = threadRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
   // ── Mode switch functions (no stop/restart — switchAudio handles it) ────────
@@ -1244,16 +1245,16 @@ export default function App() {
               : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={wouldBuy} onBuy={buyClick} highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} />
           )}
           {state === "thinking" && <ThinkingBubble />}
-          {/* Sentinel: auto-scroll lands here so products above are visible */}
+          {/* Scroll anchor — always at the very bottom of thread content */}
           <div ref={msgsEndRef} style={{ height: 0 }} />
-
-          {/* Show more products button */}
-          {canShowMore && connected && (
-            <div style={{ textAlign: "center", padding: ".5rem 0" }}>
-              <button className="show-more-btn" onClick={showMore}>Show 3 more →</button>
-            </div>
-          )}
         </div>
+
+        {/* Show more — sticky strip between thread and input, never inside scroll */}
+        {canShowMore && connected && (
+          <div className="show-more-strip">
+            <button className="show-more-btn" onClick={showMore}>Show 3 more →</button>
+          </div>
+        )}
 
         <div className="chat-input-bar">
           {!connected ? (
