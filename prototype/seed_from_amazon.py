@@ -246,7 +246,7 @@ Choose one of these options:
                 skipped += 1
                 continue
             price = item.get("price", 0)
-            if not price or price < 5:
+            if not price or price < 100:   # INR — skip anything under ₹100
                 skipped += 1
                 continue
 
@@ -259,6 +259,7 @@ Choose one of these options:
                 "category":      category,
                 "color":         _extract_color(item["name"]),
                 "price":         price,
+                "currency":      "INR",
                 "style":         [],
                 "gender":        gender,
                 "image_url":     item["image_url"],
@@ -267,13 +268,12 @@ Choose one of these options:
                 "is_active":     True,
             }
             if dry_run:
-                print(f"  DRY  {asin}  ${price:>7.2f}  {item['name'][:60]}")
+                print(f"  DRY  {asin}  ₹{price:>8.0f}  {item['name'][:60]}")
             else:
-                # Only send columns that exist in the schema
                 safe_row = {k: v for k, v in row.items()
                             if k not in ("rating", "ratings_total")}
                 sb.table("products").upsert(safe_row, on_conflict="id").execute()
-                print(f"  ✓  {asin}  ${price:>7.2f}  {item['name'][:60]}")
+                print(f"  ✓  {asin}  ₹{price:>8.0f}  {item['name'][:60]}")
             inserted += 1
 
         time.sleep(1.2)   # be polite to both APIs

@@ -30,7 +30,7 @@ def search_products(
     *,
     page: int = 1,
     api_key: str | None = None,
-    amazon_domain: str = "amazon.com",
+    amazon_domain: str = "amazon.in",
     sort_by: str = "featured",       # featured | average_review | price_low_to_high
 ) -> list[dict]:
     """
@@ -80,9 +80,9 @@ def search_products(
         ratings_total = item.get("ratings_total", 0) or 0
 
         affiliate_url = (
-            f"https://www.amazon.com/dp/{asin}"
-            f"?tag={tag}&linkCode=ll1&language=en_US"
-            if tag else f"https://www.amazon.com/dp/{asin}"
+            f"https://www.amazon.in/dp/{asin}"
+            f"?tag={tag}&linkCode=ll1"
+            if tag else f"https://www.amazon.in/dp/{asin}"
         )
         if not image or not title:
             continue
