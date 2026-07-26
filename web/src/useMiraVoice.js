@@ -148,6 +148,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
 
   const showMore = useCallback(() => {
     const ws = wsRef.current;
+    console.log("[showMore] click — ws.readyState:", ws?.readyState, "WebSocket.OPEN:", WebSocket.OPEN);
     if (ws && ws.readyState === WebSocket.OPEN) {
       setCanShowMore(false);
       ws.send(JSON.stringify({ type: "show_more" }));
@@ -156,8 +157,11 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
       // explicit show_more:false isn't overridden by this timeout.
       showMoreTimeoutRef.current = setTimeout(() => {
         showMoreTimeoutRef.current = null;
+        console.log("[showMore] safety timeout fired — server never responded, re-enabling button");
         setCanShowMore(true);
       }, 5000);
+    } else {
+      console.warn("[showMore] WS not open — message NOT sent. readyState:", ws?.readyState);
     }
   }, []);
 
@@ -282,6 +286,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             const items = msg.items || [];
             const serverSaysMore = msg.show_more === true;
             const serverSaysNoMore = msg.show_more === false;
+            console.log("[products] received:", items.length, "items, show_more:", msg.show_more, "→ canShowMore will be:", serverSaysMore || (!serverSaysNoMore && items.length > 0));
             // Cancel the show_more safety timeout — server responded, so
             // whatever it says about show_more is authoritative.
             if (showMoreTimeoutRef.current) {
@@ -292,14 +297,27 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             if (serverSaysNoMore) setCanShowMore(false);
 
             // Ensure there's a bubble to attach products to.
-            // If no active Mira bubble (e.g. show_more fired between turns),
-            // create a lightweight synthetic message so cards appear in the thread.
-            let bubId = miraBubbleId.current;
-            if (!bubId && items.length) {
-              bubId = _addMsg("mira", "Here are a few more picks for you ✦");
-              miraBubbleId.current = bubId;
+            // Paged results (Show 3 more) ALWAYS get their own fresh bubble —
+            // otherwise every batch piles into one bubble and the per-bubble
+            // 3-card cap hides everything after the first 3 (silent-mode bug).
+            let attachedBubId = null;
+            if (msg.paged) {
+              if (items.length) {
+                attachedBubId = _addMsg("mira", "Here are a few more picks for you ✦");
+                _attachProducts(attachedBubId, items);
+                // Deliberately NOT stored in miraBubbleId — the next Show 3 more
+                // must create another fresh bubble, not reuse this one.
+              }
+            } else {
+              // In-turn products attach to Mira's current speaking bubble.
+              let bubId = miraBubbleId.current;
+              if (!bubId && items.length) {
+                bubId = _addMsg("mira", "Here are a few more picks for you ✦");
+                miraBubbleId.current = bubId;
+              }
+              if (bubId) _attachProducts(bubId, items);
+              attachedBubId = bubId;
             }
-            if (bubId) _attachProducts(bubId, items);
 
             // Update top-level products list and highlighted card
             setProducts((prev) => {
@@ -312,7 +330,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             if (items.length) {
               setProductTimeline((prev) => [
                 ...prev,
-                ...items.map((p) => ({ ...p, messageId: bubId, ts: Date.now() })),
+                ...items.map((p) => ({ ...p, messageId: attachedBubId, ts: Date.now() })),
               ]);
             }
             break;
@@ -341,11 +359,15 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
         }
       };
 
-      ws.onerror = () => {
+      ws.onerror = (e) => {
+        console.error("[ws] onerror — connection failed", e);
         setRetryCount((c) => c + 1);
         setError("connection_failed");
       };
-      ws.onclose = () => stop();
+      ws.onclose = (e) => {
+        console.warn("[ws] onclose — code:", e.code, "reason:", e.reason, "wasClean:", e.wasClean);
+        stop();
+      };
     } catch (e) {
       setError(String(e));
     }

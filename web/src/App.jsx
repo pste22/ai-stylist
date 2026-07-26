@@ -1250,6 +1250,11 @@ export default function App() {
         </div>
 
         {/* Show more — sticky strip between thread and input, never inside scroll */}
+        {DEBUG_MODE && connected && (
+          <div style={{ textAlign: "center", fontSize: ".65rem", color: "var(--ink-3)", padding: "2px 0" }}>
+            dbg: connected={String(connected)} canShowMore={String(canShowMore)}
+          </div>
+        )}
         {canShowMore && connected && (
           <div className="show-more-strip">
             <button className="show-more-btn" onClick={showMore}>Show 3 more →</button>

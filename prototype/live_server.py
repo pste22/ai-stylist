@@ -913,54 +913,64 @@ async def handle(ws) -> None:
                         # If the whole catalog has been shown, cycle back to the
                         # start (keeping only the last 3 shown to avoid instant
                         # repeats) so the button always delivers something.
-                        cat_filter = data.get("category")  # optional category hint
+                        try:
+                            cat_filter = data.get("category")  # optional category hint
+                            print(f"  show_more ← received | shown={len(session_shown_ids)} catalog={len(_CATALOG)} cat={cat_filter!r}")
 
-                        def _pick_batch(exclude: set) -> list:
-                            pool = []
-                            for p in _CATALOG:
-                                if p["id"] in exclude:
-                                    continue
-                                if cat_filter and p.get("category") != cat_filter:
-                                    continue
-                                pool.append({
-                                    "id": p["id"],
-                                    "name": p["name"],
-                                    "category": p["category"],
-                                    "color": p["color"],
-                                    "price": p["price"],
-                                    "image_url": p.get("image_url"),
-                                    "affiliate_url": _affiliate_url(p),
-                                })
-                                if len(pool) >= 3:
-                                    break
-                            return pool
+                            _cf = cat_filter  # capture NOW so inner def doesn't close over mutable var
 
-                        batch = _pick_batch(session_shown_ids)
+                            def _pick_batch(exclude: set) -> list:
+                                pool = []
+                                for p in _CATALOG:
+                                    if p["id"] in exclude:
+                                        continue
+                                    if _cf and p.get("category") != _cf:
+                                        continue
+                                    pool.append({
+                                        "id": p["id"],
+                                        "name": p["name"],
+                                        "category": p["category"],
+                                        "color": p["color"],
+                                        "price": p["price"],
+                                        "image_url": p.get("image_url"),
+                                        "affiliate_url": _affiliate_url(p),
+                                    })
+                                    if len(pool) >= 3:
+                                        break
+                                return pool
 
-                        if not batch:
-                            # Catalog fully cycled — reset, keep last 3 to avoid repeats
-                            last_three = set(list(session_shown_ids)[-3:])
-                            session_shown_ids.clear()
-                            session_shown_ids.update(last_three)
                             batch = _pick_batch(session_shown_ids)
-                            print("  show_more → catalog cycled, restarting")
+                            print(f"  show_more → batch={len(batch)} products after filtering {len(session_shown_ids)} shown IDs")
 
-                        if batch:
-                            for p in batch:
-                                session_shown_ids.add(p["id"])
-                            has_more = any(
-                                p["id"] not in session_shown_ids
-                                for p in _CATALOG
-                                if not cat_filter or p.get("category") == cat_filter
-                            )
-                            await _send_json(ws, type="products", items=batch,
-                                             show_more=has_more)
-                            print(f"  show_more → pushed {len(batch)} products")
-                        else:
-                            # Fewer than 3 products in the entire catalog
-                            await _send_json(ws, type="products", items=[],
-                                             show_more=False)
-                            print("  show_more → catalog has < 3 products, cannot page")
+                            if not batch:
+                                # Catalog fully cycled — reset, keep last 3 to avoid repeats
+                                last_three = set(list(session_shown_ids)[-3:])
+                                session_shown_ids.clear()
+                                session_shown_ids.update(last_three)
+                                batch = _pick_batch(session_shown_ids)
+                                print(f"  show_more → catalog cycled, restarted, batch={len(batch)}")
+
+                            if batch:
+                                for p in batch:
+                                    session_shown_ids.add(p["id"])
+                                has_more = any(
+                                    p["id"] not in session_shown_ids
+                                    for p in _CATALOG
+                                    if not _cf or p.get("category") == _cf
+                                )
+                                print(f"  show_more → sending {len(batch)} products, show_more={has_more}, shown_now={len(session_shown_ids)}")
+                                await _send_json(ws, type="products", items=batch,
+                                                 show_more=has_more, paged=True)
+                            else:
+                                # Fewer than 3 products in the entire catalog
+                                print("  show_more → catalog has < 3 products, sending empty with show_more=true to keep button")
+                                await _send_json(ws, type="products", items=[],
+                                                 show_more=True)
+                        except Exception as _sm_exc:
+                            import traceback as _tb
+                            print(f"  ! show_more EXCEPTION: {_sm_exc}")
+                            _tb.print_exc()
+                            await _send_json(ws, type="products", items=[], show_more=True)
                     elif data.get("type") == "visual_search":
                         img = data.get("image", "")
                         mime = data.get("mime", "image/jpeg")
