@@ -20,7 +20,7 @@ const WS_URL = resolveWsUrl();
 let _msgId = 0;
 const mkId = () => ++_msgId;
 
-export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = null, textMode = false, onAddToCart = null } = {}) {
+export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = null, textMode = false, onAddToCart = null, onVisualSearchResults = null } = {}) {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(AvatarState.IDLE);
   const [mood, setMood] = useState(Mood.NEUTRAL);
@@ -314,6 +314,9 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             setLoved((prev) => { const n = new Set(prev); msg.ids.forEach((id) => n.add(id)); return n; });
             if (msg.products?.length) setSavedProducts(msg.products);
             break;
+          case "visual_search_results":
+            if (onVisualSearchResults) onVisualSearchResults(msg.items || [], msg.query || "");
+            break;
           case "interrupted":
             break;
           case "error":
@@ -337,11 +340,17 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     start();
   }, [start]);
 
+  const sendVisualSearch = useCallback((imageBase64, mime = "image/jpeg") => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ type: "visual_search", image: imageBase64, mime }));
+    }
+  }, []);
+
   return {
     connected, state, mood, captions, messages,
     products, looks, savedProducts, loved, highlightedId, error, retryCount, miraText,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
-    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
+    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch,
   };
 }

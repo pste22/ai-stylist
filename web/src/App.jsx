@@ -918,7 +918,7 @@ function ThinkingBubble() {
 }
 
 // ─── Text input row (silent mode) ────────────────────────────────────────────
-function TextInputRow({ onSend, onStop, onSwitchVoice }) {
+function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch }) {
   const [draft, setDraft] = useState("");
   const send = () => { if (draft.trim()) { onSend(draft.trim()); setDraft(""); } };
   return (
@@ -928,6 +928,32 @@ function TextInputRow({ onSend, onStop, onSwitchVoice }) {
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
         placeholder="Message Mira…" autoFocus />
       <button className="send-btn" onClick={send} disabled={!draft.trim()}>Send</button>
+      <>
+        <input
+          type="file"
+          accept="image/*"
+          capture="environment"
+          id="vs-file-input"
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+              const b64 = reader.result.split(",")[1];
+              onVisualSearch?.(b64, file.type);
+            };
+            reader.readAsDataURL(file);
+            e.target.value = "";
+          }}
+        />
+        <label htmlFor="vs-file-input" className="chat-camera-btn" title="Search by photo" aria-label="Visual search">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+            <circle cx="12" cy="13" r="4"/>
+          </svg>
+        </label>
+      </>
       <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
     </div>
   );
@@ -973,6 +999,8 @@ export default function App() {
   const [guestPinCode, setGuestPinCode]   = useState(null);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [showCart, setShowCart]           = useState(false);
+  const [vsResults, setVsResults]         = useState([]);
+  const [vsQuery, setVsQuery]             = useState("");
   const { items: cartItems, addItem: addToCart, addItems: addAllToCart, removeItem: removeFromCart, clearCart, inCart } = useCart();
   const effectivePrefs = useMemo(
     () => user ? prefs : { ...(prefs || {}), pin_code: guestPinCode },
@@ -984,8 +1012,11 @@ export default function App() {
     products, looks, savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
-    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
-  } = useMiraVoice({ userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart });
+    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch,
+  } = useMiraVoice({
+    userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
+    onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); },
+  });
 
   // Auto-scroll thread on new messages
   useEffect(() => {
@@ -1167,6 +1198,18 @@ export default function App() {
         )}
 
         <div className="chat-thread" ref={threadRef}>
+          {/* Visual search results */}
+          {vsResults.length > 0 && (
+            <div className="vs-results">
+              <div className="vs-results-head">
+                <p className="vs-results-title">🔍 Similar to your photo — {vsQuery}</p>
+                <button className="vs-results-close" onClick={() => setVsResults([])}>✕</button>
+              </div>
+              <ProductGrid products={vsResults} loved={loved} onLove={wouldBuy} onBuy={buyClick}
+                onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} />
+            </div>
+          )}
+
           {/* Look deck at the top of thread */}
           {looks.length > 0 && (
             <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook}
@@ -1201,7 +1244,7 @@ export default function App() {
               </button>
             </div>
           ) : textMode ? (
-            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} />
+            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} />
           ) : (
             <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
           )}

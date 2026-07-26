@@ -44,6 +44,7 @@ import chat_store  # noqa: E402
 from stylist import SYSTEM_PROMPT  # noqa: E402  (the SAME persona + grounding rules)
 from product_source import get_source  # noqa: E402
 from look_engine import build_looks  # noqa: E402
+from festival_calendar import festival_greeting_line, upcoming_festival  # noqa: E402
 
 # Ground the voice on the ACTIVE source (env PRODUCT_SOURCE: local / curated / amazon),
 # not just the bundled demo catalog — so curated SiteStripe / PA-API items Mira can
@@ -611,6 +612,134 @@ async def handle(ws) -> None:
             print(f"  🛒 add_to_cart: {names}")
         return True
 
+    _BUDGET_RE = re.compile(
+        r'(?:under|below|within|budget|max|upto|up to|around|≈|~)?\s*'
+        r'(?:rs\.?|₹|inr)?\s*(\d[\d,]*)\s*(?:rs\.?|₹|inr|rupees?)?',
+        re.IGNORECASE
+    )
+    _BUDGET_LOOK_PHRASES = (
+        "complete look", "full look", "full outfit", "head to toe", "entire outfit",
+        "whole outfit", "total look", "outfit for", "look for", "dress me for",
+        "style me for", "put together", "outfit under", "look under", "budget look",
+        "look within", "complete outfit",
+    )
+
+    async def _maybe_budget_look(text: str) -> bool:
+        """If text requests a complete look with a budget, build and send looks. Return True if handled."""
+        tl = text.lower()
+        has_look_phrase = any(phrase in tl for phrase in _BUDGET_LOOK_PHRASES)
+        m = _BUDGET_RE.search(tl)
+        if not (has_look_phrase or m):
+            return False
+        budget_max = None
+        if m:
+            raw = m.group(1).replace(",", "")
+            try:
+                budget_max = float(raw)
+            except ValueError:
+                pass
+        # Need at least a look phrase OR a budget; for look phrases without budget use None
+        if not has_look_phrase and budget_max is None:
+            return False
+        # Determine occasion from event_brief or text
+        occ = event_brief.get("occasion") or "casual"
+        for word in ["wedding", "party", "office", "date", "cocktail", "festive", "sangeet", "diwali", "navratri"]:
+            if word in tl:
+                occ = word
+                break
+        looks = build_looks(_CATALOG, occasion=occ, vibe=event_brief.get("vibe", ""), budget_max=budget_max)
+        if looks:
+            await _send_json(ws, type="looks", items=looks)
+            label = f"₹{int(budget_max):,}" if budget_max else "any budget"
+            print(f"  💰 budget look: {occ}, {label} → {len(looks)} looks")
+        return bool(looks)
+
+    async def _visual_search(image_b64: str, mime: str = "image/jpeg") -> None:
+        """Analyze a photo with Gemini vision and return similar catalog products."""
+        import base64
+        from google import genai as _genai
+        from google.genai import types as _types
+
+        await _send_json(ws, type="state", state="thinking", mood="focused")
+        try:
+            _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            img_bytes = base64.b64decode(image_b64)
+            response = await asyncio.to_thread(
+                _client.models.generate_content,
+                model="gemini-2.0-flash",
+                contents=[
+                    _types.Part.from_bytes(data=img_bytes, mime_type=mime),
+                    (
+                        "You are a fashion analyst. Analyze this image and return ONLY valid JSON "
+                        "(no markdown, no explanation) with these fields:\n"
+                        "- category: one of dresses/tops/bottoms/outerwear/shoes/bags/accessories/ethnic/activewear\n"
+                        "- color: single dominant color word (black/white/red/blue/etc)\n"
+                        "- gender: men or women\n"
+                        "- keywords: array of 4-6 style descriptors (e.g. floral, midi, silk, fitted)\n"
+                        "- occasion: one of wedding/party/office/casual/date/festive\n"
+                        "- description: one sentence describing the item style for a shopper"
+                    ),
+                ],
+            )
+            raw = response.text.strip()
+            # Strip markdown code fences if present
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            attrs = json.loads(raw.strip())
+        except Exception as e:
+            print(f"  visual_search error: {e}")
+            await _send_json(ws, type="visual_search_results", items=[], query="", error=str(e))
+            await _send_json(ws, type="state", state="idle", mood="neutral")
+            return
+
+        category = attrs.get("category", "")
+        color = attrs.get("color", "").lower()
+        keywords = [k.lower() for k in attrs.get("keywords", [])]
+        gender = attrs.get("gender", "women").lower()
+        description = attrs.get("description", "")
+
+        # Score catalog products for similarity
+        def _similarity(p: dict) -> float:
+            score = 0.0
+            if p.get("category") == category:
+                score += 5.0
+            if p.get("gender") == gender or p.get("gender") == "unisex":
+                score += 2.0
+            name_lower = (p.get("name") or "").lower()
+            col_lower = (p.get("color") or "").lower()
+            text = f"{name_lower} {col_lower}"
+            if color and color in text:
+                score += 2.0
+            for kw in keywords:
+                if kw in text:
+                    score += 1.5
+            return score
+
+        scored = sorted(
+            [p for p in _CATALOG if p.get("image_url") and p.get("affiliate_url")],
+            key=_similarity,
+            reverse=True,
+        )
+        top = scored[:9]
+
+        items = [{
+            "id":            p["id"],
+            "name":          p["name"],
+            "category":      p.get("category"),
+            "color":         p.get("color"),
+            "price":         p.get("price"),
+            "currency":      p.get("currency", "INR"),
+            "image_url":     p.get("image_url"),
+            "affiliate_url": _affiliate_url(p),
+        } for p in top]
+
+        query = description or f"Similar {category}"
+        await _send_json(ws, type="visual_search_results", items=items, query=query)
+        await _send_json(ws, type="state", state="idle", mood="neutral")
+        print(f"  visual_search → {category}/{color}/{gender} → {len(items)} results")
+
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
         nonlocal chat_title, session_shown_ids, show_saved_mode
@@ -678,7 +807,10 @@ async def handle(ws) -> None:
                     elif data.get("type") == "text_input":
                         text = (data.get("text") or "").strip()
                         if text:
-                            # Detect cart-add intent first — handle before passing to Gemini.
+                            # Detect budget look intent first — build and send looks if matched.
+                            if await _maybe_budget_look(text):
+                                pass  # handled — let Mira still respond verbally
+                            # Detect cart-add intent — handle before passing to Gemini.
                             if await _maybe_add_to_cart(text):
                                 # Still pass to Gemini so Mira can confirm verbally
                                 pass
@@ -807,6 +939,11 @@ async def handle(ws) -> None:
                             await _send_json(ws, type="products", items=batch,
                                              show_more=has_more)
                             print(f"  show_more → pushed {len(batch)} products")
+                    elif data.get("type") == "visual_search":
+                        img = data.get("image", "")
+                        mime = data.get("mime", "image/jpeg")
+                        if img:
+                            asyncio.ensure_future(_visual_search(img, mime))
         finally:
             stop.set()  # browser closed → tear the whole conversation down
             if user_id and chat_session_id:
@@ -852,6 +989,7 @@ async def handle(ws) -> None:
                 # user started speaking → Mira is listening/thinking.
                 if sc and sc.input_transcription and sc.input_transcription.text:
                     user_speech = sc.input_transcription.text
+                    await _maybe_budget_look(user_speech)
                     await _maybe_add_to_cart(user_speech)
                     if suppress_input_transcript["once"]:
                         suppress_input_transcript["once"] = False  # eat the kick-off echo
@@ -1008,6 +1146,9 @@ async def handle(ws) -> None:
                         if budget:         profile_parts.append(f"budget: {budget}")
                         profile_str = ", ".join(profile_parts)
 
+                        # Festival nudge — only if no event brief already set
+                        festival_line = festival_greeting_line() if not event_brief.get("occasion") else None
+
                         if event_brief.get("occasion"):
                             greeting_instruction = (
                                 f"[START SESSION] Greet {user_name} warmly by name and acknowledge "
@@ -1025,6 +1166,7 @@ async def handle(ws) -> None:
                                 f"and ask if they want to keep it or try something different today. "
                                 f"Keep it to 2–3 sentences. Sound like a friend, not a form. "
                                 f"Do NOT say 'I'm great' or respond as if they greeted you."
+                                + (f" Also weave in naturally: '{festival_line}'" if festival_line else "")
                             )
                         else:
                             greeting_instruction = (
@@ -1034,6 +1176,7 @@ async def handle(ws) -> None:
                                 f"looking for — their style, an occasion, or what they need. "
                                 f"Keep it to 2 sentences max. Sound curious and friendly. "
                                 f"Do NOT say 'I'm great' or respond as if they greeted you."
+                                + (f" Also weave in naturally: '{festival_line}'" if festival_line else "")
                             )
                         await session.send_client_content(
                             turns=[types.Content(
