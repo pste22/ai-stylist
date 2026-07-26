@@ -306,8 +306,15 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             let attachedBubId = null;
             if (msg.paged) {
               if (items.length) {
-                attachedBubId = _addMsg("mira", "Here are a few more picks for you ✦");
+                const bubbleText = msg.label || "Here are a few more picks for you ✦";
+                attachedBubId = _addMsg("mira", bubbleText);
                 _attachProducts(attachedBubId, items);
+                // Stamp the label on the bubble so ProductGrid knows to show all items
+                if (msg.label) {
+                  setMessages(prev => prev.map(m =>
+                    m.id === attachedBubId ? { ...m, label: msg.label } : m
+                  ));
+                }
                 // Deliberately NOT stored in miraBubbleId — the next Show 3 more
                 // must create another fresh bubble, not reuse this one.
               }
@@ -354,8 +361,29 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             setVsLoading(false);
             if (onVisualSearchResults) onVisualSearchResults(msg.items || [], msg.query || "");
             break;
+          case "outfit_url_status":
+            // "fetching" status — loading is already true, nothing extra needed
+            break;
+          case "outfit_url_error": {
+            setOutfitLoading(false);
+            const PRIVATE_MSG = "This post is private or unavailable. Screenshot the outfit and use the 👗 button to upload it directly.";
+            const NOT_FOUND_MSG = "Post not found — check the URL or try uploading a screenshot instead.";
+            const FAIL_MSG = "Couldn't fetch the image from that link. Try uploading a screenshot instead.";
+            const reason = msg.reason || "fetch_failed";
+            setOutfitError(reason === "private" ? PRIVATE_MSG : reason === "not_found" ? NOT_FOUND_MSG : FAIL_MSG);
+            break;
+          }
           case "outfit_anatomy":
-            if (msg.items?.length) setOutfitAnatomy(msg.items);
+            setOutfitLoading(false);
+            if (msg.items?.length) {
+              setOutfitAnatomy({
+                items: msg.items,
+                gender: msg.outfit_gender || "women",
+                catalogNote: msg.catalog_note || null,
+              });
+            } else {
+              setOutfitError(msg.error || "Could not detect outfit items — try a clearer photo.");
+            }
             break;
           case "quick_replies":
             setQuickReplies(msg.options || []);
@@ -390,12 +418,33 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const [vsLoading, setVsLoading] = useState(false);
   const [quickReplies, setQuickReplies] = useState([]);
   const [outfitAnatomy, setOutfitAnatomy] = useState(null);
+  const [outfitLoading, setOutfitLoading] = useState(false);
+  const [outfitError, setOutfitError] = useState(null);
 
   const sendOutfitImage = useCallback((imageBase64, mime = "image/jpeg") => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) return;
     setOutfitAnatomy(null);
+    setOutfitError(null);
+    setOutfitLoading(true);
     ws.send(JSON.stringify({ type: "visual_outfit", image: imageBase64, mime }));
+    setTimeout(() => setOutfitLoading(false), 45000);
+  }, []);
+
+  const sendOutfitUrl = useCallback((url) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    setOutfitAnatomy(null);
+    setOutfitError(null);
+    setOutfitLoading(true);
+    ws.send(JSON.stringify({ type: "outfit_url", url }));
+    setTimeout(() => setOutfitLoading(false), 60000);
+  }, []);
+
+  const sendOutfitAssembled = useCallback((productIds) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !productIds?.length) return;
+    ws.send(JSON.stringify({ type: "outfit_assembled", product_ids: productIds }));
   }, []);
   const quickReplyTimerRef = useRef(null);
 
@@ -433,6 +482,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
     sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies,
-    sendOutfitImage, outfitAnatomy, setOutfitAnatomy,
+    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled,
+    outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
   };
 }

@@ -79,11 +79,16 @@ function ItemRow({ item, onSelect, selectedProductId }) {
   );
 }
 
-export function OutfitBuilder({ anatomy, onClose, onTellMira }) {
+export function OutfitBuilder({ anatomy: anatomyData, onClose, onTellMira }) {
+  // anatomyData is either {items, gender, catalogNote} or a bare array (legacy)
+  const anatomy = Array.isArray(anatomyData) ? anatomyData : (anatomyData?.items || []);
+  const outfitGender = Array.isArray(anatomyData) ? "women" : (anatomyData?.gender || "women");
+  const catalogNote = Array.isArray(anatomyData) ? null : (anatomyData?.catalogNote || null);
+
   // Map of category → selected product for "My Look"
   const [myLook, setMyLook] = useState(() => {
     const init = {};
-    (anatomy || []).forEach(item => {
+    anatomy.forEach(item => {
       if (item.matches?.[0]) init[item.category + "_" + item.label] = item.matches[0];
     });
     return init;
@@ -96,23 +101,37 @@ export function OutfitBuilder({ anatomy, onClose, onTellMira }) {
   const assembled = Object.values(myLook);
 
   const handleTellMira = () => {
+    const pickedItems = anatomy
+      .map(item => myLook[item.category + "_" + item.label])
+      .filter(Boolean);
     const desc = anatomy.map(item => {
       const pick = myLook[item.category + "_" + item.label];
       return pick ? `${item.label}: ${pick.name}` : item.label;
     }).join(", ");
-    onTellMira?.(`I've assembled a look from my outfit inspiration: ${desc}. What do you think?`);
+    onTellMira?.(
+      `I've assembled a look from my outfit inspiration: ${desc}. What do you think?`,
+      pickedItems
+    );
     onClose?.();
   };
 
   if (!anatomy?.length) return null;
 
+  const genderLabel = outfitGender === "men" ? "Men's" : outfitGender === "unisex" ? "Unisex" : "Women's";
+
   return (
     <div className="ob-overlay">
       <div className="ob-panel">
         <div className="ob-header">
-          <span className="ob-title">👗 Outfit Anatomy</span>
+          <span className="ob-title">👗 Outfit Anatomy · <span className="ob-gender-tag">{genderLabel}</span></span>
           <button className="ob-close" onClick={onClose}>✕</button>
         </div>
+
+        {catalogNote && (
+          <div className="ob-catalog-note">
+            ℹ️ Our catalog is currently focused on women's fashion — showing the closest style &amp; color matches.
+          </div>
+        )}
 
         <div className="ob-body">
           {anatomy.map((item, i) => (

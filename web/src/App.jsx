@@ -230,16 +230,28 @@ function MiraBubbleContent({ text }) {
 
 // Unified 3-column product grid — single source of truth for product display.
 const PRODUCTS_PER_TURN = 3;
-function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart }) {
+function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll }) {
   if (!products?.length) return null;
-  const shown = products.slice(0, PRODUCTS_PER_TURN);
+  const shown = showAll ? products : products.slice(0, PRODUCTS_PER_TURN);
   return (
-    <div className="product-grid">
-      {shown.map((p) => (
-        <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
-          onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect}
-          inCart={inCart?.(p.id)} onAddToCart={onAddToCart} />
-      ))}
+    <div className="product-grid-wrap">
+      {label && (
+        <div className="product-grid-label">
+          <span>{label}</span>
+          {onShopAll && (
+            <button className="product-grid-shop-all" onClick={() => onShopAll(products)}>
+              🛒 Shop all
+            </button>
+          )}
+        </div>
+      )}
+      <div className="product-grid">
+        {shown.map((p) => (
+          <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
+            onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect}
+            inCart={inCart?.(p.id)} onAddToCart={onAddToCart} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -877,7 +889,7 @@ function ChatWelcome({ onEventBrief, textMode }) {
 
 // ─── Message bubble — user or Mira, with inline product cards ────────────────
 function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart,
-                         reasonPickerProductId, onReasonDone }) {
+                         reasonPickerProductId, onReasonDone, onAddAllToCart }) {
   const isMira = msg.role === "mira";
   const showPicker = isMira && reasonPickerProductId &&
     msg.products?.some(p => p.id === reasonPickerProductId);
@@ -902,6 +914,9 @@ function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inC
             onSelect={onSelect}
             inCart={inCart}
             onAddToCart={onAddToCart}
+            showAll={!!msg.label}
+            label={msg.label}
+            onShopAll={msg.label && onAddAllToCart ? (items) => { onAddAllToCart(items); } : null}
           />
         )}
         {pickerProduct && (
@@ -936,8 +951,10 @@ function ThinkingBubble() {
 }
 
 // ─── Text input row (silent mode) ────────────────────────────────────────────
-function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitSearch, vsLoading }) {
+function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitSearch, onOutfitUrl, vsLoading, outfitLoading }) {
   const [draft, setDraft] = useState("");
+  const [outfitPopover, setOutfitPopover] = useState(false);
+  const [urlDraft, setUrlDraft] = useState("");
   const send = () => { if (draft.trim()) { onSend(draft.trim()); setDraft(""); } };
 
   const makeFileHandler = (cb) => (e) => {
@@ -949,8 +966,16 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitS
     e.target.value = "";
   };
 
+  const submitOutfitUrl = () => {
+    const url = urlDraft.trim();
+    if (!url) return;
+    onOutfitUrl?.(url);
+    setUrlDraft("");
+    setOutfitPopover(false);
+  };
+
   return (
-    <div className="text-input-row">
+    <div className="text-input-row" style={{ position: "relative" }}>
       <button className="mode-switch-btn" onClick={onSwitchVoice} title="Switch to voice">🎙️</button>
       <input className="chat-input" value={draft} onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
@@ -973,13 +998,42 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitS
         }
       </label>
 
-      {/* Outfit anatomy — full look breakdown */}
-      <input type="file" accept="image/*" id="outfit-file-input" style={{ display: "none" }}
-        onChange={makeFileHandler((b64, mime) => onOutfitSearch?.(b64, mime))} />
-      <label htmlFor="outfit-file-input" className="chat-camera-btn"
-        title="Analyse a full outfit">
-        👗
-      </label>
+      {/* Outfit anatomy — URL paste or photo upload */}
+      {outfitPopover && !outfitLoading && (
+        <div className="outfit-url-popover">
+          <p className="outfit-url-label">Paste an Instagram or Pinterest link</p>
+          <div className="outfit-url-row">
+            <input
+              className="outfit-url-input"
+              value={urlDraft}
+              onChange={(e) => setUrlDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && submitOutfitUrl()}
+              placeholder="https://www.instagram.com/p/..."
+              autoFocus
+            />
+            <button className="outfit-url-go" onClick={submitOutfitUrl} disabled={!urlDraft.trim()}>Go</button>
+          </div>
+          <div className="outfit-url-divider"><span>or</span></div>
+          <input type="file" accept="image/*" id="outfit-file-input" style={{ display: "none" }}
+            onChange={makeFileHandler((b64, mime) => { onOutfitSearch?.(b64, mime); setOutfitPopover(false); })} />
+          <label htmlFor="outfit-file-input" className="outfit-upload-alt">
+            📷 Upload a screenshot instead
+          </label>
+          <button className="outfit-url-cancel" onClick={() => setOutfitPopover(false)}>Cancel</button>
+        </div>
+      )}
+
+      <button
+        className={`chat-camera-btn${outfitLoading ? " vs-loading-btn" : ""}`}
+        title={outfitLoading ? "Analysing outfit…" : "Shop this outfit"}
+        style={outfitLoading ? { pointerEvents: "none", opacity: 0.5 } : {}}
+        onClick={() => !outfitLoading && setOutfitPopover(p => !p)}
+      >
+        {outfitLoading
+          ? <span className="vs-loading-spinner" style={{ width: 14, height: 14 }} />
+          : "👗"
+        }
+      </button>
 
       <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
     </div>
@@ -1044,7 +1098,8 @@ export default function App() {
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies,
-    sendOutfitImage, outfitAnatomy, setOutfitAnatomy,
+    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled,
+    outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
   } = useMiraVoice({
     userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
     onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); setVsLoading(false); },
@@ -1271,7 +1326,8 @@ export default function App() {
           {/* Look deck at the top of thread */}
           {looks.length > 0 && (
             <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook}
-              onAddAllToCart={addAllToCart} onAddToCart={addToCart} inCart={inCart} />
+              onAddAllToCart={(items) => { addAllToCart(items); setShowCart(true); }}
+              onAddToCart={addToCart} inCart={inCart} />
           )}
 
           {messages.length === 0 && !connected && (
@@ -1282,7 +1338,8 @@ export default function App() {
               ? <EventDivider key={msg.id} text={msg.text} />
               : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={handleLove} onBuy={buyClick}
                   highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart}
-                  reasonPickerProductId={reasonPickerProductId} onReasonDone={handleReasonDone} />
+                  reasonPickerProductId={reasonPickerProductId} onReasonDone={handleReasonDone}
+                  onAddAllToCart={(items) => { addAllToCart(items); setShowCart(true); }} />
           )}
           {state === "thinking" && <ThinkingBubble />}
           {/* Scroll anchor — always at the very bottom of thread content */}
@@ -1323,7 +1380,7 @@ export default function App() {
               </button>
             </div>
           ) : textMode ? (
-            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} onOutfitSearch={sendOutfitImage} vsLoading={vsLoading} />
+            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} onOutfitSearch={sendOutfitImage} onOutfitUrl={sendOutfitUrl} vsLoading={vsLoading} outfitLoading={outfitLoading} />
           ) : (
             <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
           )}
@@ -1372,11 +1429,29 @@ export default function App() {
         <button className="privacy-link" onClick={() => setShowPrivacy(true)}>Privacy</button>
       </footer>
 
+      {outfitLoading && (
+        <div className="ob-overlay">
+          <div className="ob-loading-panel">
+            <div className="ob-loading-spinner" />
+            <p className="ob-loading-text">Analysing your outfit…</p>
+            <p className="ob-loading-sub">Mira is identifying each item and finding matches</p>
+          </div>
+        </div>
+      )}
+      {outfitError && !outfitLoading && (
+        <div className="ob-error-toast">
+          <span>{outfitError}</span>
+          <button onClick={() => setOutfitError(null)}>✕</button>
+        </div>
+      )}
       {outfitAnatomy && (
         <OutfitBuilder
           anatomy={outfitAnatomy}
           onClose={() => setOutfitAnatomy(null)}
-          onTellMira={(text) => { sendText(text); }}
+          onTellMira={(text, products) => {
+            if (products?.length) sendOutfitAssembled(products.map(p => p.id));
+            sendText(text);
+          }}
         />
       )}
       {DEBUG_MODE && <SessionWatcherPanel />}

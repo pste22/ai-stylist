@@ -303,6 +303,7 @@ def _affiliate_url(p: dict) -> str:
     return f"https://www.google.com/search?tbm=shop&q={query}"
 
 _MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
+_VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-pro")
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
 _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
@@ -666,7 +667,7 @@ async def handle(ws) -> None:
             img_bytes = base64.b64decode(image_b64)
             response = await asyncio.to_thread(
                 _client.models.generate_content,
-                model="gemini-1.5-flash",
+                model=_VISION_MODEL,
                 contents=[
                     _types.Part.from_bytes(data=img_bytes, mime_type=mime),
                     (
@@ -740,43 +741,146 @@ async def handle(ws) -> None:
         await _send_json(ws, type="state", state="idle", mood="neutral")
         print(f"  visual_search → {category}/{color}/{gender} → {len(items)} results")
 
+    async def _outfit_from_url(url: str) -> None:
+        """Fetch an outfit image from a public Instagram/Pinterest/Twitter URL and analyse it."""
+        import base64 as _b64
+        import urllib.request as _req
+        import urllib.parse as _up
+
+        if not url:
+            await _send_json(ws, type="outfit_url_error", reason="empty")
+            return
+
+        await _send_json(ws, type="outfit_url_status", status="fetching")
+
+        # oEmbed endpoints — return thumbnail_url for public posts, fail for private
+        _OEMBED = {
+            "instagram.com": "https://www.instagram.com/api/v1/oembed/?url={url}&maxwidth=1080",
+            "instagr.am":    "https://www.instagram.com/api/v1/oembed/?url={url}&maxwidth=1080",
+            "pinterest.com": "https://www.pinterest.com/oembed.json?url={url}",
+            "pin.it":        "https://www.pinterest.com/oembed.json?url={url}",
+            "twitter.com":   "https://publish.twitter.com/oembed?url={url}",
+            "x.com":         "https://publish.twitter.com/oembed?url={url}",
+        }
+
+        domain = _up.urlparse(url).netloc.lower().lstrip("www.")
+        oembed_tpl = next((v for k, v in _OEMBED.items() if domain.endswith(k)), None)
+
+        image_b64 = None
+        mime = "image/jpeg"
+
+        try:
+            if oembed_tpl:
+                # Try oEmbed first — works for public posts without auth
+                oembed_url = oembed_tpl.format(url=_up.quote(url, safe=""))
+                req = _req.Request(oembed_url, headers={"User-Agent": "Mozilla/5.0"})
+                with _req.urlopen(req, timeout=10) as r:
+                    oembed = json.loads(r.read())
+                thumb = oembed.get("thumbnail_url") or oembed.get("url")
+                if not thumb:
+                    raise ValueError("no image in oembed response")
+                # Fetch the actual image bytes
+                req2 = _req.Request(thumb, headers={"User-Agent": "Mozilla/5.0"})
+                with _req.urlopen(req2, timeout=15) as r:
+                    img_bytes = r.read()
+                    ct = r.headers.get("Content-Type", "image/jpeg")
+                    mime = ct.split(";")[0].strip() or "image/jpeg"
+                image_b64 = _b64.b64encode(img_bytes).decode()
+            else:
+                # Unknown platform — try fetching URL directly as an image
+                req = _req.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+                with _req.urlopen(req, timeout=15) as r:
+                    ct = r.headers.get("Content-Type", "")
+                    if not ct.startswith("image/"):
+                        raise ValueError(f"URL is not an image ({ct}) — please upload instead")
+                    img_bytes = r.read()
+                    mime = ct.split(";")[0].strip()
+                image_b64 = _b64.b64encode(img_bytes).decode()
+
+        except Exception as e:
+            err = str(e).lower()
+            print(f"  outfit_url error for {url}: {e}")
+            if any(x in err for x in ["401", "403", "login", "private", "forbidden", "unauthorized"]):
+                reason = "private"
+            elif any(x in err for x in ["404", "not found"]):
+                reason = "not_found"
+            else:
+                reason = "fetch_failed"
+            await _send_json(ws, type="outfit_url_error", reason=reason, message=str(e))
+            return
+
+        # Hand off to the existing anatomy pipeline
+        await _outfit_anatomy(image_b64, mime)
+
     async def _outfit_anatomy(image_b64: str, mime: str = "image/jpeg") -> None:
         """Detect every clothing item in an outfit photo and match each to the catalog."""
         import base64
         from google import genai as _genai
         from google.genai import types as _types
 
+        # Color synonym map — lets us match "burgundy" against catalog "red/maroon/wine" etc.
+        _COLOR_FAMILY = {
+            "burgundy": ["burgundy","maroon","wine","red","crimson","dark red"],
+            "maroon":   ["maroon","burgundy","wine","red","dark red"],
+            "navy":     ["navy","dark blue","navy blue","blue"],
+            "cream":    ["cream","ivory","off white","beige","white"],
+            "beige":    ["beige","cream","tan","camel","nude"],
+            "khaki":    ["khaki","tan","beige","camel"],
+            "grey":     ["grey","gray","charcoal","silver"],
+            "gray":     ["gray","grey","charcoal","silver"],
+            "pink":     ["pink","rose","blush","coral","magenta"],
+            "coral":    ["coral","orange","pink","salmon"],
+            "olive":    ["olive","khaki","green","dark green"],
+            "mustard":  ["mustard","yellow","gold","amber"],
+            "white":    ["white","cream","ivory","off white"],
+            "black":    ["black","charcoal","dark"],
+            "red":      ["red","burgundy","maroon","crimson","wine"],
+            "blue":     ["blue","navy","cobalt","royal blue"],
+            "green":    ["green","olive","teal","emerald"],
+            "brown":    ["brown","tan","camel","chocolate","coffee"],
+        }
+
+        print(f"  [outfit_anatomy] starting — image size={len(image_b64)} mime={mime}")
         await _send_json(ws, type="state", state="thinking", mood="focused")
         try:
             _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
             img_bytes = base64.b64decode(image_b64)
             response = await asyncio.to_thread(
                 _client.models.generate_content,
-                model="gemini-1.5-flash",
+                model=_VISION_MODEL,
                 contents=[
                     _types.Part.from_bytes(data=img_bytes, mime_type=mime),
                     (
-                        "You are a fashion analyst. Identify every clothing and accessory item "
-                        "visible in this outfit photo. Return ONLY a valid JSON array — no markdown, "
-                        "no explanation. Each element must have:\n"
-                        "- label: short human-readable name (e.g. 'White Linen Shirt')\n"
+                        "You are a fashion analyst. Analyse this outfit photo and return ONLY valid JSON "
+                        "(no markdown, no explanation) with this exact shape:\n"
+                        "{\"gender\": \"women|men|unisex\", \"items\": [...]}\n\n"
+                        "gender: who is wearing the outfit — men, women, or unisex.\n"
+                        "Each item in the array must have:\n"
+                        "- label: descriptive name (e.g. 'Burgundy Casual T-Shirt')\n"
                         "- category: one of tops/bottoms/dresses/outerwear/shoes/bags/accessories\n"
-                        "- color: primary color as ONE word (e.g. white, blue, black, brown, pink)\n"
-                        "- style: 1-2 style descriptors (e.g. casual, slim-fit, formal, sporty)\n"
-                        "Only include items that are clearly visible. Cap at 6 items.\n"
-                        "Example: [{\"label\":\"White Oxford Shirt\",\"category\":\"tops\","
-                        "\"color\":\"white\",\"style\":\"formal\"}]"
+                        "- color: primary color as ONE lowercase word (e.g. burgundy, navy, white)\n"
+                        "- style: comma-separated 1-2 style tags (e.g. 'casual, slim-fit')\n"
+                        "Only include clearly visible items. Cap at 6 items.\n"
+                        "Example: {\"gender\":\"men\",\"items\":[{\"label\":\"White Oxford Shirt\","
+                        "\"category\":\"tops\",\"color\":\"white\",\"style\":\"formal\"}]}"
                     ),
                 ],
             )
             raw = response.text.strip()
+            print(f"  [outfit_anatomy] Gemini raw ({len(raw)} chars): {raw[:300]!r}")
             if raw.startswith("```"):
-                raw = raw.split("```")[1]
-                if raw.startswith("json"):
-                    raw = raw[4:]
-            detected = json.loads(raw.strip())
-            if not isinstance(detected, list):
-                raise ValueError("Gemini did not return a list")
+                raw = re.sub(r"^```[a-z]*\n?", "", raw, flags=re.MULTILINE)
+                raw = re.sub(r"```$", "", raw.strip()).strip()
+            parsed = json.loads(raw.strip())
+            # Support both {gender, items} object and bare array (older format)
+            if isinstance(parsed, dict):
+                outfit_gender = parsed.get("gender", "women").lower()
+                detected = parsed.get("items", [])
+            elif isinstance(parsed, list):
+                outfit_gender = "women"
+                detected = parsed
+            else:
+                raise ValueError("Gemini did not return a list or dict")
         except Exception as e:
             print(f"  outfit_anatomy error: {e}")
             await _send_json(ws, type="outfit_anatomy", items=[], error=str(e))
@@ -784,39 +888,54 @@ async def handle(ws) -> None:
             return
 
         pool = [p for p in _CATALOG if p.get("image_url") and p.get("affiliate_url")]
+        # Filter by gender when catalog has enough coverage
+        gender_pool = [p for p in pool if (p.get("gender") or "women").lower() in (outfit_gender, "unisex")]
+        if len(gender_pool) < 10:
+            gender_pool = pool  # fallback to full catalog if too few gender matches
+        catalog_gender_note = outfit_gender if len(gender_pool) >= 10 else None
+
         result_items = []
+
+        def _fmt(p):
+            return {
+                "id": p["id"], "name": p["name"],
+                "category": p.get("category"), "color": p.get("color"),
+                "price": p.get("price"), "image_url": p.get("image_url"),
+                "affiliate_url": _affiliate_url(p),
+            }
 
         for item in detected[:6]:
             cat   = item.get("category", "")
             color = (item.get("color") or "").lower()
             style = (item.get("style") or "").lower()
+            # Build the set of acceptable color synonyms for this detected color
+            color_synonyms = set(_COLOR_FAMILY.get(color, [color]))
 
-            def _score(p: dict, _cat=cat, _color=color, _style=style) -> float:
+            def _score(p: dict, _cat=cat, _color=color, _syns=color_synonyms, _style=style) -> float:
                 s = 0.0
-                if p.get("category") == _cat:   s += 5.0
+                if p.get("category") == _cat:
+                    s += 5.0
                 pc = (p.get("color") or "").lower()
-                if _color and _color in pc:      s += 3.0
-                pt = (p.get("name") or "").lower()
-                if _style and _style in pt:      s += 1.0
+                if _color and _color == pc:          s += 4.0  # exact color match
+                elif pc and pc in _syns:             s += 2.5  # synonym match
+                elif _color and _color in pc:        s += 1.5  # partial match
+                pn = (p.get("name") or "").lower()
+                for tag in _style.split(","):
+                    tag = tag.strip()
+                    if tag and tag in pn:            s += 0.5
                 return s
 
-            # Default matches (detected color)
-            cat_pool = [p for p in pool if p.get("category") == cat]
+            cat_pool = [p for p in gender_pool if p.get("category") == cat]
+            if not cat_pool:
+                cat_pool = [p for p in pool if p.get("category") == cat]  # gender fallback
+
             top3 = sorted(cat_pool, key=_score, reverse=True)[:3]
 
-            # Pre-compute top-3 matches for each available color in this category
+            # Pre-compute top-3 per color for instant client-side switching
             cat_colors = sorted({
                 (p.get("color") or "").lower()
                 for p in cat_pool if p.get("color")
             })[:8]
-
-            def _fmt(p):
-                return {
-                    "id": p["id"], "name": p["name"],
-                    "category": p.get("category"), "color": p.get("color"),
-                    "price": p.get("price"), "image_url": p.get("image_url"),
-                    "affiliate_url": _affiliate_url(p),
-                }
 
             color_variants = {}
             for c in cat_colors:
@@ -837,9 +956,11 @@ async def handle(ws) -> None:
                 "color_variants": color_variants,
             })
 
-        await _send_json(ws, type="outfit_anatomy", items=result_items)
+        await _send_json(ws, type="outfit_anatomy", items=result_items,
+                         outfit_gender=outfit_gender,
+                         catalog_note=None if catalog_gender_note else "women's catalog")
         await _send_json(ws, type="state", state="idle", mood="neutral")
-        print(f"  outfit_anatomy → {len(result_items)} items detected")
+        print(f"  outfit_anatomy → gender={outfit_gender} {len(result_items)} items detected")
 
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
@@ -1186,6 +1307,30 @@ async def handle(ws) -> None:
                         mime = data.get("mime", "image/jpeg")
                         if img:
                             asyncio.ensure_future(_outfit_anatomy(img, mime))
+                    elif data.get("type") == "outfit_url":
+                        asyncio.ensure_future(_outfit_from_url(data.get("url", "")))
+                    elif data.get("type") == "outfit_assembled":
+                        # User clicked "Tell Mira" in OutfitBuilder — echo the
+                        # selected products as a product row in the chat so they
+                        # are visible alongside Mira's response.
+                        ids = data.get("product_ids", [])
+                        id_set = {str(i) for i in ids}
+                        ordered = []
+                        for pid in ids:
+                            match = next((p for p in _CATALOG if str(p.get("id")) == str(pid)), None)
+                            if match:
+                                ordered.append({
+                                    "id": match["id"], "name": match["name"],
+                                    "category": match.get("category"),
+                                    "color": match.get("color"),
+                                    "price": match.get("price"),
+                                    "image_url": match.get("image_url"),
+                                    "affiliate_url": _affiliate_url(match),
+                                })
+                        if ordered:
+                            await _send_json(ws, type="products", items=ordered,
+                                             show_more=False, paged=True,
+                                             label="Your assembled look")
         finally:
             stop.set()  # browser closed → tear the whole conversation down
             if user_id and chat_session_id:
