@@ -15,6 +15,12 @@ import ProductQuickView from "./ProductQuickView.jsx";
 import CartPanel from "./CartPanel.jsx";
 import { useCart } from "./useCart.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
+import { install as installWatcher } from "./SessionWatcher.js";
+import { SessionWatcherPanel } from "./SessionWatcherPanel.jsx";
+
+// Activate in dev mode or when ?debug appears in the URL
+const DEBUG_MODE = import.meta.env.DEV || new URLSearchParams(location.search).has("debug");
+if (DEBUG_MODE) installWatcher();
 
 // ─── User avatar menu (dropdown) ─────────────────────────────────────────────
 function UserMenu({ userName, userEmail, userAvatar, onSignOut, onDeleteAccount }) {
@@ -1307,6 +1313,8 @@ export default function App() {
         {connected ? (textMode ? "text" : "live") : "offline"} ·{" "}
         <button className="privacy-link" onClick={() => setShowPrivacy(true)}>Privacy</button>
       </footer>
+
+      {DEBUG_MODE && <SessionWatcherPanel />}
     </>
   );
 }
