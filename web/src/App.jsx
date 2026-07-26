@@ -286,48 +286,163 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
   );
 }
 
-function LookDeck({ looks, loved, onLove, onBuy, onSaveLook, onAddAllToCart }) {
+// ─── Slot label config ────────────────────────────────────────────────────────
+const SLOT_META = {
+  outfit:      { label: "Outfit",      emoji: "👗" },
+  shoes:       { label: "Shoes",       emoji: "👠" },
+  bag:         { label: "Bag",         emoji: "👜" },
+  accessories: { label: "Accessories", emoji: "✨" },
+};
+
+function LookSlot({ slotKey, product, loved, onLove, onBuy, onAddToCart, inCart }) {
+  if (!product) return null;
+  const { label, emoji } = SLOT_META[slotKey] || { label: slotKey, emoji: "🛍️" };
+  const isLoved = loved?.has(product.id);
+  return (
+    <div className="look-slot">
+      <span className="look-slot-label">{emoji} {label}</span>
+      <div className="look-slot-card" onClick={() => onBuy?.(product)}>
+        <img
+          className="look-slot-img"
+          src={product.image_url}
+          alt={product.name}
+          loading="lazy"
+          onError={(e) => { e.target.style.display = "none"; }}
+        />
+        <div className="look-slot-info">
+          <p className="look-slot-name">{product.name}</p>
+          <p className="look-slot-price">₹{Number(product.price || 0).toLocaleString("en-IN")}</p>
+        </div>
+        <div className="look-slot-actions">
+          <button
+            className={`look-slot-love${isLoved ? " loved" : ""}`}
+            onClick={(e) => { e.stopPropagation(); onLove?.(product); }}
+            aria-label={isLoved ? "Saved" : "Save"}
+          >{isLoved ? "♥" : "♡"}</button>
+          <button
+            className={`look-slot-cart${inCart?.(product.id) ? " in-cart" : ""}`}
+            onClick={(e) => { e.stopPropagation(); if (!inCart?.(product.id)) onAddToCart?.(product); }}
+            aria-label={inCart?.(product.id) ? "In cart" : "Add to cart"}
+          >{inCart?.(product.id) ? "🛒✓" : "🛒"}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAddToCart, inCart }) {
+  const [expanded, setExpanded] = useState(false);
+  const slots = look.slots || {};
+  const outfitItems = slots.outfit || look.items || [];
+  const allItems = look.items || [];
+  const allSaved = allItems.every((p) => loved?.has(p.id));
+  const total = allItems.reduce((s, p) => s + (Number(p.price) || 0), 0);
+
+  return (
+    <article className="look-card-v2">
+      {/* Header */}
+      <div className="look-card-v2-head">
+        <div>
+          <h3 className="look-card-v2-name">{look.name}</h3>
+          <p className="look-card-v2-rationale">{look.rationale}</p>
+        </div>
+        <div className="look-card-v2-price-block">
+          <span className="look-card-v2-total">₹{total.toLocaleString("en-IN")}</span>
+          <span className="look-card-v2-count">{allItems.length} pieces</span>
+        </div>
+      </div>
+
+      {/* Outfit anchor — hero images */}
+      <div className="look-outfit-row">
+        {outfitItems.map((p) => (
+          <div className="look-outfit-img-wrap" key={p.id} onClick={() => onBuy?.(p)}>
+            <img
+              className="look-outfit-img"
+              src={p.image_url}
+              alt={p.name}
+              loading="lazy"
+              onError={(e) => { e.target.style.display = "none"; }}
+            />
+            <span className="look-outfit-tag">{p.category}</span>
+          </div>
+        ))}
+      </div>
+
+      {/* Accessories strip */}
+      <div className="look-accessories-strip">
+        {["shoes", "bag", "accessories"].map((key) => {
+          const p = slots[key];
+          if (!p) return null;
+          return (
+            <div className="look-acc-thumb" key={key} onClick={() => onBuy?.(p)}>
+              <img
+                src={p.image_url}
+                alt={p.name}
+                loading="lazy"
+                onError={(e) => { e.target.style.display = "none"; }}
+              />
+              <span className="look-acc-label">{SLOT_META[key]?.emoji} {SLOT_META[key]?.label}</span>
+              <span className="look-acc-price">₹{Number(p.price || 0).toLocaleString("en-IN")}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Expandable detail slots */}
+      <button className="look-expand-btn" onClick={() => setExpanded(v => !v)}>
+        {expanded ? "▴ Less detail" : "▾ View all pieces"}
+      </button>
+      {expanded && (
+        <div className="look-slots-list">
+          {["outfit", "shoes", "bag", "accessories"].map((key) => {
+            if (key === "outfit") {
+              return outfitItems.map((p) => (
+                <LookSlot key={p.id} slotKey="outfit" product={p}
+                  loved={loved} onLove={onLove} onBuy={onBuy}
+                  onAddToCart={onAddToCart} inCart={inCart} />
+              ));
+            }
+            const p = slots[key];
+            if (!p) return null;
+            return (
+              <LookSlot key={key} slotKey={key} product={p}
+                loved={loved} onLove={onLove} onBuy={onBuy}
+                onAddToCart={onAddToCart} inCart={inCart} />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="look-card-v2-actions">
+        <button
+          className={`look-save${allSaved ? " look-save--saved" : ""}`}
+          onClick={() => !allSaved && onSaveLook?.(allItems)}
+        >{allSaved ? "♥ Saved" : "♡ Save look"}</button>
+        <button
+          className="look-cart-btn"
+          onClick={() => onAddAllToCart?.(allItems)}
+        >🛒 Shop this look</button>
+      </div>
+    </article>
+  );
+}
+
+function LookDeck({ looks, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAddToCart, inCart }) {
   if (!looks?.length) return null;
   return (
     <section className="look-deck" aria-label="Mira's complete look drafts">
       <div className="look-deck-heading">
         <p className="look-deck-eyebrow">✦ Mira Event Edit</p>
-        <h2>Three ways to make it yours</h2>
+        <h2>Complete looks for your occasion</h2>
+        <p className="look-deck-sub">Each look is head-to-toe — outfit, shoes, bag, and accessories.</p>
       </div>
       <div className="look-grid">
-        {looks.map((look) => {
-          const allSaved = look.items.every((p) => loved.has(p.id));
-          const total = look.items.reduce((s, p) => s + (Number(p.price) || 0), 0);
-          return (
-            <article className="look-card" key={look.id}>
-              <div className="look-card-head">
-                <h3>{look.name}</h3>
-                <strong className="look-total">₹{total.toLocaleString("en-IN")}</strong>
-              </div>
-              <p className="look-rationale">{look.rationale}</p>
-              <div className="look-items">
-                {look.items.map((product) => (
-                  <ProductCard key={product.id} product={product} compact
-                    loved={loved.has(product.id)} onLove={onLove} onBuy={onBuy} />
-                ))}
-              </div>
-              <div className="look-actions">
-                <button
-                  className={`look-save${allSaved ? " look-save--saved" : ""}`}
-                  onClick={() => !allSaved && onSaveLook(look.items)}
-                >
-                  {allSaved ? "♥ Saved" : "♡ Save"}
-                </button>
-                <button
-                  className="look-cart-btn"
-                  onClick={() => onAddAllToCart?.(look.items)}
-                >
-                  🛒 Add look to cart
-                </button>
-              </div>
-            </article>
-          );
-        })}
+        {looks.map((look) => (
+          <LookCard key={look.id} look={look} loved={loved}
+            onLove={onLove} onBuy={onBuy} onSaveLook={onSaveLook}
+            onAddAllToCart={onAddAllToCart} onAddToCart={onAddToCart} inCart={inCart} />
+        ))}
       </div>
     </section>
   );
@@ -467,7 +582,8 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
 // ─── Full-screen chat view (kept for reference; not rendered in main path) ────
 function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
                     onStop, onSend, error, userName, userEmail, userAvatar, onSignOut, onDeleteAccount,
-                    canShowMore, onShowMore, products, looks, onSaveLook, highlightedId }) {
+                    canShowMore, onShowMore, products, looks, onSaveLook, highlightedId,
+                    inCart, onAddToCart, onAddAllToCart }) {
   const [draft, setDraft] = useState("");
   const threadRef = useRef(null);
   const inputRef = useRef(null);
@@ -537,7 +653,8 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
       <div className="chat-body">
         <div className="chat-left">
           <div className="chat-thread" ref={threadRef}>
-            <LookDeck looks={looks} loved={loved} onLove={onLove} onBuy={onBuy} onSaveLook={onSaveLook} />
+            <LookDeck looks={looks} loved={loved} onLove={onLove} onBuy={onBuy} onSaveLook={onSaveLook}
+              onAddAllToCart={onAddAllToCart} onAddToCart={onAddToCart} inCart={inCart} />
             {messages.length === 0 && (
               <div className="chat-empty">
                 <span>Mira is thinking of a greeting…</span>
@@ -1052,7 +1169,8 @@ export default function App() {
         <div className="chat-thread" ref={threadRef}>
           {/* Look deck at the top of thread */}
           {looks.length > 0 && (
-            <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook} onAddAllToCart={addAllToCart} />
+            <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook}
+              onAddAllToCart={addAllToCart} onAddToCart={addToCart} inCart={inCart} />
           )}
 
           {messages.length === 0 && !connected && (

@@ -50,10 +50,10 @@ from look_engine import build_looks  # noqa: E402
 # actually earn on flow straight into the spoken conversation. See docs/10-sourcing.
 _SOURCE = get_source()
 # Full catalog for "Show 10 more" paging — never put all of this in the AI prompt.
-_CATALOG = _SOURCE.search(limit=2000)
-# Curated spotlight (≤50 products, ~2 per category) for the grounding prompt so
+_CATALOG = _SOURCE.search(limit=5000)
+# Curated spotlight (≤60 products, ~5 per category) for the grounding prompt so
 # Mira has focused, speakable recommendations without a 40k-token product dump.
-_SPOTLIGHT_PER_CAT = 5
+_SPOTLIGHT_PER_CAT = 6
 _SPOTLIGHT: list[dict] = []
 _seen_cats: dict = {}
 for _p in _CATALOG:
@@ -78,7 +78,7 @@ _BUDGET_LABELS = {
 _FOCUS_CATS = {
     "everyday":   {"tops", "bottoms", "shoes", "activewear"},
     "work":       {"tops", "bottoms", "outerwear", "bags", "accessories"},
-    "occasions":  {"dresses", "outerwear", "accessories", "shoes", "bags"},
+    "occasions":  {"dresses", "ethnic", "outerwear", "accessories", "shoes", "bags"},
     "everything": None,
 }
 
@@ -215,9 +215,16 @@ def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: st
         parts.append(
             "EVENT BRIEF (the shopper submitted this before the chat):\n"
             + "\n".join(f"- {field}" for field in fields)
-            + "\n\nStart by acknowledging the brief. Ask only one concise question if a "
-            "critical detail is missing; otherwise help them decide between the three "
-            "grounded look drafts already shown in the interface. Never invent an item."
+            + "\n\nThree COMPLETE looks are already shown — each with an outfit anchor, shoes, bag, and accessories. "
+            "Your job is to help the shopper DECIDE between the looks and make them excited to buy.\n"
+            "When describing a look:\n"
+            "- Name the outfit piece first (dress/lehenga/top+trouser), then shoes, then bag, then accessory\n"
+            "- Paint a picture of the full look: 'Picture this — a blush Mango midi dress, Steve Madden block heels, a Charles Keith clutch, and a Fossil rose-gold watch.'\n"
+            "- Give 1–2 sentences on WHY it works for this occasion and WHAT the person will feel wearing it\n"
+            "- End with a soft decision nudge: 'Does that feel right for the vibe?' or 'Want me to swap the shoes?'\n"
+            "Do NOT list product names. Speak in vivid, sensory fashion-editor language.\n"
+            "If the shopper wants a different direction, help them refine — don't start over unless asked.\n"
+            "Encourage the 'Shop this look' button once they're excited."
         )
     parts.append(
         f"PRODUCTS you may recommend (curated spotlight — {len(_CATALOG)} total in catalog):\n"

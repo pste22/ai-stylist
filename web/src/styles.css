@@ -1526,8 +1526,85 @@ button.primary.stop { background: var(--accent); }
 .event-brief-disclosure { color: var(--ink-3); text-align: center; font-size: .71rem; line-height: 1.45; }
 .look-deck { width: 100%; margin-bottom: .5rem; }
 .look-deck-eyebrow { margin-top: 0; }
-.look-deck h2 { margin: 0 0 .85rem; font-size: 1.25rem; letter-spacing: -.03em; }
-.look-grid { display: grid; gap: .75rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.look-deck h2 { margin: 0 0 .25rem; font-size: 1.25rem; letter-spacing: -.03em; }
+.look-deck-sub { color: var(--ink-2); font-size: .78rem; margin: 0 0 .85rem; }
+.look-grid { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* ── Complete Look Card v2 ─────────────────────────────────────────────────── */
+.look-card-v2 {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card);
+  padding: 1rem; box-shadow: var(--shadow-xs); display: flex; flex-direction: column; gap: .6rem;
+}
+.look-card-v2-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem;
+}
+.look-card-v2-name { margin: 0; font-size: .95rem; letter-spacing: -.02em; }
+.look-card-v2-rationale { color: var(--ink-2); font-size: .74rem; line-height: 1.45; margin: .2rem 0 0; }
+.look-card-v2-price-block { text-align: right; flex-shrink: 0; }
+.look-card-v2-total { display: block; color: var(--accent); font-weight: 800; font-size: .95rem; }
+.look-card-v2-count { display: block; color: var(--ink-2); font-size: .7rem; }
+
+/* Outfit hero images */
+.look-outfit-row { display: flex; gap: .4rem; }
+.look-outfit-img-wrap {
+  flex: 1; position: relative; cursor: pointer; border-radius: var(--r-sm);
+  overflow: hidden; background: var(--surface-2); aspect-ratio: 3/4;
+  border: 1px solid var(--border);
+}
+.look-outfit-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.look-outfit-tag {
+  position: absolute; bottom: .3rem; left: .3rem;
+  background: rgba(0,0,0,.55); color: #fff; font-size: .62rem;
+  padding: .1rem .35rem; border-radius: 99px; text-transform: capitalize;
+}
+
+/* Accessories thumbnail strip */
+.look-accessories-strip { display: flex; gap: .4rem; }
+.look-acc-thumb {
+  flex: 1; cursor: pointer; border-radius: var(--r-sm); overflow: hidden;
+  background: var(--surface-2); border: 1px solid var(--border);
+  display: flex; flex-direction: column; align-items: center; padding: .35rem;
+  transition: border-color .15s;
+}
+.look-acc-thumb:hover { border-color: var(--accent); }
+.look-acc-thumb img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-sm); }
+.look-acc-label { font-size: .64rem; color: var(--ink-2); margin-top: .25rem; text-align: center; }
+.look-acc-price { font-size: .68rem; font-weight: 700; color: var(--ink); }
+
+/* Expand toggle */
+.look-expand-btn {
+  background: none; border: none; color: var(--ink-2); font-size: .72rem;
+  cursor: pointer; padding: .1rem 0; text-align: left; font-family: inherit;
+}
+.look-expand-btn:hover { color: var(--accent); }
+
+/* Detail slots */
+.look-slots-list { display: flex; flex-direction: column; gap: .4rem; }
+.look-slot { display: flex; flex-direction: column; gap: .2rem; }
+.look-slot-label { font-size: .68rem; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; }
+.look-slot-card {
+  display: flex; gap: .5rem; align-items: center; cursor: pointer;
+  padding: .4rem; border-radius: var(--r-sm); border: 1px solid var(--border);
+  background: var(--surface-2); transition: border-color .15s;
+}
+.look-slot-card:hover { border-color: var(--accent); }
+.look-slot-img { width: 44px; height: 44px; object-fit: cover; border-radius: var(--r-sm); flex-shrink: 0; }
+.look-slot-info { flex: 1; min-width: 0; }
+.look-slot-name { font-size: .72rem; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; }
+.look-slot-price { font-size: .72rem; font-weight: 700; color: var(--accent); margin: .1rem 0 0; }
+.look-slot-actions { display: flex; gap: .3rem; flex-shrink: 0; }
+.look-slot-love, .look-slot-cart {
+  background: none; border: 1px solid var(--border); border-radius: 99px;
+  width: 28px; height: 28px; font-size: .7rem; cursor: pointer; display: flex;
+  align-items: center; justify-content: center; transition: all .15s;
+}
+.look-slot-love:hover { border-color: var(--accent); color: var(--accent); }
+.look-slot-love.loved { background: var(--accent); border-color: var(--accent); color: #fff; }
+.look-slot-cart:hover { border-color: var(--accent); color: var(--accent); }
+.look-slot-cart.in-cart { background: #22c55e; border-color: #22c55e; color: #fff; }
+
+/* Actions row */
+.look-card-v2-actions { display: flex; gap: .5rem; margin-top: .25rem; }
 .look-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card);
   padding: .9rem; box-shadow: var(--shadow-xs);
