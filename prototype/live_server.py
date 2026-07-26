@@ -811,32 +811,90 @@ async def handle(ws) -> None:
                         pname   = prod.get("name", pid)
                         reason_text = ", ".join(reasons) if reasons else "general appeal"
                         print(f"  ♥ like_reason: {pname!r} → {reason_text}")
-                        # Suppress this product from appearing again — user already has it saved
+                        # Suppress the liked product from appearing again
                         session_shown_ids.add(pid)
-                        # Send quick-reply options to the client immediately (before Mira speaks)
+
+                        # ── Parse reason signals from chip labels ──────────────
+                        color_want = None
+                        brand_want = None
+                        cat_want   = prod.get("category")  # default: same category
+                        price_tier = None
+                        for r in reasons:
+                            rl = r.lower()
+                            if "color" in rl:
+                                color_want = rl.replace("color", "").strip()
+                            elif "brand" in rl:
+                                brand_want = rl.replace("brand", "").strip()
+                            elif "style" in rl:
+                                cat_want = rl.replace("style", "").strip()
+                            elif any(w in rl for w in ("budget", "mid-range", "premium", "luxury")):
+                                price_tier = rl
+
+                        # ── Score & pick matching products immediately ─────────
+                        scored = []
+                        for p in _CATALOG:
+                            if p["id"] in session_shown_ids:
+                                continue
+                            score = 0
+                            pcolor = (p.get("color") or "").lower()
+                            pname_ = (p.get("name")  or "").lower()
+                            pcat   =  p.get("category", "")
+                            if color_want and color_want in pcolor:
+                                score += 3   # colour match is strongest signal
+                            if cat_want and pcat == cat_want:
+                                score += 2
+                            if brand_want and brand_want in pname_:
+                                score += 2
+                            if score > 0:
+                                scored.append((score, p))
+
+                        scored.sort(key=lambda x: -x[0])
+                        similar = [p for _, p in scored[:3]]
+
+                        cat   = prod.get("category", "item")
+                        color = prod.get("color", "")
+
+                        if similar:
+                            for p in similar:
+                                session_shown_ids.add(p["id"])
+                            batch = [{
+                                "id": p["id"], "name": p["name"],
+                                "category": p["category"], "color": p["color"],
+                                "price": p["price"], "image_url": p.get("image_url"),
+                                "affiliate_url": _affiliate_url(p),
+                            } for p in similar]
+                            has_more = any(p["id"] not in session_shown_ids for p in _CATALOG)
+                            await _send_json(ws, type="products", items=batch,
+                                             show_more=has_more, paged=True)
+                            print(f"  ♥ pushed {len(batch)} reason-matched products")
+                            mira_prompt = (
+                                f"The user saved a {color} {cat} because of: {reason_text}. "
+                                f"I've already shown them {len(batch)} similar items on screen. "
+                                f"Say one warm short sentence acknowledging their taste "
+                                f"(e.g. 'Since you love {reason_text}, I pulled some similar picks!'). "
+                                f"Do NOT name any specific products."
+                            )
+                        else:
+                            # No strong matches — ask what to show next
+                            mira_prompt = (
+                                f"The user saved a {color} {cat} because of: {reason_text}. "
+                                f"No exact matches were found in the catalog right now. "
+                                f"Ask them in one warm sentence what they'd like to explore next. "
+                                f"Do NOT name any specific products."
+                            )
+
+                        # Send quick-reply options
                         await _send_json(ws, type="quick_replies", options=[
-                            "Yes, show me more like this",
+                            "Show me more like this",
                             "Try a different style",
                             "Show me something new",
                         ])
-                        # Build preference context — injected silently, never spoken
-                        cat   = prod.get("category", "item")
-                        color = prod.get("color", "")
-                        context_msg = (
-                            f"[PREFERENCE: The user saved a {color} {cat} to their wishlist "
-                            f"because of: {reason_text}. "
-                            f"Keep this in mind for future recommendations — "
-                            f"prioritise items with similar {reason_text}. "
-                            f"IMPORTANT: Do NOT mention or show the same item again.]"
-                        )
-                        # Trigger Mira follow-up — deliberately omit the product name so
-                        # _match_products cannot re-surface the same card.
-                        follow_up = (
-                            f"{context_msg}\n\n"
-                            f"The user just saved a {color} {cat} they loved (reason: {reason_text}). "
-                            f"Ask them in one warm, short sentence what to explore next — "
-                            f"more items with similar qualities, a different style, or fresh picks. "
-                            f"Do NOT say the product name. Do NOT list options — just ask naturally."
+
+                        # Trigger Mira to speak (inject silently, don't use product name)
+                        context_prefix = (
+                            f"[PREFERENCE: User loves {reason_text} in {cat}s. "
+                            f"Prioritise similar items going forward. "
+                            f"Do NOT repeat already-shown items.]\n\n"
                         )
                         sess = current["session"]
                         if sess is not None:
@@ -844,7 +902,7 @@ async def handle(ws) -> None:
                                 await sess.send_client_content(
                                     turns=[types.Content(
                                         role="user",
-                                        parts=[types.Part(text=follow_up)],
+                                        parts=[types.Part(text=context_prefix + mira_prompt)],
                                     )],
                                     turn_complete=True,
                                 )
