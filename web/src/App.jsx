@@ -18,6 +18,7 @@ import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { install as installWatcher } from "./SessionWatcher.js";
 import { SessionWatcherPanel } from "./SessionWatcherPanel.jsx";
 import { ReasonPicker } from "./ReasonPicker.jsx";
+import { OutfitBuilder } from "./OutfitBuilder.jsx";
 
 // Activate in dev mode or when ?debug appears in the URL
 const DEBUG_MODE = import.meta.env.DEV || new URLSearchParams(location.search).has("debug");
@@ -935,9 +936,19 @@ function ThinkingBubble() {
 }
 
 // ─── Text input row (silent mode) ────────────────────────────────────────────
-function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, vsLoading }) {
+function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitSearch, vsLoading }) {
   const [draft, setDraft] = useState("");
   const send = () => { if (draft.trim()) { onSend(draft.trim()); setDraft(""); } };
+
+  const makeFileHandler = (cb) => (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => { cb(reader.result.split(",")[1], file.type); };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   return (
     <div className="text-input-row">
       <button className="mode-switch-btn" onClick={onSwitchVoice} title="Switch to voice">🎙️</button>
@@ -945,31 +956,14 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, vsLoading
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
         placeholder="Message Mira…" autoFocus />
       <button className="send-btn" onClick={send} disabled={!draft.trim()}>Send</button>
-      <input
-        type="file"
-        accept="image/*"
-        id="vs-file-input"
-        style={{ display: "none" }}
-        disabled={vsLoading}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          const reader = new FileReader();
-          reader.onload = () => {
-            const b64 = reader.result.split(",")[1];
-            onVisualSearch?.(b64, file.type);
-          };
-          reader.readAsDataURL(file);
-          e.target.value = "";
-        }}
-      />
-      <label
-        htmlFor="vs-file-input"
+
+      {/* Visual search — single item */}
+      <input type="file" accept="image/*" id="vs-file-input" style={{ display: "none" }}
+        disabled={vsLoading} onChange={makeFileHandler((b64, mime) => onVisualSearch?.(b64, mime))} />
+      <label htmlFor="vs-file-input"
         className={`chat-camera-btn${vsLoading ? " vs-loading-btn" : ""}`}
         title={vsLoading ? "Analysing…" : "Search by photo"}
-        aria-label="Visual search"
-        style={vsLoading ? { pointerEvents: "none", opacity: 0.5 } : {}}
-      >
+        style={vsLoading ? { pointerEvents: "none", opacity: 0.5 } : {}}>
         {vsLoading
           ? <span className="vs-loading-spinner" style={{ width: 14, height: 14 }} />
           : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -978,6 +972,15 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, vsLoading
             </svg>
         }
       </label>
+
+      {/* Outfit anatomy — full look breakdown */}
+      <input type="file" accept="image/*" id="outfit-file-input" style={{ display: "none" }}
+        onChange={makeFileHandler((b64, mime) => onOutfitSearch?.(b64, mime))} />
+      <label htmlFor="outfit-file-input" className="chat-camera-btn"
+        title="Analyse a full outfit">
+        👗
+      </label>
+
       <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
     </div>
   );
@@ -1041,6 +1044,7 @@ export default function App() {
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies,
+    sendOutfitImage, outfitAnatomy, setOutfitAnatomy,
   } = useMiraVoice({
     userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
     onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); setVsLoading(false); },
@@ -1319,7 +1323,7 @@ export default function App() {
               </button>
             </div>
           ) : textMode ? (
-            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} vsLoading={vsLoading} />
+            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} onOutfitSearch={sendOutfitImage} vsLoading={vsLoading} />
           ) : (
             <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
           )}
@@ -1368,6 +1372,13 @@ export default function App() {
         <button className="privacy-link" onClick={() => setShowPrivacy(true)}>Privacy</button>
       </footer>
 
+      {outfitAnatomy && (
+        <OutfitBuilder
+          anatomy={outfitAnatomy}
+          onClose={() => setOutfitAnatomy(null)}
+          onTellMira={(text) => { sendText(text); }}
+        />
+      )}
       {DEBUG_MODE && <SessionWatcherPanel />}
     </>
   );

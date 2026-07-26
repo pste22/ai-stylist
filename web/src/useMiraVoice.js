@@ -354,6 +354,9 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             setVsLoading(false);
             if (onVisualSearchResults) onVisualSearchResults(msg.items || [], msg.query || "");
             break;
+          case "outfit_anatomy":
+            if (msg.items?.length) setOutfitAnatomy(msg.items);
+            break;
           case "quick_replies":
             setQuickReplies(msg.options || []);
             break;
@@ -386,6 +389,14 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
 
   const [vsLoading, setVsLoading] = useState(false);
   const [quickReplies, setQuickReplies] = useState([]);
+  const [outfitAnatomy, setOutfitAnatomy] = useState(null);
+
+  const sendOutfitImage = useCallback((imageBase64, mime = "image/jpeg") => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return;
+    setOutfitAnatomy(null);
+    ws.send(JSON.stringify({ type: "visual_outfit", image: imageBase64, mime }));
+  }, []);
   const quickReplyTimerRef = useRef(null);
 
   const sendLikeReason = useCallback((product, reasons) => {
@@ -422,5 +433,6 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
     sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies,
+    sendOutfitImage, outfitAnatomy, setOutfitAnatomy,
   };
 }

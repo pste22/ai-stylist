@@ -740,6 +740,107 @@ async def handle(ws) -> None:
         await _send_json(ws, type="state", state="idle", mood="neutral")
         print(f"  visual_search → {category}/{color}/{gender} → {len(items)} results")
 
+    async def _outfit_anatomy(image_b64: str, mime: str = "image/jpeg") -> None:
+        """Detect every clothing item in an outfit photo and match each to the catalog."""
+        import base64
+        from google import genai as _genai
+        from google.genai import types as _types
+
+        await _send_json(ws, type="state", state="thinking", mood="focused")
+        try:
+            _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            img_bytes = base64.b64decode(image_b64)
+            response = await asyncio.to_thread(
+                _client.models.generate_content,
+                model="gemini-1.5-flash",
+                contents=[
+                    _types.Part.from_bytes(data=img_bytes, mime_type=mime),
+                    (
+                        "You are a fashion analyst. Identify every clothing and accessory item "
+                        "visible in this outfit photo. Return ONLY a valid JSON array — no markdown, "
+                        "no explanation. Each element must have:\n"
+                        "- label: short human-readable name (e.g. 'White Linen Shirt')\n"
+                        "- category: one of tops/bottoms/dresses/outerwear/shoes/bags/accessories\n"
+                        "- color: primary color as ONE word (e.g. white, blue, black, brown, pink)\n"
+                        "- style: 1-2 style descriptors (e.g. casual, slim-fit, formal, sporty)\n"
+                        "Only include items that are clearly visible. Cap at 6 items.\n"
+                        "Example: [{\"label\":\"White Oxford Shirt\",\"category\":\"tops\","
+                        "\"color\":\"white\",\"style\":\"formal\"}]"
+                    ),
+                ],
+            )
+            raw = response.text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("```")[1]
+                if raw.startswith("json"):
+                    raw = raw[4:]
+            detected = json.loads(raw.strip())
+            if not isinstance(detected, list):
+                raise ValueError("Gemini did not return a list")
+        except Exception as e:
+            print(f"  outfit_anatomy error: {e}")
+            await _send_json(ws, type="outfit_anatomy", items=[], error=str(e))
+            await _send_json(ws, type="state", state="idle", mood="neutral")
+            return
+
+        pool = [p for p in _CATALOG if p.get("image_url") and p.get("affiliate_url")]
+        result_items = []
+
+        for item in detected[:6]:
+            cat   = item.get("category", "")
+            color = (item.get("color") or "").lower()
+            style = (item.get("style") or "").lower()
+
+            def _score(p: dict, _cat=cat, _color=color, _style=style) -> float:
+                s = 0.0
+                if p.get("category") == _cat:   s += 5.0
+                pc = (p.get("color") or "").lower()
+                if _color and _color in pc:      s += 3.0
+                pt = (p.get("name") or "").lower()
+                if _style and _style in pt:      s += 1.0
+                return s
+
+            # Default matches (detected color)
+            cat_pool = [p for p in pool if p.get("category") == cat]
+            top3 = sorted(cat_pool, key=_score, reverse=True)[:3]
+
+            # Pre-compute top-3 matches for each available color in this category
+            cat_colors = sorted({
+                (p.get("color") or "").lower()
+                for p in cat_pool if p.get("color")
+            })[:8]
+
+            def _fmt(p):
+                return {
+                    "id": p["id"], "name": p["name"],
+                    "category": p.get("category"), "color": p.get("color"),
+                    "price": p.get("price"), "image_url": p.get("image_url"),
+                    "affiliate_url": _affiliate_url(p),
+                }
+
+            color_variants = {}
+            for c in cat_colors:
+                c_pool = sorted(
+                    [p for p in cat_pool if (p.get("color") or "").lower() == c],
+                    key=lambda p: 1 if p.get("image_url") else 0,
+                    reverse=True,
+                )[:3]
+                if c_pool:
+                    color_variants[c] = [_fmt(p) for p in c_pool]
+
+            result_items.append({
+                "label":          item.get("label", cat),
+                "category":       cat,
+                "color":          color,
+                "style":          item.get("style", ""),
+                "matches":        [_fmt(p) for p in top3],
+                "color_variants": color_variants,
+            })
+
+        await _send_json(ws, type="outfit_anatomy", items=result_items)
+        await _send_json(ws, type="state", state="idle", mood="neutral")
+        print(f"  outfit_anatomy → {len(result_items)} items detected")
+
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
         nonlocal chat_title, session_shown_ids, show_saved_mode
@@ -1080,6 +1181,11 @@ async def handle(ws) -> None:
                         mime = data.get("mime", "image/jpeg")
                         if img:
                             asyncio.ensure_future(_visual_search(img, mime))
+                    elif data.get("type") == "visual_outfit":
+                        img = data.get("image", "")
+                        mime = data.get("mime", "image/jpeg")
+                        if img:
+                            asyncio.ensure_future(_outfit_anatomy(img, mime))
         finally:
             stop.set()  # browser closed → tear the whole conversation down
             if user_id and chat_session_id:
