@@ -230,28 +230,26 @@ function MiraBubbleContent({ text }) {
 
 // Unified 3-column product grid — single source of truth for product display.
 const PRODUCTS_PER_TURN = 3;
-function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll }) {
+function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll, userSize }) {
   if (!products?.length) return null;
   const shown = showAll ? products : products.slice(0, PRODUCTS_PER_TURN);
   return (
     <div className="product-grid-wrap">
-      {label && (
-        <div className="product-grid-label">
-          <span>{label}</span>
-          {onShopAll && (
-            <button className="product-grid-shop-all" onClick={() => onShopAll(products)}>
-              🛒 Shop all
-            </button>
-          )}
-        </div>
-      )}
+      {label && <div className="product-grid-label"><span>{label}</span></div>}
       <div className="product-grid">
         {shown.map((p) => (
           <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
             onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect}
-            inCart={inCart?.(p.id)} onAddToCart={onAddToCart} />
+            inCart={inCart?.(p.id)} onAddToCart={onAddToCart} userSize={userSize} />
         ))}
       </div>
+      {onShopAll && (
+        <div className="product-grid-shop-all-row">
+          <button className="product-grid-shop-all" onClick={() => onShopAll(products)}>
+            🛒 Shop all {products.length} items
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -873,23 +871,200 @@ function ModeToggle({ textMode, connected, quality, onVoice, onText }) {
 }
 
 // ─── Chat welcome / empty state — shown before first message ─────────────────
-function ChatWelcome({ onEventBrief, textMode }) {
+const FILTER_CATS = [
+  { key: "all",       label: "All",        emoji: "✦" },
+  { key: "dresses",   label: "Dresses",    emoji: "👗" },
+  { key: "tops",      label: "Tops",       emoji: "👚" },
+  { key: "bottoms",   label: "Bottoms",    emoji: "👖" },
+  { key: "bags",      label: "Bags",       emoji: "👜" },
+  { key: "shoes",     label: "Shoes",      emoji: "👟" },
+  { key: "outerwear", label: "Outerwear",  emoji: "🧥" },
+];
+
+function FilterBar({ active, onChange, onFetchCategory }) {
   return (
-    <div className="chat-welcome">
-      <p className="chat-welcome-title">Hi, I'm Mira ✦</p>
-      <p className="chat-welcome-sub">
-        {textMode ? "Type to ask me anything about style." : "Tap Start talking and ask me anything."}
-      </p>
-      <button className="event-brief-chip" onClick={onEventBrief}>
-        ✦ Plan an outfit for an event
-      </button>
+    <div className="filter-bar">
+      {FILTER_CATS.map(({ key, label, emoji }) => (
+        <button
+          key={key}
+          className={`filter-chip${active === key ? " active" : ""}`}
+          onClick={() => { onChange(key); if (key !== "all") onFetchCategory(key); }}
+        >
+          <span>{emoji}</span> {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function YouMightLike({ data, onBuy, onLove, loved, onAddToCart, inCart, onDismiss }) {
+  if (!data?.items?.length) return null;
+  return (
+    <div className="yml-strip">
+      <div className="yml-header">
+        <span className="yml-title">✦ You might also like</span>
+        <button className="yml-dismiss" onClick={onDismiss} aria-label="Dismiss">✕</button>
+      </div>
+      <div className="yml-scroll">
+        {data.items.map(p => (
+          <div key={p.id} className="yml-card">
+            <div className="yml-img-wrap">
+              {p.image_url
+                ? <img className="yml-img" src={p.image_url} alt={p.name} loading="lazy" />
+                : <div className="yml-img yml-img--placeholder" />
+              }
+              <button
+                className={`yml-heart${loved?.has(p.id) ? " is-loved" : ""}`}
+                onClick={() => onLove?.(p)}
+              >{loved?.has(p.id) ? "♥" : "♡"}</button>
+            </div>
+            <p className="yml-name">{p.name}</p>
+            <div className="yml-footer">
+              <span className="yml-price">₹{Number(p.price).toLocaleString("en-IN")}</span>
+              <a className="yml-shop" href={p.affiliate_url} target="_blank" rel="noopener noreferrer nofollow sponsored" onClick={() => onBuy?.(p)}>Shop →</a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ShopTheLookStrip({ looks, onShopLook, onLove, loved, onAddToCart, inCart }) {
+  if (!looks?.length) return null;
+  return (
+    <div className="stl-strip">
+      <div className="stl-header">
+        <span className="stl-title">✦ Shop the look</span>
+      </div>
+      <div className="stl-scroll">
+        {looks.map((look, i) => {
+          const items = look.items || [];
+          const images = items.filter(p => p.image_url).slice(0, 4);
+          const totalPrice = items.reduce((s, p) => s + (Number(p.price) || 0), 0);
+          return (
+            <div key={look.id || i} className="stl-card">
+              <div className="stl-collage">
+                {images.slice(0, 4).map((p, j) => (
+                  <div key={p.id} className={`stl-collage-cell stl-cell-${j}`}>
+                    <img src={p.image_url} alt={p.name} loading="lazy" className="stl-collage-img" />
+                  </div>
+                ))}
+                {images.length === 0 && (
+                  <div className="stl-collage-empty">
+                    <span>👗</span>
+                  </div>
+                )}
+              </div>
+              <div className="stl-card-body">
+                <p className="stl-occasion">{look.occasion || look.name || "Complete look"}</p>
+                {totalPrice > 0 && (
+                  <p className="stl-price">From ₹{totalPrice.toLocaleString("en-IN")}</p>
+                )}
+                <button className="stl-shop-btn" onClick={() => onShopLook(look)}>
+                  Shop this look →
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart }) {
+  if (!products?.length) return null;
+  return (
+    <div className="trending-strip">
+      <div className="trending-strip-header">
+        <span className="trending-strip-title">🔥 Trending now</span>
+      </div>
+      <div className="trending-strip-scroll">
+        {products.map(p => (
+          <div key={p.id} className="trending-card">
+            <div className="trending-card-img-wrap">
+              {p.image_url
+                ? <img className="trending-card-img" src={p.image_url} alt={p.name} loading="lazy" />
+                : <div className="trending-card-img trending-card-img--placeholder">{p.category}</div>
+              }
+              <button
+                className={`trending-card-heart${loved?.has(p.id) ? " is-loved" : ""}`}
+                onClick={() => onLove?.(p)}
+              >{loved?.has(p.id) ? "♥" : "♡"}</button>
+            </div>
+            <p className="trending-card-name">{p.name}</p>
+            <div className="trending-card-footer">
+              <span className="trending-card-price">
+                ₹{Number(p.price).toLocaleString("en-IN")}
+              </span>
+              <a
+                className="trending-card-shop"
+                href={p.affiliate_url}
+                target="_blank"
+                rel="noopener noreferrer nofollow sponsored"
+                onClick={() => onBuy?.(p)}
+              >Shop →</a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+const OCCASION_CHIPS = [
+  { emoji: "💍", label: "Wedding guest",    prompt: "I need an outfit for a wedding — suggest something elegant and appropriate." },
+  { emoji: "💼", label: "Office look",      prompt: "Help me put together a polished office outfit for work." },
+  { emoji: "🌅", label: "Beach holiday",    prompt: "I'm going on a beach holiday — what should I pack and wear?" },
+  { emoji: "🍷", label: "Date night",       prompt: "I have a date tonight — suggest something stylish and flattering." },
+  { emoji: "🎉", label: "Party / festival", prompt: "I'm going to a party or festival — help me find a fun, standout look." },
+  { emoji: "☕", label: "Casual everyday",  prompt: "I want a comfortable but stylish everyday casual outfit." },
+  { emoji: "🎓", label: "Graduation",       prompt: "I need an outfit for a graduation ceremony — something smart and celebratory." },
+  { emoji: "🛍️", label: "Just browsing",   prompt: "Show me what's trending right now — I'm looking for inspiration." },
+];
+
+function ChatWelcome({ onEventBrief, onOccasion, textMode }) {
+  return (
+    <div className="hero-welcome">
+      <div className="hero-figure" aria-hidden="true">
+        <div className="hero-fig-glow" />
+        <div className="hero-fig-head" />
+        <div className="hero-fig-body" />
+        <div className="hero-fig-hair" />
+      </div>
+
+      <div className="hero-content">
+        <span className="hero-eyebrow">✦ AI-Powered Style</span>
+        <h1 className="hero-heading">
+          Your Personal<br/>Style Expert
+        </h1>
+        <p className="hero-sub">What are you dressing for today?</p>
+
+        <div className="occasion-chips">
+          {OCCASION_CHIPS.map(({ emoji, label, prompt }) => (
+            <button
+              key={label}
+              className="occasion-chip"
+              onClick={() => onOccasion(prompt)}
+            >
+              <span className="occasion-chip-emoji">{emoji}</span>
+              <span className="occasion-chip-label">{label}</span>
+            </button>
+          ))}
+        </div>
+
+        <p className="hero-cta-hint">
+          {textMode ? "or type a message below" : "or tap Start Talking"}
+        </p>
+      </div>
     </div>
   );
 }
 
 // ─── Message bubble — user or Mira, with inline product cards ────────────────
 function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart,
-                         reasonPickerProductId, onReasonDone, onAddAllToCart }) {
+                         reasonPickerProductId, onReasonDone, onAddAllToCart, userSize }) {
   const isMira = msg.role === "mira";
   const showPicker = isMira && reasonPickerProductId &&
     msg.products?.some(p => p.id === reasonPickerProductId);
@@ -917,6 +1092,7 @@ function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inC
             showAll={!!msg.label}
             label={msg.label}
             onShopAll={msg.label && onAddAllToCart ? (items) => { onAddAllToCart(items); } : null}
+            userSize={userSize}
           />
         )}
         {pickerProduct && (
@@ -1081,8 +1257,12 @@ export default function App() {
   const [guestPinCode, setGuestPinCode]   = useState(null);
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [showCart, setShowCart]           = useState(false);
+  const [activeFilter, setActiveFilter]   = useState("all");
+  const pendingOccasionRef = useRef(null);
+  const pendingOccasionStartRef = useRef(false);
   const [vsResults, setVsResults]         = useState([]);
   const [vsQuery, setVsQuery]             = useState("");
+  const [vsCatalogNote, setVsCatalogNote] = useState(null);
   const { items: cartItems, addItem: addToCart, addItems: addAllToCart, removeItem: removeFromCart, clearCart, inCart } = useCart();
   const effectivePrefs = useMemo(
     () => user ? prefs : { ...(prefs || {}), pin_code: guestPinCode },
@@ -1093,16 +1273,17 @@ export default function App() {
 
   const {
     connected, state, mood, captions, messages,
-    products, looks, savedProducts, loved, highlightedId, error, retryCount,
+    products, looks, editorialLooks, trendingProducts, youMightLike, setYouMightLike,
+    savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
-    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, sendVisualSearch, vsLoading, setVsLoading,
+    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, browseCategory, sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies,
-    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled,
+    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
   } = useMiraVoice({
     userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
-    onVisualSearchResults: (items, query) => { setVsResults(items); setVsQuery(query); setVsLoading(false); },
+    onVisualSearchResults: (items, query, note) => { setVsResults(items); setVsQuery(query); setVsCatalogNote(note || null); setVsLoading(false); },
   });
 
   // Auto-scroll thread to bottom on new messages/products
@@ -1173,6 +1354,27 @@ export default function App() {
       start();
     }
   }, [startRequested, eventBrief, connected, start]);
+
+  // Fire a deferred occasion text once the session connects
+  useEffect(() => {
+    if (connected && pendingOccasionRef.current) {
+      sendText(pendingOccasionRef.current);
+      pendingOccasionRef.current = null;
+    }
+  }, [connected, sendText]);
+
+  // Start session AFTER textMode has been set to true (occasion chip flow).
+  // Can't call start() and setTextMode(true) in the same handler because start()
+  // is memoized with the old textMode closure — this useEffect sees the updated value.
+  // We pass the pending text as initial_request so Mira skips the greeting.
+  useEffect(() => {
+    if (pendingOccasionStartRef.current && !connected) {
+      pendingOccasionStartRef.current = false;
+      const initialText = pendingOccasionRef.current;
+      pendingOccasionRef.current = null; // clear so the connected useEffect doesn't double-send
+      start(initialText);
+    }
+  }, [textMode, connected, start]);
 
   const startEventEdit = (brief) => {
     setEventBrief(brief);
@@ -1304,6 +1506,12 @@ export default function App() {
           </div>
         )}
 
+        <FilterBar
+          active={activeFilter}
+          onChange={setActiveFilter}
+          onFetchCategory={browseCategory}
+        />
+
         <div className="chat-thread" ref={threadRef}>
           {/* Visual search — loading / results / empty */}
           {vsLoading && (
@@ -1316,8 +1524,11 @@ export default function App() {
             <div className="vs-results">
               <div className="vs-results-head">
                 <p className="vs-results-title">🔍 {vsQuery || "Similar to your photo"}</p>
-                <button className="vs-results-close" onClick={() => { setVsResults([]); setVsQuery(""); }}>✕</button>
+                <button className="vs-results-close" onClick={() => { setVsResults([]); setVsQuery(""); setVsCatalogNote(null); }}>✕</button>
               </div>
+              {vsCatalogNote && (
+                <div className="vs-catalog-note">ℹ️ {vsCatalogNote}</div>
+              )}
               <ProductGrid products={vsResults} loved={loved} onLove={wouldBuy} onBuy={buyClick}
                 onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} />
             </div>
@@ -1330,8 +1541,39 @@ export default function App() {
               onAddToCart={addToCart} inCart={inCart} />
           )}
 
-          {messages.length === 0 && !connected && (
-            <ChatWelcome onEventBrief={() => setShowEventBrief(true)} textMode={textMode} />
+          {messages.length === 0 && (
+            <ChatWelcome onEventBrief={() => setShowEventBrief(true)} onOccasion={(prompt) => {
+                if (!connected) {
+                  if (!textMode) {
+                    // Force text mode so no mic popup blocks the experience.
+                    // The useEffect above calls start(prompt) once textMode updates.
+                    pendingOccasionRef.current = prompt;
+                    pendingOccasionStartRef.current = true;
+                    setTextMode(true);
+                  } else {
+                    // Already text mode — start immediately with the prompt as initial_request.
+                    start(prompt);
+                  }
+                } else {
+                  sendText(prompt);
+                }
+              }} textMode={textMode} />
+          )}
+          {messages.length === 0 && trendingProducts.length > 0 && (
+            <TrendingStrip products={trendingProducts} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} />
+          )}
+          {messages.length === 0 && editorialLooks.length > 0 && (
+            <ShopTheLookStrip
+              looks={editorialLooks}
+              loved={loved}
+              onLove={handleLove}
+              onAddToCart={addToCart}
+              inCart={inCart}
+              onShopLook={(look) => { addAllToCart(look.items || []); setShowCart(true); }}
+            />
+          )}
+          {youMightLike && (
+            <YouMightLike data={youMightLike} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} onDismiss={() => setYouMightLike(null)} />
           )}
           {messages.map((msg) =>
             msg.role === "event"
@@ -1339,7 +1581,8 @@ export default function App() {
               : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={handleLove} onBuy={buyClick}
                   highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart}
                   reasonPickerProductId={reasonPickerProductId} onReasonDone={handleReasonDone}
-                  onAddAllToCart={(items) => { addAllToCart(items); setShowCart(true); }} />
+                  onAddAllToCart={(items) => { addAllToCart(items); setShowCart(true); }}
+                  userSize={effectivePrefs?.top_size || effectivePrefs?.bottom_size || null} />
           )}
           {state === "thinking" && <ThinkingBubble />}
           {/* Scroll anchor — always at the very bottom of thread content */}
@@ -1352,7 +1595,7 @@ export default function App() {
             dbg: connected={String(connected)} canShowMore={String(canShowMore)}
           </div>
         )}
-        {canShowMore && connected && (
+        {canShowMore && (
           <div className="show-more-strip">
             <button className="show-more-btn" onClick={showMore}>Show 3 more →</button>
           </div>
@@ -1448,9 +1691,15 @@ export default function App() {
         <OutfitBuilder
           anatomy={outfitAnatomy}
           onClose={() => setOutfitAnatomy(null)}
-          onTellMira={(text, products) => {
-            if (products?.length) sendOutfitAssembled(products.map(p => p.id));
-            sendText(text);
+          onTellMira={(products) => {
+            if (!products?.length) return;
+            // Show the assembled look cards immediately, then let the server
+            // trigger ONE clean Mira response (comment + offer similar items).
+            // We send product IDs — NOT a verbose fake-user message — so Mira
+            // knows these are catalog items and doesn't greet or say she can't
+            // find them.
+            addAssembledLookToChat(products);
+            sendOutfitAssembled(products.map((p) => p.id));
           }}
         />
       )}

@@ -34,6 +34,9 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const [miraText, setMiraText] = useState(null);
   const [canShowMore, setCanShowMore] = useState(false);
   const [looks, setLooks] = useState([]);
+  const [editorialLooks, setEditorialLooks] = useState([]);
+  const [trendingProducts, setTrendingProducts] = useState([]);
+  const [youMightLike, setYouMightLike] = useState(null); // {anchorId, items}
 
   // Full chat history — always built regardless of voice/text mode
   const [messages, setMessages] = useState([]);
@@ -93,6 +96,9 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     const ws = wsRef.current;
     const trimmed = (text || "").trim();
     if (!ws || ws.readyState !== WebSocket.OPEN || !trimmed) return;
+    // New conversation input — clear filter-chip browse context so show_more
+    // uses server's own session_last_categories from this voice/text turn.
+    lastBrowseCatRef.current = null;
     // Optimistically add the user bubble immediately
     _addMsg("you", trimmed);
     ws.send(JSON.stringify({ type: "text_input", text: trimmed }));
@@ -148,24 +154,41 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   }, []);
 
   const showMoreTimeoutRef = useRef(null);
+  // Tracks the last category browsed via filter chip so show_more can stay in context.
+  // Cleared when the user sends a text/voice message (new conversation resets category).
+  const lastBrowseCatRef = useRef(null);
+  // Tracks IDs shown via REST browse so the exclude list is correct for REST show_more.
+  const restShownIdsRef = useRef(new Set());
 
-  const showMore = useCallback(() => {
+  const showMore = useCallback(async () => {
     const ws = wsRef.current;
-    console.log("[showMore] click — ws.readyState:", ws?.readyState, "WebSocket.OPEN:", WebSocket.OPEN);
     if (ws && ws.readyState === WebSocket.OPEN) {
       setCanShowMore(false);
-      ws.send(JSON.stringify({ type: "show_more" }));
+      const payload = { type: "show_more" };
+      if (lastBrowseCatRef.current) payload.category = lastBrowseCatRef.current;
+      ws.send(JSON.stringify(payload));
       // Safety: re-enable after 5s ONLY if server never responds at all.
-      // Cleared immediately when any products message arrives so server's
-      // explicit show_more:false isn't overridden by this timeout.
       showMoreTimeoutRef.current = setTimeout(() => {
         showMoreTimeoutRef.current = null;
-        console.log("[showMore] safety timeout fired — server never responded, re-enabling button");
         setCanShowMore(true);
       }, 5000);
-    } else {
-      console.warn("[showMore] WS not open — message NOT sent. readyState:", ws?.readyState);
+    } else if (lastBrowseCatRef.current) {
+      // Not connected but have a browse category — use REST so no session needed.
+      const cat = lastBrowseCatRef.current;
+      const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+      const excludeStr = [...restShownIdsRef.current].join(",");
+      const bubId = _addMsg("mira", `Browsing: ${catLabel}`);
+      try {
+        const resp = await fetch(`/api/browse?category=${encodeURIComponent(cat)}&limit=6&exclude=${encodeURIComponent(excludeStr)}`);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const data = await resp.json();
+        const items = data.products || [];
+        items.forEach((p) => restShownIdsRef.current.add(p.id));
+        if (items.length) _attachProducts(bubId, items);
+        setCanShowMore(!!data.show_more);
+      } catch (e) { console.error("[showMore REST]", e); }
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Send a mid-session location update without restarting the session
@@ -205,7 +228,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     miraBubbleId.current = null;
   }, []);
 
-  const start = useCallback(async () => {
+  const start = useCallback(async (initialText = null) => {
     setError(null);
     setLooks([]);
     setProductTimeline([]);
@@ -218,20 +241,20 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
       if (!textMode) playerRef.current = new PcmPlayer();
 
       ws.onopen = async () => {
-        if (userId)
-          ws.send(JSON.stringify({
-            type:           "init",
-            user_id:        userId,
-            name:           userName || "there",
-            style_vibe:     userPrefs?.style_vibe     ?? null,
-            shopping_focus: userPrefs?.shopping_focus ?? null,
-            top_size:       userPrefs?.top_size       ?? null,
-            bottom_size:    userPrefs?.bottom_size    ?? null,
-            budget:         userPrefs?.budget         ?? null,
-            pin_code:       userPrefs?.pin_code       ?? null,
-            text_mode:      textMode,
-            event_brief:    eventBrief,
-          }));
+        ws.send(JSON.stringify({
+          type:             "init",
+          user_id:          userId,
+          name:             userName || "there",
+          style_vibe:       userPrefs?.style_vibe     ?? null,
+          shopping_focus:   userPrefs?.shopping_focus ?? null,
+          top_size:         userPrefs?.top_size       ?? null,
+          bottom_size:      userPrefs?.bottom_size    ?? null,
+          budget:           userPrefs?.budget         ?? null,
+          pin_code:         userPrefs?.pin_code       ?? null,
+          text_mode:        textMode,
+          event_brief:      eventBrief,
+          initial_request:  initialText || null,
+        }));
         setConnected(true);
         setCanShowMore(true); // always show browse button once connected (1000+ products available)
         if (!textMode) {
@@ -349,6 +372,20 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             setLooks(msg.items || []);
             break;
 
+          case "trending":
+            setTrendingProducts(msg.items || []);
+            break;
+
+          case "editorial_looks":
+            setEditorialLooks(msg.items || []);
+            break;
+
+          case "you_might_like":
+            if (msg.items?.length) {
+              setYouMightLike({ anchorId: msg.anchor_id, items: msg.items });
+            }
+            break;
+
           case "add_to_cart":
             if (onAddToCart && msg.items?.length) msg.items.forEach(onAddToCart);
             break;
@@ -359,7 +396,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             break;
           case "visual_search_results":
             setVsLoading(false);
-            if (onVisualSearchResults) onVisualSearchResults(msg.items || [], msg.query || "");
+            if (onVisualSearchResults) onVisualSearchResults(msg.items || [], msg.query || "", msg.catalog_note || null);
             break;
           case "outfit_url_status":
             // "fetching" status — loading is already true, nothing extra needed
@@ -441,10 +478,55 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     setTimeout(() => setOutfitLoading(false), 60000);
   }, []);
 
+  const browseCategory = useCallback(async (cat) => {
+    if (!cat) return;
+    const ws = wsRef.current;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      // Connected: use WS so session tracks context for show_more
+      lastBrowseCatRef.current = cat;
+      restShownIdsRef.current = new Set(); // reset REST tracking for new category
+      ws.send(JSON.stringify({ type: "category_browse", category: cat }));
+      return;
+    }
+    // Not connected: REST fetch — no session, no mic permission, instant results
+    lastBrowseCatRef.current = cat;
+    restShownIdsRef.current = new Set(); // reset for new category
+    const catLabel = cat.charAt(0).toUpperCase() + cat.slice(1);
+    const bubId = _addMsg("mira", `Browsing: ${catLabel}`);
+    try {
+      const resp = await fetch(`/api/browse?category=${encodeURIComponent(cat)}&limit=6`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const items = data.products || [];
+      items.forEach((p) => restShownIdsRef.current.add(p.id));
+      if (items.length) _attachProducts(bubId, items);
+      setCanShowMore(!!data.show_more);
+    } catch (e) {
+      console.error("[browseCategory]", e);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const sendOutfitAssembled = useCallback((productIds) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !productIds?.length) return;
     ws.send(JSON.stringify({ type: "outfit_assembled", product_ids: productIds }));
+  }, []);
+
+  // Immediately inject assembled look products into chat (before Mira replies).
+  // Single atomic setMessages so products are never missing due to batching.
+  const addAssembledLookToChat = useCallback((products) => {
+    if (!products?.length) return;
+    const id = mkId();
+    setMessages(prev => [...prev, {
+      id,
+      role: "mira",
+      text: "Your assembled look",
+      products,
+      label: "Your assembled look",
+      showAll: true,
+      ts: new Date(),
+    }]);
   }, []);
   const quickReplyTimerRef = useRef(null);
 
@@ -476,13 +558,14 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
 
   return {
     connected, state, mood, captions, messages,
-    products, looks, savedProducts, loved, highlightedId, error, retryCount, miraText,
+    products, looks, editorialLooks, trendingProducts, youMightLike, setYouMightLike,
+    savedProducts, loved, highlightedId, error, retryCount, miraText,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
-    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore,
+    start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, browseCategory,
     sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies,
-    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled,
+    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
   };
 }

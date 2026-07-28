@@ -63,22 +63,38 @@ function categoryLabel(cat) {
   return cat ? cat.charAt(0).toUpperCase() + cat.slice(1) : "Fashion";
 }
 
-export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact }) {
-  const [tryOnOpen, setTryOnOpen] = useState(false);
+function isInUserSize(productName, userSize) {
+  if (!userSize || !productName) return false;
+  const name = productName.toLowerCase();
+  const size = userSize.trim().toLowerCase();
+  // Match whole word/token: "S" shouldn't match "XS" or "2XS"
+  const re = new RegExp(`(?<![a-z0-9])${size}(?![a-z0-9])`, "i");
+  return re.test(name);
+}
 
-  const usePhoto   = isRealProductPhoto(product.image_url);
-  const isTrending = pseudoRandom(product.id, 7777) % 6 === 0;
-  const isNew      = pseudoRandom(product.id, 9999) % 9 === 0 && !isTrending;
+export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact, userSize }) {
+  const [tryOnOpen, setTryOnOpen] = useState(false);
+  const [imgLoaded, setImgLoaded] = useState(false);
+  const [imgError, setImgError]   = useState(false);
+
+  const usePhoto     = isRealProductPhoto(product.image_url) && !imgError;
+  const isTrending   = pseudoRandom(product.id, 7777) % 6 === 0;
+  const isNew        = pseudoRandom(product.id, 9999) % 9 === 0 && !isTrending;
+  const isUserSize   = isInUserSize(product.name, userSize);
   const priceStr   = formatPrice(product.price, product.currency);
 
   const thumbnail = usePhoto ? (
-    <img
-      className="card-img"
-      src={product.image_url}
-      alt={product.name}
-      loading="lazy"
-      onError={(e) => { e.currentTarget.style.display = "none"; }}
-    />
+    <>
+      {!imgLoaded && <div className="card-img-skeleton" aria-hidden="true" />}
+      <img
+        className={`card-img${imgLoaded ? "" : " card-img--loading"}`}
+        src={product.image_url}
+        alt={product.name}
+        loading="lazy"
+        onLoad={() => setImgLoaded(true)}
+        onError={() => { setImgError(true); setImgLoaded(true); }}
+      />
+    </>
   ) : (
     <CategoryThumbnail category={product.category} color={product.color} />
   );
@@ -148,11 +164,16 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
         {/* ── Info panel ── */}
         <div className="card-body">
 
-          {/* Category chip */}
-          <span className="card-cat-chip">
-            {CATEGORY_EMOJI[product.category] || "🛍️"}
-            {" "}{categoryLabel(product.category)}
-          </span>
+          {/* Category chip + size badge */}
+          <div className="card-chip-row">
+            <span className="card-cat-chip">
+              {CATEGORY_EMOJI[product.category] || "🛍️"}
+              {" "}{categoryLabel(product.category)}
+            </span>
+            {isUserSize && (
+              <span className="card-size-badge">✓ Your size</span>
+            )}
+          </div>
 
           {/* Product name */}
           <p className="card-name">{product.name}</p>

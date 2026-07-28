@@ -31,6 +31,13 @@ export default defineConfig({
         target: process.env.VITE_MIRA_WS_TARGET?.replace(/^ws/, "http") || "http://localhost:8765",
         changeOrigin: true,
       },
+      // REST endpoints (category browse, etc.) — forward to the Python backend.
+      // Without this, /api/* hits Vite's SPA fallback and returns index.html,
+      // so filter-chip fetches silently fail (resp.json() throws on HTML).
+      "/api": {
+        target: process.env.VITE_MIRA_WS_TARGET?.replace(/^ws/, "http") || "http://localhost:8765",
+        changeOrigin: true,
+      },
     },
   },
 });

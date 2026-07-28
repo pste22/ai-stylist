@@ -72,7 +72,9 @@ function ItemRow({ item, onSelect, selectedProductId }) {
                 selected={selectedProductId === p.id}
                 onSelect={onSelect} />
             ))
-          : <p className="ob-no-match">No catalog matches for this item</p>
+          : item.unavailable
+            ? <p className="ob-no-match ob-no-match--soon">🛍️ Coming soon — not in catalog yet</p>
+            : <p className="ob-no-match">No catalog matches for this item</p>
         }
       </div>
     </div>
@@ -104,14 +106,7 @@ export function OutfitBuilder({ anatomy: anatomyData, onClose, onTellMira }) {
     const pickedItems = anatomy
       .map(item => myLook[item.category + "_" + item.label])
       .filter(Boolean);
-    const desc = anatomy.map(item => {
-      const pick = myLook[item.category + "_" + item.label];
-      return pick ? `${item.label}: ${pick.name}` : item.label;
-    }).join(", ");
-    onTellMira?.(
-      `I've assembled a look from my outfit inspiration: ${desc}. What do you think?`,
-      pickedItems
-    );
+    onTellMira?.(pickedItems);
     onClose?.();
   };
 

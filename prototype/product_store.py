@@ -173,6 +173,55 @@ def search_products(
     return results
 
 
+def vector_search(
+    query_text: str,
+    *,
+    category: str | None = None,
+    min_price: float | None = None,
+    max_price: float | None = None,
+    limit: int = 5,
+    api_key: str | None = None,
+) -> list[dict]:
+    """Semantic product search via pgvector similarity.
+
+    Embeds query_text with Google text-embedding-004, then calls the
+    match_products Supabase RPC.  Falls back to an empty list if pgvector
+    isn't set up yet (embeddings column missing / RPC not created).
+
+    Requires GEMINI_API_KEY (or pass api_key=).
+    """
+    import os
+    key = api_key or os.environ.get("GEMINI_API_KEY", "")
+    if not key:
+        return []
+    try:
+        from google import genai as _genai
+        client = _genai.Client(api_key=key)
+        resp = client.models.embed_content(
+            model="gemini-embedding-001",
+            contents=[query_text],
+            config={"output_dimensionality": 768},
+        )
+        embedding = resp.embeddings[0].values
+    except Exception as e:
+        print(f"[vector_search] embed failed: {e}")
+        return []
+
+    try:
+        rpc_params: dict = {"query_embedding": embedding, "match_count": limit}
+        if category:
+            rpc_params["filter_category"] = category
+        if min_price is not None:
+            rpc_params["min_price"] = min_price
+        if max_price is not None:
+            rpc_params["max_price"] = max_price
+        result = _db().rpc("match_products", rpc_params).execute()
+        return result.data or []
+    except Exception as e:
+        print(f"[vector_search] rpc failed: {e}")
+        return []
+
+
 def render_products(products: list[dict]) -> str:
     """Render products as compact pipe-delimited lines for the LLM prompt."""
     lines = []
