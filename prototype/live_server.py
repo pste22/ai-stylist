@@ -33,7 +33,20 @@ from dotenv import load_dotenv
 
 # Load THIS package's .env (prototype/.env) regardless of the process CWD, so keys are
 # found whether the bridge is launched from the repo root or from prototype/.
+# Track whether GEMINI_API_KEY was already in the environment (e.g. a Codespaces
+# secret) BEFORE .env is loaded, so we can report its source at startup.
+_gemini_key_from_env = bool(os.environ.get("GEMINI_API_KEY"))
+_gemini_key_in_dotenv = "GEMINI_API_KEY" in open(
+    os.path.join(os.path.dirname(__file__), ".env"), encoding="utf-8"
+).read() if os.path.exists(os.path.join(os.path.dirname(__file__), ".env")) else False
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"), override=True)
+if _gemini_key_from_env and not _gemini_key_in_dotenv:
+    print("  🔑 GEMINI_API_KEY source: environment / Codespaces secret ✅")
+elif _gemini_key_in_dotenv:
+    print("  🔑 GEMINI_API_KEY source: prototype/.env (move to a Codespaces secret; "
+          "remove it from .env so the secret is used)")
+elif not os.environ.get("GEMINI_API_KEY"):
+    print("  ⚠️  GEMINI_API_KEY is NOT SET (env or .env) — try-on/voice will fail")
 
 import websockets
 from websockets.asyncio.server import serve
@@ -311,6 +324,21 @@ _VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-pro")
 _TRYON_MODEL = os.environ.get("GEMINI_TRYON_MODEL", "gemini-2.5-flash-image")
 # Veo model for the on-demand "spin" video (image-to-video 360° turntable).
 _VEO_MODEL = os.environ.get("GEMINI_VEO_MODEL", "veo-3.1-fast-generate-preview")
+
+# Cost ESTIMATES for logging only (USD) — verify live rates at ai.google.dev/pricing.
+# Image cost is derived from real token usage; video is a flat per-clip estimate.
+_IMG_IN_RATE  = float(os.environ.get("GEMINI_IMG_INPUT_RATE", "0.30"))    # $/1M input tokens
+_IMG_OUT_RATE = float(os.environ.get("GEMINI_IMG_OUTPUT_RATE", "30.0"))   # $/1M output (image) tokens
+_VEO_COST_PER_CLIP = float(os.environ.get("GEMINI_VEO_COST_PER_CLIP", "1.00"))  # $/spin clip
+
+
+def _img_gen_cost(response) -> float:
+    """Estimate the USD cost of one image generation from its token usage.
+    Logging aid only — reads real prompt/candidate token counts when present."""
+    um = getattr(response, "usage_metadata", None)
+    in_tok  = getattr(um, "prompt_token_count", 0) or 0
+    out_tok = getattr(um, "candidates_token_count", 0) or 0
+    return in_tok / 1e6 * _IMG_IN_RATE + out_tok / 1e6 * _IMG_OUT_RATE
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
 _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
@@ -1139,9 +1167,10 @@ async def handle(ws) -> None:
                                  message="Try-on couldn't be generated for this photo. Try a clear, front-facing full-body shot.")
                 return
 
+            _costs = [_img_gen_cost(front_resp)]
+            print(f"  [try_on] front sent — cost≈${_costs[0]:.4f}")
             await _send_json(ws, type="try_on_result", product_id=product_id, view="front",
                              total=total, image=base64.b64encode(front_bytes).decode(), mime=front_mime)
-            print("  [try_on] front sent")
 
             # ── OTHER ANGLES: re-render the FRONT result from each angle, in parallel ──
             async def _angle(view):
@@ -1156,6 +1185,7 @@ async def handle(ws) -> None:
                         config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
                     )
                     b, m = _extract(resp)
+                    _costs.append(_img_gen_cost(resp))
                     if b:
                         await _send_json(ws, type="try_on_result", product_id=product_id, view=view,
                                          total=total, image=base64.b64encode(b).decode(), mime=m)
@@ -1168,6 +1198,8 @@ async def handle(ws) -> None:
                     await _send_json(ws, type="try_on_view_error", product_id=product_id, view=view)
 
             await asyncio.gather(*[_angle(v) for v in views if v != "front"])
+            print(f"  💰 [try_on] TOTAL ≈ ${sum(_costs):.4f} for {len(_costs)} image(s) "
+                  f"— product={payload['product_name']!r}")
         except Exception as e:
             import traceback as _tb
             print(f"  ! try_on failed: {e}")
@@ -1226,7 +1258,8 @@ async def handle(ws) -> None:
             if vb:
                 await _send_json(ws, type="try_on_video_result", product_id=product_id,
                                  video=base64.b64encode(vb).decode(), mime="video/mp4")
-                print(f"  [try_on_video] success — {len(vb)}b")
+                print(f"  💰 [try_on_video] success — {len(vb)}b, 1 Veo clip ≈ ${_VEO_COST_PER_CLIP:.2f} "
+                      f"(estimate; model={_VEO_MODEL})")
             else:
                 await _send_json(ws, type="try_on_video_error", product_id=product_id,
                                  message="Couldn't generate the spin video. Please try again.")
