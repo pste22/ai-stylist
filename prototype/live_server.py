@@ -329,7 +329,7 @@ _VEO_MODEL = os.environ.get("GEMINI_VEO_MODEL", "veo-3.1-fast-generate-preview")
 # Image cost is derived from real token usage; video is a flat per-clip estimate.
 _IMG_IN_RATE  = float(os.environ.get("GEMINI_IMG_INPUT_RATE", "0.30"))    # $/1M input tokens
 _IMG_OUT_RATE = float(os.environ.get("GEMINI_IMG_OUTPUT_RATE", "30.0"))   # $/1M output (image) tokens
-_VEO_COST_PER_CLIP = float(os.environ.get("GEMINI_VEO_COST_PER_CLIP", "1.00"))  # $/spin clip
+_VEO_COST_PER_CLIP = float(os.environ.get("GEMINI_VEO_COST_PER_CLIP", "0.15"))  # $/spin clip (veo fast; tune to real billing)
 
 
 def _img_gen_cost(response) -> float:
