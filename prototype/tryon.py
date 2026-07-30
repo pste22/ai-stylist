@@ -25,6 +25,17 @@ def view_label(view: str) -> str:
     return _VIEW_LABELS.get(view, view.title())
 
 
+def spin_prompt(product_name: str) -> str:
+    """Prompt for the Veo 360° 'spin' video, seeded from the front try-on image."""
+    name = (product_name or "the outfit").strip() or "the outfit"
+    return (
+        f"The person slowly turns a full 360 degrees in place to show the {name} from "
+        f"every angle — front, side, back, side, front — a smooth fashion-runway turntable "
+        f"rotation. Keep the person's identity, hair and the outfit consistent throughout; "
+        f"studio background, full body in frame, natural lighting."
+    )
+
+
 def view_instruction(product_name: str, view: str) -> str:
     """Prompt for re-rendering the already-generated front try-on from another angle.
 

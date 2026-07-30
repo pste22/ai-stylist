@@ -452,6 +452,17 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             setTryOnLoading(false);
             setTryOnError(msg.message || "Try-on failed. Please try again.");
             break;
+          case "try_on_video_result":
+            if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
+            setTryOnVideoLoading(false);
+            setTryOnVideoError(null);
+            setTryOnVideo({ productId: msg.product_id, video: msg.video, mime: msg.mime || "video/mp4" });
+            break;
+          case "try_on_video_error":
+            if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
+            setTryOnVideoLoading(false);
+            setTryOnVideoError(msg.message || "Spin video failed. Please try again.");
+            break;
           case "quick_replies":
             setQuickReplies(msg.options || []);
             break;
@@ -487,16 +498,39 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const [outfitAnatomy, setOutfitAnatomy] = useState(null);
   const [outfitLoading, setOutfitLoading] = useState(false);
   const [outfitError, setOutfitError] = useState(null);
-  const [tryOnResult, setTryOnResult] = useState(null);   // { productId, image, mime }
+  const [tryOnResult, setTryOnResult] = useState(null);   // { productId, views:{}, failed:{}, total }
   const [tryOnLoading, setTryOnLoading] = useState(false);
   const [tryOnError, setTryOnError] = useState(null);
   const tryOnTimeoutRef = useRef(null);
+  const [tryOnVideo, setTryOnVideo] = useState(null);     // { productId, video, mime }
+  const [tryOnVideoLoading, setTryOnVideoLoading] = useState(false);
+  const [tryOnVideoError, setTryOnVideoError] = useState(null);
+  const tryOnVideoTimeoutRef = useRef(null);
 
   const clearTryOn = useCallback(() => {
     setTryOnResult(null);
     setTryOnError(null);
     setTryOnLoading(false);
+    setTryOnVideo(null);
+    setTryOnVideoError(null);
+    setTryOnVideoLoading(false);
     if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
+    if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
+  }, []);
+
+  const sendTryOnVideo = useCallback((productId, imageBase64, mime = "image/png") => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !productId || !imageBase64) return;
+    setTryOnVideo(null);
+    setTryOnVideoError(null);
+    setTryOnVideoLoading(true);
+    ws.send(JSON.stringify({ type: "try_on_video", product_id: productId, image: imageBase64, mime }));
+    if (tryOnVideoTimeoutRef.current) clearTimeout(tryOnVideoTimeoutRef.current);
+    tryOnVideoTimeoutRef.current = setTimeout(() => {
+      tryOnVideoTimeoutRef.current = null;
+      setTryOnVideoLoading(false);
+      setTryOnVideoError((e) => e || "Spin video timed out. Please try again.");
+    }, 240000);
   }, []);
 
   const sendTryOn = useCallback((productId, imageBase64, mime = "image/jpeg") => {
@@ -625,5 +659,6 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
     sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
+    sendTryOnVideo, tryOnVideo, tryOnVideoLoading, tryOnVideoError,
   };
 }

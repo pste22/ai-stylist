@@ -50,7 +50,8 @@ function SilhouetteSVG() {
   );
 }
 
-export default function TryOnModal({ product, onClose, onTryOn, result, loading, error }) {
+export default function TryOnModal({ product, onClose, onTryOn, result, loading, error,
+                                     onSpin, video, videoLoading, videoError }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -119,6 +120,18 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const selectedFailed = myResult && !selected && failed[selectedView];
   const anyDone = myResult && Object.keys(views).length > 0;
 
+  // ── Spin (Veo 360° video) ──
+  const myVideo = video && video.productId === product.id ? video : null;
+  const onSpinView = selectedView === "spin";
+  const front = views.front;
+  const handleSpin = () => {
+    setSelectedView("spin");
+    // Kick off generation the first time (needs the front try-on as the seed).
+    if (!myVideo && !videoLoading && front && onSpin) {
+      onSpin(product.id, front.image, front.mime || "image/png");
+    }
+  };
+
   return (
     <div
       className="tryon-overlay"
@@ -143,7 +156,28 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           </p>
         </div>
 
-        {anyDone ? (
+        {anyDone && onSpinView ? (
+          /* ── Spin video view ── */
+          <div className="tryon-result-stage">
+            {myVideo ? (
+              <video
+                className="tryon-result-full"
+                src={`data:${myVideo.mime};base64,${myVideo.video}`}
+                autoPlay loop muted playsInline controls
+              />
+            ) : videoError ? (
+              <div className="tryon-result-placeholder">
+                <span className="tryon-product-emoji">🎬</span>
+                <p style={{ color: "#c0103a" }}>{videoError}</p>
+              </div>
+            ) : (
+              <div className="tryon-result-placeholder">
+                <span className="tryon-angle-dot big" aria-hidden="true" />
+                <p>Filming your 360° spin… this takes about a minute 🎬</p>
+              </div>
+            )}
+          </div>
+        ) : anyDone ? (
           /* ── Large result view — full magnified image of you in the item ── */
           <div className="tryon-result-stage">
             {selected ? (
@@ -234,6 +268,18 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 </button>
               );
             })}
+            {/* On-demand 360° spin video */}
+            <button
+              role="tab"
+              aria-selected={onSpinView}
+              className={`tryon-angle tryon-angle--spin${onSpinView ? " active" : ""}`}
+              onClick={handleSpin}
+              disabled={!front}
+              title="Generate a 360° spin video (~1 min)"
+            >
+              ✨ Spin
+              {videoLoading && <span className="tryon-angle-dot" aria-hidden="true" />}
+            </button>
           </div>
         )}
 

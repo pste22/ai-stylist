@@ -309,6 +309,8 @@ _VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-pro")
 # the Gemini Developer API we use an image-output model ("Nano Banana") via
 # generate_content: person photo + garment image + prompt → edited try-on image.
 _TRYON_MODEL = os.environ.get("GEMINI_TRYON_MODEL", "gemini-2.5-flash-image")
+# Veo model for the on-demand "spin" video (image-to-video 360° turntable).
+_VEO_MODEL = os.environ.get("GEMINI_VEO_MODEL", "veo-3.1-fast-generate-preview")
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
 _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
@@ -1175,6 +1177,68 @@ async def handle(ws) -> None:
         finally:
             await _send_json(ws, type="state", state="idle", mood="neutral")
 
+    async def _try_on_video(product_id: str, image_b64: str, mime: str = "image/png") -> None:
+        """On-demand 360° 'spin' video via Veo, seeded from the FRONT try-on image
+        (sent by the client). Slow (~1-2 min) + costly, so only runs when the user
+        taps ✨ Spin. Never crashes the session.
+        """
+        import base64, time
+        import tryon as _tryon
+        from google import genai as _genai
+        from google.genai import types as _types
+
+        product = _BY_ID.get(product_id) or {}
+        if not image_b64:
+            await _send_json(ws, type="try_on_video_error", product_id=product_id,
+                             message="Generate a try-on first, then spin it.")
+            return
+
+        prompt = _tryon.spin_prompt(product.get("name", "the outfit"))
+        print(f"  [try_on_video] starting — product={product.get('name')!r} model={_VEO_MODEL}")
+        await _send_json(ws, type="state", state="thinking", mood="focused")
+
+        def _blocking_spin():
+            client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            op = client.models.generate_videos(
+                model=_VEO_MODEL,
+                prompt=prompt,
+                image=_types.Image(image_bytes=base64.b64decode(image_b64), mime_type=mime),
+                config=_types.GenerateVideosConfig(
+                    number_of_videos=1, aspect_ratio="9:16", person_generation="allow_adult"
+                ),
+            )
+            t0 = time.time()
+            while not op.done:
+                if time.time() - t0 > 240:
+                    raise TimeoutError("video generation timed out")
+                time.sleep(8)
+                op = client.operations.get(op)
+            gv = (op.response.generated_videos or [None])[0]
+            vid = getattr(gv, "video", None)
+            vb = getattr(vid, "video_bytes", None)
+            if not vb and getattr(vid, "uri", None):
+                client.files.download(file=vid)
+                vb = vid.video_bytes
+            return vb
+
+        try:
+            vb = await asyncio.to_thread(_blocking_spin)
+            if vb:
+                await _send_json(ws, type="try_on_video_result", product_id=product_id,
+                                 video=base64.b64encode(vb).decode(), mime="video/mp4")
+                print(f"  [try_on_video] success — {len(vb)}b")
+            else:
+                await _send_json(ws, type="try_on_video_error", product_id=product_id,
+                                 message="Couldn't generate the spin video. Please try again.")
+        except Exception as e:
+            import traceback as _tb
+            print(f"  ! try_on_video failed: {e}")
+            _tb.print_exc()
+            await _send_json(ws, type="try_on_video_error", product_id=product_id,
+                             message="Something went wrong generating the spin video. Please try again.")
+        finally:
+            await _send_json(ws, type="state", state="idle", mood="neutral")
+
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
         nonlocal chat_title, session_shown_ids, show_saved_mode, session_last_user_text
@@ -1629,6 +1693,12 @@ async def handle(ws) -> None:
                         pid = data.get("product_id", "")
                         if img and pid:
                             asyncio.ensure_future(_try_on(pid, img, mime))
+                    elif data.get("type") == "try_on_video":
+                        img = data.get("image", "")
+                        mime = data.get("mime", "image/png")
+                        pid = data.get("product_id", "")
+                        if img and pid:
+                            asyncio.ensure_future(_try_on_video(pid, img, mime))
                     elif data.get("type") == "outfit_assembled":
                         # User assembled a look from catalog items in the Outfit Builder.
                         # The product cards are already on screen (client-side
