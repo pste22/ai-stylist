@@ -1104,6 +1104,19 @@ button.primary.stop { background: var(--accent); }
   white-space: nowrap; transition: background .15s;
 }
 .cart-item-buy:hover { background: var(--accent); }
+.cart-item-tryon {
+  font-size: .72rem; font-weight: 700; cursor: pointer;
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+  color: var(--accent); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  padding: .3rem .6rem; border-radius: var(--r-pill);
+  white-space: nowrap; transition: background .15s;
+}
+.cart-item-tryon:hover { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+/* Try-on generated result fills the "You" panel */
+.tryon-result-img {
+  width: 100%; height: 100%; max-height: 320px; object-fit: contain;
+  border-radius: var(--r-md, 12px);
+}
 .cart-item-remove {
   width: 24px; height: 24px; border-radius: 50%;
   background: transparent; border: 1px solid var(--border);

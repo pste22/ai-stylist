@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 /* ── Minimal body-outline SVG silhouette ── */
 function SilhouetteSVG() {
@@ -47,8 +47,10 @@ function SilhouetteSVG() {
   );
 }
 
-export default function TryOnModal({ product, onClose }) {
+export default function TryOnModal({ product, onClose, onTryOn, result, loading, error }) {
   const overlayRef = useRef(null);
+  const fileRef = useRef(null);
+  const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
 
   /* Close on Escape key */
   useEffect(() => {
@@ -79,6 +81,23 @@ export default function TryOnModal({ product, onClose }) {
     (product.image_url.includes("m.media-amazon.com") ||
       product.image_url.includes("images.pexels.com"));
 
+  const handleFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result;
+      setUserPhoto(dataUrl);
+      const base64 = String(dataUrl).split(",")[1];
+      onTryOn?.(product.id, base64, file.type || "image/jpeg");
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  // Only show a result if it belongs to THIS product.
+  const myResult = result && result.productId === product.id ? result : null;
+
   return (
     <div
       className="tryon-overlay"
@@ -96,10 +115,10 @@ export default function TryOnModal({ product, onClose }) {
 
         {/* Header */}
         <div className="tryon-header">
-          <span className="tryon-badge">Coming Soon</span>
+          <span className="tryon-badge">✨ AI</span>
           <h2 className="tryon-title">Virtual Try-On</h2>
           <p className="tryon-subtitle">
-            See how it looks — on you, before you buy.
+            See how the {product.name?.split(" ").slice(0, 4).join(" ")} looks on you.
           </p>
         </div>
 
@@ -133,29 +152,62 @@ export default function TryOnModal({ product, onClose }) {
             </svg>
           </div>
 
-          {/* Right — silhouette */}
+          {/* Right — result / your photo / silhouette */}
           <div className="tryon-silhouette-wrap">
-            <SilhouetteSVG />
-            <div className="tryon-shimmer-bar" aria-hidden="true" />
+            {myResult ? (
+              <img
+                className="tryon-product-img tryon-result-img"
+                src={`data:${myResult.mime};base64,${myResult.image}`}
+                alt="Virtual try-on result"
+              />
+            ) : loading ? (
+              <>
+                <SilhouetteSVG />
+                <div className="tryon-shimmer-bar" aria-hidden="true" />
+              </>
+            ) : userPhoto ? (
+              <img className="tryon-product-img" src={userPhoto} alt="Your photo" />
+            ) : (
+              <SilhouetteSVG />
+            )}
             <span className="tryon-product-label">You</span>
           </div>
         </div>
 
-        {/* CTA copy */}
+        {/* CTA copy + upload */}
         <div className="tryon-cta-area">
-          <p className="tryon-magic-text">
-            We're building virtual try-on — you'll be first to know!&nbsp;🪄
-          </p>
-          <p className="tryon-desc">
-            Upload your photo, pick any item from Mira's suggestions, and see it
-            styled on you — powered by AI.
-          </p>
+          {loading ? (
+            <p className="tryon-magic-text">Styling it on you… this takes a few seconds 🪄</p>
+          ) : myResult ? (
+            <p className="tryon-magic-text">Here's how it looks on you! ✨</p>
+          ) : error ? (
+            <p className="tryon-desc" style={{ color: "#c0103a" }}>{error}</p>
+          ) : (
+            <p className="tryon-desc">
+              Upload a clear, front-facing full-body photo and Mira will show this
+              piece styled on you — powered by AI.
+            </p>
+          )}
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={handleFile}
+          />
           <div className="tryon-actions">
-            <button className="tryon-notify-btn" type="button" onClick={onClose}>
-              Notify Me ✨
-            </button>
+            {!loading && (
+              <button
+                className="tryon-notify-btn"
+                type="button"
+                onClick={() => fileRef.current?.click()}
+              >
+                {myResult || error || userPhoto ? "Try another photo" : "Upload your photo"} 📷
+              </button>
+            )}
             <button className="tryon-skip-btn" type="button" onClick={onClose}>
-              Maybe later
+              {myResult ? "Done" : "Maybe later"}
             </button>
           </div>
         </div>

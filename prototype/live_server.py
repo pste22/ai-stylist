@@ -305,6 +305,10 @@ def _affiliate_url(p: dict) -> str:
 
 _MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 _VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-pro")
+# Image-generation model for virtual try-on. recontext_image is Vertex-only, so on
+# the Gemini Developer API we use an image-output model ("Nano Banana") via
+# generate_content: person photo + garment image + prompt → edited try-on image.
+_TRYON_MODEL = os.environ.get("GEMINI_TRYON_MODEL", "gemini-2.5-flash-image")
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
 _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
@@ -1063,6 +1067,84 @@ async def handle(ws) -> None:
         await _send_json(ws, type="state", state="idle", mood="neutral")
         print(f"  outfit_anatomy → gender={outfit_gender} {len(result_items)} items detected")
 
+    async def _try_on(product_id: str, image_b64: str, mime: str = "image/jpeg") -> None:
+        """Generate an AI virtual try-on: place the product on the user's photo.
+
+        Uses Gemini's recontext_image (Virtual Try-On). Never crashes the
+        session — any failure is reported back as a `try_on_error`.
+        """
+        import base64
+        import urllib.request as _req
+        import tryon as _tryon
+        from google import genai as _genai
+        from google.genai import types as _types
+
+        product = _BY_ID.get(product_id)
+        # Validate + assemble inputs via the pure builder.
+        try:
+            payload = _tryon.build_tryon_request(product, image_b64, mime)
+        except ValueError as ve:
+            print(f"  [try_on] invalid request: {ve}")
+            await _send_json(ws, type="try_on_error", product_id=product_id,
+                             message="Couldn't start try-on — please pick a product and upload a clear photo.")
+            return
+
+        print(f"  [try_on] starting — product={payload['product_name']!r} photo={len(image_b64)}b")
+        await _send_json(ws, type="state", state="thinking", mood="focused")
+        try:
+            # Fetch the garment image bytes (blocking → run in a thread).
+            def _fetch(url):
+                headers = {"User-Agent": "Mozilla/5.0 (Mira try-on)"}
+                r = _req.Request(url, headers=headers)
+                with _req.urlopen(r, timeout=8) as resp:
+                    return resp.read(), resp.headers.get_content_type() or "image/jpeg"
+
+            product_bytes, product_mime = await asyncio.to_thread(_fetch, payload["product_image_url"])
+            person_bytes = base64.b64decode(image_b64)
+
+            # recontext_image is Vertex-only; on the Developer API we edit with an
+            # image-output model: person photo + garment image + prompt → try-on image.
+            _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            response = await asyncio.to_thread(
+                _client.models.generate_content,
+                model=_TRYON_MODEL,
+                contents=[
+                    _types.Part.from_bytes(data=person_bytes, mime_type=mime),
+                    _types.Part.from_bytes(data=product_bytes, mime_type=product_mime),
+                    payload["prompt"],
+                ],
+                config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
+            )
+
+            out_bytes = None
+            out_mime = "image/png"
+            cand = (response.candidates or [None])[0]
+            parts = getattr(getattr(cand, "content", None), "parts", None) or []
+            for p in parts:
+                inline = getattr(p, "inline_data", None)
+                if inline and inline.data:
+                    out_bytes = inline.data
+                    out_mime = inline.mime_type or "image/png"
+                    break
+
+            if not out_bytes:
+                print(f"  [try_on] no image in response")
+                await _send_json(ws, type="try_on_error", product_id=product_id,
+                                 message="Try-on couldn't be generated for this photo. Try a clear, front-facing full-body shot.")
+            else:
+                out_b64 = base64.b64encode(out_bytes).decode()
+                await _send_json(ws, type="try_on_result", product_id=product_id,
+                                 image=out_b64, mime=out_mime)
+                print(f"  [try_on] success — {len(out_b64)}b image sent")
+        except Exception as e:
+            import traceback as _tb
+            print(f"  ! try_on failed: {e}")
+            _tb.print_exc()
+            await _send_json(ws, type="try_on_error", product_id=product_id,
+                             message="Something went wrong generating your try-on. Please try again.")
+        finally:
+            await _send_json(ws, type="state", state="idle", mood="neutral")
+
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
         nonlocal chat_title, session_shown_ids, show_saved_mode, session_last_user_text
@@ -1511,6 +1593,12 @@ async def handle(ws) -> None:
                             asyncio.ensure_future(_outfit_anatomy(img, mime))
                     elif data.get("type") == "outfit_url":
                         asyncio.ensure_future(_outfit_from_url(data.get("url", "")))
+                    elif data.get("type") == "try_on":
+                        img = data.get("image", "")
+                        mime = data.get("mime", "image/jpeg")
+                        pid = data.get("product_id", "")
+                        if img and pid:
+                            asyncio.ensure_future(_try_on(pid, img, mime))
                     elif data.get("type") == "outfit_assembled":
                         # User assembled a look from catalog items in the Outfit Builder.
                         # The product cards are already on screen (client-side

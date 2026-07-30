@@ -422,6 +422,17 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
               setOutfitError(msg.error || "Could not detect outfit items — try a clearer photo.");
             }
             break;
+          case "try_on_result":
+            if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
+            setTryOnLoading(false);
+            setTryOnError(null);
+            setTryOnResult({ productId: msg.product_id, image: msg.image, mime: msg.mime || "image/png" });
+            break;
+          case "try_on_error":
+            if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
+            setTryOnLoading(false);
+            setTryOnError(msg.message || "Try-on failed. Please try again.");
+            break;
           case "quick_replies":
             setQuickReplies(msg.options || []);
             break;
@@ -457,6 +468,33 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const [outfitAnatomy, setOutfitAnatomy] = useState(null);
   const [outfitLoading, setOutfitLoading] = useState(false);
   const [outfitError, setOutfitError] = useState(null);
+  const [tryOnResult, setTryOnResult] = useState(null);   // { productId, image, mime }
+  const [tryOnLoading, setTryOnLoading] = useState(false);
+  const [tryOnError, setTryOnError] = useState(null);
+  const tryOnTimeoutRef = useRef(null);
+
+  const clearTryOn = useCallback(() => {
+    setTryOnResult(null);
+    setTryOnError(null);
+    setTryOnLoading(false);
+    if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
+  }, []);
+
+  const sendTryOn = useCallback((productId, imageBase64, mime = "image/jpeg") => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN || !productId || !imageBase64) return;
+    setTryOnResult(null);
+    setTryOnError(null);
+    setTryOnLoading(true);
+    ws.send(JSON.stringify({ type: "try_on", product_id: productId, image: imageBase64, mime }));
+    // Safety: clear loading if the server never responds.
+    if (tryOnTimeoutRef.current) clearTimeout(tryOnTimeoutRef.current);
+    tryOnTimeoutRef.current = setTimeout(() => {
+      tryOnTimeoutRef.current = null;
+      setTryOnLoading(false);
+      setTryOnError((e) => e || "Try-on timed out. Please try again.");
+    }, 60000);
+  }, []);
 
   const sendOutfitImage = useCallback((imageBase64, mime = "image/jpeg") => {
     const ws = wsRef.current;
@@ -567,5 +605,6 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     sendLikeReason, quickReplies, dismissQuickReplies,
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
+    sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
   };
 }

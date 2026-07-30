@@ -21,7 +21,7 @@ function openAll(items) {
   });
 }
 
-export default function CartPanel({ items, onRemove, onClear, onClose }) {
+export default function CartPanel({ items, onRemove, onClear, onClose, onTryOn }) {
   const overlayRef = useRef(null);
 
   useEffect(() => {
@@ -70,6 +70,13 @@ export default function CartPanel({ items, onRemove, onClear, onClose }) {
                     <strong className="cart-item-price">{formatPrice(p.price, p.currency)}</strong>
                   </div>
                   <div className="cart-item-actions">
+                    {onTryOn && (
+                      <button
+                        className="cart-item-tryon"
+                        onClick={() => { onClose?.(); onTryOn(p); }}
+                        title="Virtual try-on"
+                      >✨ Try on</button>
+                    )}
                     <a
                       className="cart-item-buy"
                       href={p.affiliate_url}

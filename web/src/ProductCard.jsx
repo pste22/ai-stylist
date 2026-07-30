@@ -72,7 +72,7 @@ function isInUserSize(productName, userSize) {
   return re.test(name);
 }
 
-export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact, userSize }) {
+export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact, userSize, onTryOn }) {
   const [tryOnOpen, setTryOnOpen] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError]   = useState(false);
@@ -195,7 +195,7 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
             <button
               className="card-try-btn"
               type="button"
-              onClick={(e) => { e.stopPropagation(); setTryOnOpen(true); }}
+              onClick={(e) => { e.stopPropagation(); onTryOn ? onTryOn(product) : setTryOnOpen(true); }}
               aria-label="Virtual try on"
               title="Virtual Try On"
             >

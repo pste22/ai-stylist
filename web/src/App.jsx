@@ -19,6 +19,7 @@ import { install as installWatcher } from "./SessionWatcher.js";
 import { SessionWatcherPanel } from "./SessionWatcherPanel.jsx";
 import { ReasonPicker } from "./ReasonPicker.jsx";
 import { OutfitBuilder } from "./OutfitBuilder.jsx";
+import TryOnModal from "./TryOnModal.jsx";
 
 // Activate in dev mode or when ?debug appears in the URL
 const DEBUG_MODE = import.meta.env.DEV || new URLSearchParams(location.search).has("debug");
@@ -230,7 +231,7 @@ function MiraBubbleContent({ text }) {
 
 // Unified 3-column product grid — single source of truth for product display.
 const PRODUCTS_PER_TURN = 3;
-function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll, userSize }) {
+function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll, userSize, onTryOn }) {
   if (!products?.length) return null;
   const shown = showAll ? products : products.slice(0, PRODUCTS_PER_TURN);
   return (
@@ -240,7 +241,7 @@ function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, 
         {shown.map((p) => (
           <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
             onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect}
-            inCart={inCart?.(p.id)} onAddToCart={onAddToCart} userSize={userSize} />
+            inCart={inCart?.(p.id)} onAddToCart={onAddToCart} userSize={userSize} onTryOn={onTryOn} />
         ))}
       </div>
       {onShopAll && (
@@ -1064,7 +1065,7 @@ function ChatWelcome({ onEventBrief, onOccasion, textMode }) {
 
 // ─── Message bubble — user or Mira, with inline product cards ────────────────
 function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart,
-                         reasonPickerProductId, onReasonDone, onAddAllToCart, userSize }) {
+                         reasonPickerProductId, onReasonDone, onAddAllToCart, userSize, onTryOn }) {
   const isMira = msg.role === "mira";
   const showPicker = isMira && reasonPickerProductId &&
     msg.products?.some(p => p.id === reasonPickerProductId);
@@ -1093,6 +1094,7 @@ function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inC
             label={msg.label}
             onShopAll={msg.label && onAddAllToCart ? (items) => { onAddAllToCart(items); } : null}
             userSize={userSize}
+            onTryOn={onTryOn}
           />
         )}
         {pickerProduct && (
@@ -1260,6 +1262,7 @@ export default function App() {
   const [activeFilter, setActiveFilter]   = useState("all");
   const pendingOccasionRef = useRef(null);
   const pendingOccasionStartRef = useRef(false);
+  const pendingTryOnStartRef = useRef(false);
   const [vsResults, setVsResults]         = useState([]);
   const [vsQuery, setVsQuery]             = useState("");
   const [vsCatalogNote, setVsCatalogNote] = useState(null);
@@ -1270,6 +1273,7 @@ export default function App() {
   );
 
   const [reasonPickerProductId, setReasonPickerProductId] = useState(null);
+  const [tryOnProduct, setTryOnProduct] = useState(null);
 
   const {
     connected, state, mood, captions, messages,
@@ -1281,6 +1285,7 @@ export default function App() {
     sendLikeReason, quickReplies, dismissQuickReplies,
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
+    sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
   } = useMiraVoice({
     userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
     onVisualSearchResults: (items, query, note) => { setVsResults(items); setVsQuery(query); setVsCatalogNote(note || null); setVsLoading(false); },
@@ -1375,6 +1380,25 @@ export default function App() {
       start(initialText);
     }
   }, [textMode, connected, start]);
+
+  // Start a (text-mode) session for try-on once textMode flips, so sendTryOn works.
+  useEffect(() => {
+    if (pendingTryOnStartRef.current && !connected) {
+      pendingTryOnStartRef.current = false;
+      start();
+    }
+  }, [textMode, connected, start]);
+
+  // Open the try-on modal for a product; ensure a session is running so the
+  // photo upload can reach the server (text mode → no mic popup).
+  const openTryOn = (product) => {
+    clearTryOn();
+    setTryOnProduct(product);
+    if (!connected) {
+      if (!textMode) { pendingTryOnStartRef.current = true; setTextMode(true); }
+      else start();
+    }
+  };
 
   const startEventEdit = (brief) => {
     setEventBrief(brief);
@@ -1582,7 +1606,8 @@ export default function App() {
                   highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart}
                   reasonPickerProductId={reasonPickerProductId} onReasonDone={handleReasonDone}
                   onAddAllToCart={(items) => { addAllToCart(items); setShowCart(true); }}
-                  userSize={effectivePrefs?.top_size || effectivePrefs?.bottom_size || null} />
+                  userSize={effectivePrefs?.top_size || effectivePrefs?.bottom_size || null}
+                  onTryOn={openTryOn} />
           )}
           {state === "thinking" && <ThinkingBubble />}
           {/* Scroll anchor — always at the very bottom of thread content */}
@@ -1656,6 +1681,7 @@ export default function App() {
           onRemove={removeFromCart}
           onClear={clearCart}
           onClose={() => setShowCart(false)}
+          onTryOn={openTryOn}
         />
       )}
       {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
@@ -1686,6 +1712,16 @@ export default function App() {
           <span>{outfitError}</span>
           <button onClick={() => setOutfitError(null)}>✕</button>
         </div>
+      )}
+      {tryOnProduct && (
+        <TryOnModal
+          product={tryOnProduct}
+          onClose={() => { setTryOnProduct(null); clearTryOn(); }}
+          onTryOn={sendTryOn}
+          result={tryOnResult}
+          loading={tryOnLoading}
+          error={tryOnError}
+        />
       )}
       {outfitAnatomy && (
         <OutfitBuilder
