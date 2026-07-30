@@ -1,5 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
+const VIEW_ORDER = ["front", "side", "back"];
+const VIEW_LABEL = { front: "Front", side: "Side", back: "Back" };
+
 /* ── Minimal body-outline SVG silhouette ── */
 function SilhouetteSVG() {
   return (
@@ -51,11 +54,15 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
+  const [selectedView, setSelectedView] = useState("front");
+  const [zoom, setZoom] = useState(false); // fullscreen magnified result
 
   /* Close on Escape key */
   useEffect(() => {
     function onKey(e) {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (zoom) setZoom(false);   // close the enlarged view first
+      else onClose();
     }
     document.addEventListener("keydown", onKey);
     /* Prevent body scroll while modal open */
@@ -64,7 +71,10 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [onClose]);
+  }, [onClose, zoom]);
+
+  /* Reset to the front angle whenever a new product's try-on begins */
+  useEffect(() => { setSelectedView("front"); }, [product.id]);
 
   /* Close on backdrop click */
   function handleOverlayClick(e) {
@@ -97,6 +107,17 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
 
   // Only show a result if it belongs to THIS product.
   const myResult = result && result.productId === product.id ? result : null;
+  const views = myResult?.views || {};
+  const failed = myResult?.failed || {};
+  const total = myResult?.total || 0;
+  // Which angle buttons to show: the expected set (front/side/back), capped to total.
+  const angleKeys = myResult
+    ? VIEW_ORDER.slice(0, Math.max(total, Object.keys(views).length) || 1)
+    : [];
+  const selected = views[selectedView];
+  const selectedPending = myResult && !selected && !failed[selectedView];
+  const selectedFailed = myResult && !selected && failed[selectedView];
+  const anyDone = myResult && Object.keys(views).length > 0;
 
   return (
     <div
@@ -107,7 +128,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
       aria-modal="true"
       aria-label="Virtual try-on"
     >
-      <div className="tryon-modal">
+      <div className={`tryon-modal${anyDone ? " has-result" : ""}`}>
         {/* Close */}
         <button className="tryon-close" onClick={onClose} aria-label="Close">
           ✕
@@ -122,64 +143,110 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           </p>
         </div>
 
-        {/* Visual area */}
-        <div className="tryon-stage">
-          {/* Left — product preview */}
-          <div className="tryon-product-preview">
-            {hasPhoto ? (
-              <img
-                className="tryon-product-img"
-                src={product.image_url}
-                alt={product.name}
-                loading="lazy"
-              />
+        {anyDone ? (
+          /* ── Large result view — full magnified image of you in the item ── */
+          <div className="tryon-result-stage">
+            {selected ? (
+              <button
+                className="tryon-result-full-btn"
+                onClick={() => setZoom(true)}
+                title="Click to enlarge"
+                aria-label="Enlarge try-on image"
+              >
+                <img
+                  className="tryon-result-full"
+                  src={`data:${selected.mime};base64,${selected.image}`}
+                  alt={`Virtual try-on — ${VIEW_LABEL[selectedView] || selectedView}`}
+                />
+                <span className="tryon-zoom-hint">⤢ Tap to enlarge</span>
+              </button>
+            ) : selectedPending ? (
+              <div className="tryon-result-placeholder">
+                <span className="tryon-angle-dot big" aria-hidden="true" />
+                <p>Generating the {(VIEW_LABEL[selectedView] || selectedView).toLowerCase()} view…</p>
+              </div>
             ) : (
-              <div className="tryon-product-emoji-wrap">
-                <span className="tryon-product-emoji">{emoji}</span>
+              <div className="tryon-result-placeholder">
+                <span className="tryon-product-emoji">🙈</span>
+                <p>Couldn't generate this angle — try another.</p>
               </div>
             )}
-            <span className="tryon-product-label">Item</span>
           </div>
+        ) : (
+          /* ── Pre-upload / loading — item + silhouette ── */
+          <div className="tryon-stage">
+            <div className="tryon-product-preview">
+              {hasPhoto ? (
+                <img className="tryon-product-img" src={product.image_url} alt={product.name} loading="lazy" />
+              ) : (
+                <div className="tryon-product-emoji-wrap">
+                  <span className="tryon-product-emoji">{emoji}</span>
+                </div>
+              )}
+              <span className="tryon-product-label">Item</span>
+            </div>
 
-          {/* Connector arrow */}
-          <div className="tryon-connector" aria-hidden="true">
-            <svg viewBox="0 0 48 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M2 12 H44 M36 4 L44 12 L36 20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            <span>+</span>
-            <svg viewBox="0 0 48 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <path d="M2 12 H44 M36 4 L44 12 L36 20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </div>
+            <div className="tryon-connector" aria-hidden="true">
+              <svg viewBox="0 0 48 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 12 H44 M36 4 L44 12 L36 20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span>+</span>
+              <svg viewBox="0 0 48 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M2 12 H44 M36 4 L44 12 L36 20" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
 
-          {/* Right — result / your photo / silhouette */}
-          <div className="tryon-silhouette-wrap">
-            {myResult ? (
-              <img
-                className="tryon-product-img tryon-result-img"
-                src={`data:${myResult.mime};base64,${myResult.image}`}
-                alt="Virtual try-on result"
-              />
-            ) : loading ? (
-              <>
+            <div className="tryon-silhouette-wrap">
+              {loading ? (
+                <>
+                  <SilhouetteSVG />
+                  <div className="tryon-shimmer-bar" aria-hidden="true" />
+                </>
+              ) : userPhoto ? (
+                <img className="tryon-product-img" src={userPhoto} alt="Your photo" />
+              ) : (
                 <SilhouetteSVG />
-                <div className="tryon-shimmer-bar" aria-hidden="true" />
-              </>
-            ) : userPhoto ? (
-              <img className="tryon-product-img" src={userPhoto} alt="Your photo" />
-            ) : (
-              <SilhouetteSVG />
-            )}
-            <span className="tryon-product-label">You</span>
+              )}
+              <span className="tryon-product-label">You</span>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* Angle switcher — appears once the first view is ready */}
+        {anyDone && (
+          <div className="tryon-angles" role="tablist" aria-label="View angles">
+            {angleKeys.map((v) => {
+              const ready = !!views[v];
+              const isFailed = !!failed[v];
+              return (
+                <button
+                  key={v}
+                  role="tab"
+                  aria-selected={selectedView === v}
+                  className={`tryon-angle${selectedView === v ? " active" : ""}${ready ? "" : " pending"}${isFailed ? " failed" : ""}`}
+                  disabled={!ready}
+                  onClick={() => ready && setSelectedView(v)}
+                  title={isFailed ? "Couldn't generate this angle" : VIEW_LABEL[v]}
+                >
+                  {VIEW_LABEL[v] || v}
+                  {!ready && !isFailed && <span className="tryon-angle-dot" aria-hidden="true" />}
+                  {isFailed && " ✕"}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* CTA copy + upload */}
         <div className="tryon-cta-area">
           {loading ? (
             <p className="tryon-magic-text">Styling it on you… this takes a few seconds 🪄</p>
-          ) : myResult ? (
-            <p className="tryon-magic-text">Here's how it looks on you! ✨</p>
+          ) : anyDone ? (
+            angleKeys.every((v) => views[v] || failed[v]) ? (
+              <p className="tryon-magic-text">Here's how it looks — from every angle! ✨</p>
+            ) : (
+              <p className="tryon-magic-text">Front's ready — spinning up the other angles… ✨</p>
+            )
           ) : error ? (
             <p className="tryon-desc" style={{ color: "#c0103a" }}>{error}</p>
           ) : (
@@ -203,15 +270,27 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 type="button"
                 onClick={() => fileRef.current?.click()}
               >
-                {myResult || error || userPhoto ? "Try another photo" : "Upload your photo"} 📷
+                {anyDone || error || userPhoto ? "Try another photo" : "Upload your photo"} 📷
               </button>
             )}
             <button className="tryon-skip-btn" type="button" onClick={onClose}>
-              {myResult ? "Done" : "Maybe later"}
+              {anyDone ? "Done" : "Maybe later"}
             </button>
           </div>
         </div>
       </div>
+
+      {/* Fullscreen magnified view */}
+      {zoom && selected && (
+        <div className="tryon-zoom" onClick={() => setZoom(false)} role="dialog" aria-label="Enlarged try-on">
+          <img
+            className="tryon-zoom-img"
+            src={`data:${selected.mime};base64,${selected.image}`}
+            alt={`Virtual try-on — ${VIEW_LABEL[selectedView] || selectedView}`}
+          />
+          <button className="tryon-zoom-close" onClick={() => setZoom(false)} aria-label="Close enlarged view">✕</button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1068,10 +1068,13 @@ async def handle(ws) -> None:
         print(f"  outfit_anatomy → gender={outfit_gender} {len(result_items)} items detected")
 
     async def _try_on(product_id: str, image_b64: str, mime: str = "image/jpeg") -> None:
-        """Generate an AI virtual try-on: place the product on the user's photo.
+        """Generate a multi-angle AI virtual try-on (front / side / back).
 
-        Uses Gemini's recontext_image (Virtual Try-On). Never crashes the
-        session — any failure is reported back as a `try_on_error`.
+        recontext_image is Vertex-only, so on the Developer API we edit with an
+        image-output model. The FRONT view is generated from the user's photo +
+        the garment; the other angles are generated FROM the front result so
+        identity, hair and garment stay consistent. Each view is streamed to the
+        client as it finishes (progressive turntable). Never crashes the session.
         """
         import base64
         import urllib.request as _req
@@ -1089,8 +1092,22 @@ async def handle(ws) -> None:
                              message="Couldn't start try-on — please pick a product and upload a clear photo.")
             return
 
-        print(f"  [try_on] starting — product={payload['product_name']!r} photo={len(image_b64)}b")
+        views = _tryon.TRYON_VIEWS
+        total = len(views)
+        print(f"  [try_on] starting — product={payload['product_name']!r} views={total}")
         await _send_json(ws, type="state", state="thinking", mood="focused")
+
+        _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+        def _extract(response):
+            cand = (response.candidates or [None])[0]
+            parts = getattr(getattr(cand, "content", None), "parts", None) or []
+            for p in parts:
+                inline = getattr(p, "inline_data", None)
+                if inline and inline.data:
+                    return inline.data, (inline.mime_type or "image/png")
+            return None, None
+
         try:
             # Fetch the garment image bytes (blocking → run in a thread).
             def _fetch(url):
@@ -1102,10 +1119,8 @@ async def handle(ws) -> None:
             product_bytes, product_mime = await asyncio.to_thread(_fetch, payload["product_image_url"])
             person_bytes = base64.b64decode(image_b64)
 
-            # recontext_image is Vertex-only; on the Developer API we edit with an
-            # image-output model: person photo + garment image + prompt → try-on image.
-            _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
-            response = await asyncio.to_thread(
+            # ── FRONT: person photo + garment ──
+            front_resp = await asyncio.to_thread(
                 _client.models.generate_content,
                 model=_TRYON_MODEL,
                 contents=[
@@ -1115,27 +1130,42 @@ async def handle(ws) -> None:
                 ],
                 config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
             )
-
-            out_bytes = None
-            out_mime = "image/png"
-            cand = (response.candidates or [None])[0]
-            parts = getattr(getattr(cand, "content", None), "parts", None) or []
-            for p in parts:
-                inline = getattr(p, "inline_data", None)
-                if inline and inline.data:
-                    out_bytes = inline.data
-                    out_mime = inline.mime_type or "image/png"
-                    break
-
-            if not out_bytes:
-                print(f"  [try_on] no image in response")
+            front_bytes, front_mime = _extract(front_resp)
+            if not front_bytes:
+                print("  [try_on] no front image in response")
                 await _send_json(ws, type="try_on_error", product_id=product_id,
                                  message="Try-on couldn't be generated for this photo. Try a clear, front-facing full-body shot.")
-            else:
-                out_b64 = base64.b64encode(out_bytes).decode()
-                await _send_json(ws, type="try_on_result", product_id=product_id,
-                                 image=out_b64, mime=out_mime)
-                print(f"  [try_on] success — {len(out_b64)}b image sent")
+                return
+
+            await _send_json(ws, type="try_on_result", product_id=product_id, view="front",
+                             total=total, image=base64.b64encode(front_bytes).decode(), mime=front_mime)
+            print("  [try_on] front sent")
+
+            # ── OTHER ANGLES: re-render the FRONT result from each angle, in parallel ──
+            async def _angle(view):
+                try:
+                    resp = await asyncio.to_thread(
+                        _client.models.generate_content,
+                        model=_TRYON_MODEL,
+                        contents=[
+                            _types.Part.from_bytes(data=front_bytes, mime_type=front_mime),
+                            _tryon.view_instruction(payload["product_name"], view),
+                        ],
+                        config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
+                    )
+                    b, m = _extract(resp)
+                    if b:
+                        await _send_json(ws, type="try_on_result", product_id=product_id, view=view,
+                                         total=total, image=base64.b64encode(b).decode(), mime=m)
+                        print(f"  [try_on] {view} sent")
+                    else:
+                        await _send_json(ws, type="try_on_view_error", product_id=product_id, view=view)
+                        print(f"  [try_on] {view} produced no image")
+                except Exception as _ae:
+                    print(f"  [try_on] {view} failed: {_ae}")
+                    await _send_json(ws, type="try_on_view_error", product_id=product_id, view=view)
+
+            await asyncio.gather(*[_angle(v) for v in views if v != "front"])
         except Exception as e:
             import traceback as _tb
             print(f"  ! try_on failed: {e}")

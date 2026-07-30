@@ -1117,6 +1117,79 @@ button.primary.stop { background: var(--accent); }
   width: 100%; height: 100%; max-height: 320px; object-fit: contain;
   border-radius: var(--r-md, 12px);
 }
+/* Angle switcher (Front / Side / Back turntable) */
+.tryon-angles {
+  display: flex; justify-content: center; gap: .5rem;
+  margin: .85rem 0 .25rem;
+}
+.tryon-angle {
+  display: inline-flex; align-items: center; gap: .35rem;
+  font-size: .8rem; font-weight: 700; cursor: pointer;
+  padding: .38rem .9rem; border-radius: var(--r-pill, 999px);
+  background: var(--surface-2, #f1f1f4); color: var(--ink, #222);
+  border: 1.5px solid transparent; transition: all .15s;
+}
+.tryon-angle.active {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  border-color: var(--accent); color: var(--accent);
+}
+.tryon-angle.pending { opacity: .6; cursor: default; }
+.tryon-angle.failed { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
+.tryon-angle-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  border: 2px solid currentColor; border-top-color: transparent;
+  display: inline-block; animation: tryon-spin .7s linear infinite;
+}
+@keyframes tryon-spin { to { transform: rotate(360deg); } }
+
+/* ── Large result view — the full magnified try-on image ── */
+.tryon-modal.has-result { max-width: 640px; }
+.tryon-result-stage {
+  display: flex; align-items: center; justify-content: center;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 16px; padding: .75rem; overflow: hidden;
+}
+.tryon-result-full-btn {
+  position: relative; border: 0; background: none; padding: 0; cursor: zoom-in;
+  display: block; width: 100%;
+}
+.tryon-result-full {
+  display: block; width: 100%; height: auto;
+  max-height: 68vh; object-fit: contain;
+  border-radius: 12px;
+}
+.tryon-zoom-hint {
+  position: absolute; bottom: .6rem; right: .6rem;
+  font-size: .72rem; font-weight: 700; color: #fff;
+  background: rgba(26,20,16,.55); backdrop-filter: blur(4px);
+  padding: .3rem .6rem; border-radius: var(--r-pill, 999px);
+  pointer-events: none;
+}
+.tryon-result-placeholder {
+  display: flex; flex-direction: column; align-items: center; gap: .8rem;
+  min-height: 320px; justify-content: center;
+  color: var(--ink-2); font-size: .9rem; text-align: center;
+}
+.tryon-angle-dot.big { width: 22px; height: 22px; border-width: 3px; color: var(--accent); }
+
+/* Fullscreen magnified overlay */
+.tryon-zoom {
+  position: fixed; inset: 0; z-index: 1200;
+  background: rgba(12,10,8,.92);
+  display: flex; align-items: center; justify-content: center;
+  padding: 1.5rem; cursor: zoom-out;
+}
+.tryon-zoom-img {
+  max-width: 96vw; max-height: 94vh; object-fit: contain;
+  border-radius: 10px; box-shadow: 0 20px 60px rgba(0,0,0,.5);
+}
+.tryon-zoom-close {
+  position: absolute; top: 1.1rem; right: 1.1rem;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: rgba(255,255,255,.14); color: #fff; border: 1px solid rgba(255,255,255,.3);
+  font-size: 1rem; cursor: pointer;
+}
+.tryon-zoom-close:hover { background: rgba(255,255,255,.28); }
 .cart-item-remove {
   width: 24px; height: 24px; border-radius: 50%;
   background: transparent; border: 1px solid var(--border);

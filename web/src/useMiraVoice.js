@@ -422,11 +422,30 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
               setOutfitError(msg.error || "Could not detect outfit items — try a clearer photo.");
             }
             break;
-          case "try_on_result":
+          case "try_on_result": {
             if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
-            setTryOnLoading(false);
+            setTryOnLoading(false); // first angle arrived — show it immediately
             setTryOnError(null);
-            setTryOnResult({ productId: msg.product_id, image: msg.image, mime: msg.mime || "image/png" });
+            const view = msg.view || "front";
+            setTryOnResult((prev) => {
+              const base = prev && prev.productId === msg.product_id
+                ? prev
+                : { productId: msg.product_id, views: {}, failed: {}, total: msg.total || 1 };
+              return {
+                ...base,
+                total: msg.total || base.total,
+                views: { ...base.views, [view]: { image: msg.image, mime: msg.mime || "image/png" } },
+              };
+            });
+            break;
+          }
+          case "try_on_view_error":
+            // A single angle failed — keep the others; mark this one so the UI stops waiting.
+            setTryOnResult((prev) =>
+              prev && prev.productId === msg.product_id
+                ? { ...prev, failed: { ...prev.failed, [msg.view]: true } }
+                : prev
+            );
             break;
           case "try_on_error":
             if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
@@ -493,7 +512,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
       tryOnTimeoutRef.current = null;
       setTryOnLoading(false);
       setTryOnError((e) => e || "Try-on timed out. Please try again.");
-    }, 60000);
+    }, 90000);
   }, []);
 
   const sendOutfitImage = useCallback((imageBase64, mime = "image/jpeg") => {
