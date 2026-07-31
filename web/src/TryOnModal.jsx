@@ -131,7 +131,8 @@ function SilhouetteSVG() {
 }
 
 export default function TryOnModal({ product, onClose, onTryOn, result, loading, error,
-                                     onVideo, video, videoLoadingKind, videoError }) {
+                                     onVideo, video, videoLoadingKind, videoError,
+                                     savedPhoto, onSavePhoto, onClearPhoto }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -180,10 +181,19 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
       const dataUrl = reader.result;
       setUserPhoto(dataUrl);
       const base64 = String(dataUrl).split(",")[1];
-      onTryOn?.(product.id, base64, file.type || "image/jpeg");
+      const mime = file.type || "image/jpeg";
+      onSavePhoto?.(base64, mime);   // remember for next time (client-side only)
+      onTryOn?.(product.id, base64, mime);
     };
     reader.readAsDataURL(file);
     e.target.value = "";
+  };
+
+  // One-tap "try it on me" using the previously saved photo — no re-upload.
+  const tryWithSaved = () => {
+    if (!savedPhoto?.image) return;
+    setUserPhoto(`data:${savedPhoto.mime};base64,${savedPhoto.image}`);
+    onTryOn?.(product.id, savedPhoto.image, savedPhoto.mime || "image/jpeg");
   };
 
   // Only show a result if it belongs to THIS product.
@@ -435,10 +445,14 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             )
           ) : error ? (
             <p className="tryon-desc" style={{ color: "#c0103a" }}>{error}</p>
+          ) : savedPhoto?.image && !userPhoto ? (
+            <p className="tryon-desc">
+              See it on you in one tap — or upload a new photo. Your photo stays on your device.
+            </p>
           ) : (
             <p className="tryon-desc">
               Upload a clear, front-facing full-body photo and Mira will show this
-              piece styled on you — powered by AI.
+              piece styled on you. Your photo stays on your device — never uploaded to our servers.
             </p>
           )}
 
@@ -450,18 +464,31 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             onChange={handleFile}
           />
           <div className="tryon-actions">
+            {/* One-tap try-on with the saved photo (pre-upload only) */}
+            {!loading && !anyDone && savedPhoto?.image && !userPhoto && (
+              <button className="tryon-notify-btn" type="button" onClick={tryWithSaved}>
+                ✨ Try it on me
+              </button>
+            )}
             {!loading && (
               <button
-                className="tryon-notify-btn"
+                className={(!anyDone && savedPhoto?.image && !userPhoto) ? "tryon-share-btn" : "tryon-notify-btn"}
                 type="button"
                 onClick={() => fileRef.current?.click()}
               >
-                {anyDone || error || userPhoto ? "Try another photo" : "Upload your photo"} 📷
+                {anyDone || error || userPhoto
+                  ? "Try another photo"
+                  : (savedPhoto?.image ? "Upload a different photo" : "Upload your photo")} 📷
               </button>
             )}
             {canShare && (
               <button className="tryon-share-btn" type="button" onClick={handleShare} disabled={sharing}>
                 {sharing ? "Preparing…" : "Share ✦"}
+              </button>
+            )}
+            {savedPhoto?.image && !anyDone && !loading && (
+              <button className="tryon-skip-btn" type="button" onClick={onClearPhoto}>
+                Forget my photo
               </button>
             )}
             <button className="tryon-skip-btn" type="button" onClick={onClose}>

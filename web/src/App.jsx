@@ -14,6 +14,7 @@ import PrivacyPolicy from "./PrivacyPolicy.jsx";
 import ProductQuickView from "./ProductQuickView.jsx";
 import CartPanel from "./CartPanel.jsx";
 import { useCart } from "./useCart.js";
+import { usePhotoProfile } from "./usePhotoProfile.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { install as installWatcher } from "./SessionWatcher.js";
 import { SessionWatcherPanel } from "./SessionWatcherPanel.jsx";
@@ -1267,6 +1268,7 @@ export default function App() {
   const [vsQuery, setVsQuery]             = useState("");
   const [vsCatalogNote, setVsCatalogNote] = useState(null);
   const { items: cartItems, addItem: addToCart, addItems: addAllToCart, removeItem: removeFromCart, clearCart, inCart } = useCart();
+  const { photo: savedPhoto, savePhoto, clearPhoto } = usePhotoProfile();
   const effectivePrefs = useMemo(
     () => user ? prefs : { ...(prefs || {}), pin_code: guestPinCode },
     [user, prefs, guestPinCode]
@@ -1726,6 +1728,9 @@ export default function App() {
           video={tryOnVideo}
           videoLoadingKind={tryOnVideoLoadingKind}
           videoError={tryOnVideoError}
+          savedPhoto={savedPhoto}
+          onSavePhoto={savePhoto}
+          onClearPhoto={clearPhoto}
         />
       )}
       {outfitAnatomy && (
