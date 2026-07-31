@@ -15,6 +15,74 @@ const VIDEO_KINDS = [
 ];
 const VIDEO_KEYS = VIDEO_KINDS.map((k) => k.key);
 
+// base64 → Blob
+function b64toBlob(b64, mime = "application/octet-stream") {
+  const bytes = atob(b64);
+  const arr = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+  return new Blob([arr], { type: mime });
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// Compose a branded 9:16 share card (1080×1920) from a try-on image.
+async function composeShareCard(imgBase64, imgMime, product) {
+  const W = 1080, H = 1920;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+
+  // Soft brand gradient backdrop
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, "#fbeef0"); g.addColorStop(1, "#efe7f6");
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+
+  // Draw the try-on image "contain" into the top region, centered
+  const img = new Image();
+  img.src = `data:${imgMime};base64,${imgBase64}`;
+  try { await img.decode(); } catch { /* fall through */ }
+  const areaTop = 60, areaH = 1440, areaW = W - 120, areaX = 60;
+  const scale = Math.min(areaW / img.width, areaH / img.height);
+  const dw = img.width * scale, dh = img.height * scale;
+  const dx = (W - dw) / 2, dy = areaTop + (areaH - dh) / 2;
+  ctx.save();
+  ctx.shadowColor = "rgba(60,30,40,.18)"; ctx.shadowBlur = 40; ctx.shadowOffsetY = 16;
+  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.restore();
+
+  // Bottom text block
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#1a1410";
+  ctx.font = "700 46px Georgia, serif";
+  const name = (product.name || "").slice(0, 60);
+  // simple 1-2 line wrap
+  const words = name.split(" "); let line = "", lines = [];
+  for (const w of words) {
+    if ((line + " " + w).trim().length > 26) { lines.push(line.trim()); line = w; }
+    else line += " " + w;
+    if (lines.length === 2) break;
+  }
+  if (line && lines.length < 2) lines.push(line.trim());
+  lines.forEach((ln, i) => ctx.fillText(ln, W / 2, 1580 + i * 56));
+
+  if (product.price != null) {
+    const cur = product.currency === "USD" ? "$" : "₹";
+    ctx.font = "700 44px Georgia, serif"; ctx.fillStyle = "#c0103a";
+    ctx.fillText(`${cur}${Number(product.price).toLocaleString("en-IN")}`, W / 2, 1580 + lines.length * 56 + 20);
+  }
+
+  ctx.font = "800 34px Georgia, serif"; ctx.fillStyle = "#7c3aed";
+  ctx.fillText("✦ Styled by Mira", W / 2, 1840);
+
+  return await new Promise((res) => canvas.toBlob((b) => res(b), "image/png", 0.92));
+}
+
 /* ── Minimal body-outline SVG silhouette ── */
 function SilhouetteSVG() {
   return (
@@ -145,6 +213,36 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
       onVideo(product.id, front.image, front.mime || "image/png", kind);
     }
   };
+
+  const [sharing, setSharing] = useState(false);
+  const handleShare = async () => {
+    if (sharing) return;
+    setSharing(true);
+    const caption = `Styled by Mira ✦ — ${product.name || "my look"}`;
+    try {
+      // If a video clip is showing, share the clip itself.
+      const clip = clips[selectedView];
+      if (clip) {
+        const blob = b64toBlob(clip.video, clip.mime || "video/mp4");
+        const file = new File([blob], "mira-tryon.mp4", { type: blob.type });
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], title: "My Mira try-on", text: caption });
+        } else { triggerDownload(blob, "mira-tryon.mp4"); }
+        return;
+      }
+      // Otherwise compose a branded card from the best available still image.
+      const src = selected?.image || stills[selectedView]?.image || front?.image;
+      const srcMime = selected?.mime || stills[selectedView]?.mime || front?.mime || "image/png";
+      if (!src) return;
+      const blob = await composeShareCard(src, srcMime, product);
+      const file = new File([blob], "mira-look.png", { type: "image/png" });
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: "My Mira look", text: caption });
+      } else { triggerDownload(blob, "mira-look.png"); }
+    } catch { /* user cancelled share or unsupported — no-op */ }
+    finally { setSharing(false); }
+  };
+  const canShare = anyDone; // share available once we have at least the front image
 
   return (
     <div
@@ -359,6 +457,11 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 onClick={() => fileRef.current?.click()}
               >
                 {anyDone || error || userPhoto ? "Try another photo" : "Upload your photo"} 📷
+              </button>
+            )}
+            {canShare && (
+              <button className="tryon-share-btn" type="button" onClick={handleShare} disabled={sharing}>
+                {sharing ? "Preparing…" : "Share ✦"}
               </button>
             )}
             <button className="tryon-skip-btn" type="button" onClick={onClose}>

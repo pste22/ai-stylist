@@ -1604,6 +1604,16 @@ button.primary.stop { background: var(--accent); }
   transition: opacity .14s, transform .12s;
 }
 .tryon-notify-btn:hover { opacity: .88; transform: translateY(-1px); }
+.tryon-share-btn {
+  width: 100%; max-width: 280px;
+  padding: .7rem 1.5rem;
+  background: #fff; color: var(--accent);
+  border: 1.5px solid var(--accent); border-radius: var(--r-pill);
+  font: inherit; font-size: .88rem; font-weight: 800; letter-spacing: .02em;
+  cursor: pointer; transition: background .14s, transform .12s;
+}
+.tryon-share-btn:hover { background: var(--accent-soft); transform: translateY(-1px); }
+.tryon-share-btn:disabled { opacity: .6; cursor: default; }
 .tryon-skip-btn {
   background: transparent; border: none;
   font: inherit; font-size: .8rem; color: var(--ink-3);
