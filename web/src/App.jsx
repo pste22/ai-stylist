@@ -15,6 +15,8 @@ import ProductQuickView from "./ProductQuickView.jsx";
 import CartPanel from "./CartPanel.jsx";
 import { useCart } from "./useCart.js";
 import { usePhotoProfile } from "./usePhotoProfile.js";
+import { saveTryOn, getTryOn, listTryOns, photoSignature } from "./tryOnDB.js";
+import FittingRoom from "./FittingRoom.jsx";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { install as installWatcher } from "./SessionWatcher.js";
 import { SessionWatcherPanel } from "./SessionWatcherPanel.jsx";
@@ -1276,6 +1278,9 @@ export default function App() {
 
   const [reasonPickerProductId, setReasonPickerProductId] = useState(null);
   const [tryOnProduct, setTryOnProduct] = useState(null);
+  const [savedTryOn, setSavedTryOn] = useState(null);   // this product's stored try-on (IndexedDB)
+  const [showFittingRoom, setShowFittingRoom] = useState(false);
+  const [fittingRoomCount, setFittingRoomCount] = useState(0);
 
   const {
     connected, state, mood, captions, messages,
@@ -1397,11 +1402,46 @@ export default function App() {
   const openTryOn = (product) => {
     clearTryOn();
     setTryOnProduct(product);
+    setShowFittingRoom(false);
+    // Restore a previously saved try-on for this product (instant, free).
+    setSavedTryOn(null);
+    getTryOn(product.id).then((rec) => { if (rec) setSavedTryOn(rec); });
     if (!connected) {
       if (!textMode) { pendingTryOnStartRef.current = true; setTextMode(true); }
       else start();
     }
   };
+
+  // Persist a try-on to the Fitting Room (IndexedDB) as results/videos arrive.
+  useEffect(() => {
+    if (!tryOnProduct) return;
+    const r = tryOnResult && tryOnResult.productId === tryOnProduct.id ? tryOnResult : null;
+    const v = tryOnVideo && tryOnVideo.productId === tryOnProduct.id ? tryOnVideo : null;
+    const hasViews = r && Object.keys(r.views || {}).length > 0;
+    const hasClips = v && Object.keys(v.clips || {}).length > 0;
+    if (!hasViews && !hasClips) return;
+    const p = tryOnProduct;
+    saveTryOn({
+      productId: p.id,
+      product: {
+        id: p.id, name: p.name, price: p.price, currency: p.currency,
+        image_url: p.image_url, category: p.category, affiliate_url: p.affiliate_url,
+      },
+      views: { ...(savedTryOn?.views || {}), ...(r?.views || {}) },
+      clips: { ...(savedTryOn?.clips || {}), ...(v?.clips || {}) },
+      stills: { ...(savedTryOn?.stills || {}), ...(v?.stills || {}) },
+      photoSig: photoSignature(savedPhoto?.image),
+    }).then(() => setFittingRoomCount((c) => (savedTryOn ? c : c + 1)));
+  }, [tryOnResult, tryOnVideo, tryOnProduct]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Whether the saved try-on was made with a now-replaced profile photo.
+  const savedTryOnStale = !!(
+    savedTryOn && savedPhoto?.image && savedTryOn.photoSig &&
+    savedTryOn.photoSig !== photoSignature(savedPhoto.image)
+  );
+
+  // Fitting Room badge count on mount.
+  useEffect(() => { listTryOns().then((r) => setFittingRoomCount(r.length)); }, []);
 
   const startEventEdit = (brief) => {
     setEventBrief(brief);
@@ -1480,6 +1520,13 @@ export default function App() {
           <MiraDot state={state} mood={mood} audioActive={!textMode && connected} />
           <span className="chat-title">Mira</span>
           <div className="chat-header-right">
+            {/* Fitting Room — past try-ons ("seen on me") */}
+            {fittingRoomCount > 0 && (
+              <button className="cart-icon-btn" onClick={() => setShowFittingRoom(true)} title={`Fitting Room (${fittingRoomCount})`}>
+                🪞
+                <span className="cart-icon-badge">{fittingRoomCount}</span>
+              </button>
+            )}
             {/* Cart icon */}
             <button className="cart-icon-btn" onClick={() => setShowCart(true)} title={`Cart (${cartItems.length})`}>
               🛒
@@ -1687,6 +1734,13 @@ export default function App() {
           onTryOn={openTryOn}
         />
       )}
+      {showFittingRoom && (
+        <FittingRoom
+          onClose={() => setShowFittingRoom(false)}
+          onOpenTryOn={(product) => openTryOn(product)}
+          onCountChange={setFittingRoomCount}
+        />
+      )}
       {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
       {showDeleteModal && (
         <DeleteAccountModal
@@ -1731,6 +1785,8 @@ export default function App() {
           savedPhoto={savedPhoto}
           onSavePhoto={savePhoto}
           onClearPhoto={clearPhoto}
+          savedTryOn={savedTryOn}
+          savedStale={savedTryOnStale}
         />
       )}
       {outfitAnatomy && (

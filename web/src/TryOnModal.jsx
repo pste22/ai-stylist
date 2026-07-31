@@ -132,7 +132,8 @@ function SilhouetteSVG() {
 
 export default function TryOnModal({ product, onClose, onTryOn, result, loading, error,
                                      onVideo, video, videoLoadingKind, videoError,
-                                     savedPhoto, onSavePhoto, onClearPhoto }) {
+                                     savedPhoto, onSavePhoto, onClearPhoto,
+                                     savedTryOn, savedStale }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -196,24 +197,29 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
     onTryOn?.(product.id, savedPhoto.image, savedPhoto.mime || "image/jpeg");
   };
 
-  // Only show a result if it belongs to THIS product.
+  // Live result for THIS product, plus the saved (Fitting Room) fallback so a
+  // previously-tried product shows instantly with no regeneration.
   const myResult = result && result.productId === product.id ? result : null;
-  const views = myResult?.views || {};
+  const saved = savedTryOn && savedTryOn.productId === product.id ? savedTryOn : null;
+  const liveViews = myResult?.views || {};
+  // Merge saved + live (live overlays saved) so a saved angle always shows, even
+  // if a late in-flight message would otherwise leave it looking "pending".
+  const views = { ...(saved?.views || {}), ...liveViews };
   const failed = myResult?.failed || {};
-  const total = myResult?.total || 0;
+  const total = Math.max(myResult?.total || 0, Object.keys(views).length) || 0;
   // Which angle buttons to show: the expected set (front/side/back), capped to total.
-  const angleKeys = myResult
+  const angleKeys = Object.keys(views).length
     ? VIEW_ORDER.slice(0, Math.max(total, Object.keys(views).length) || 1)
     : [];
   const selected = views[selectedView];
   const selectedPending = myResult && !selected && !failed[selectedView];
   const selectedFailed = myResult && !selected && failed[selectedView];
-  const anyDone = myResult && Object.keys(views).length > 0;
+  const anyDone = Object.keys(views).length > 0;
 
-  // ── Videos (Veo): 360° spin + curated scenes ──
+  // ── Videos (Veo): 360° spin + curated scenes (live overlaid on saved) ──
   const myVideo = video && video.productId === product.id ? video : null;
-  const clips = myVideo?.clips || {};
-  const stills = myVideo?.stills || {};
+  const clips = { ...(saved?.clips || {}), ...(myVideo?.clips || {}) };
+  const stills = { ...(saved?.stills || {}), ...(myVideo?.stills || {}) };
   const isVideoView = VIDEO_KEYS.includes(selectedView);
   const front = views.front;
   const handleVideo = (kind) => {
@@ -453,6 +459,12 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             <p className="tryon-desc">
               Upload a clear, front-facing full-body photo and Mira will show this
               piece styled on you. Your photo stays on your device — never uploaded to our servers.
+            </p>
+          )}
+
+          {anyDone && savedStale && (
+            <p className="tryon-stale-nudge">
+              Made with your old photo — <button className="tryon-stale-link" onClick={() => fileRef.current?.click()}>refresh with your current one?</button>
             </p>
           )}
 
