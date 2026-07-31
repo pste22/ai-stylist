@@ -3,6 +3,18 @@ import { useEffect, useRef, useState } from "react";
 const VIEW_ORDER = ["front", "side", "back"];
 const VIEW_LABEL = { front: "Front", side: "Side", back: "Back" };
 
+// On-demand videos: the 360° spin + curated, occasion-led scenes.
+const VIDEO_KINDS = [
+  { key: "spin",      label: "Spin",        emoji: "🎬" },
+  { key: "sangeet",   label: "Sangeet",     emoji: "🪩" },
+  { key: "beach",     label: "Beach",       emoji: "🏖️" },
+  { key: "date",      label: "Date night",  emoji: "🍷" },
+  { key: "office",    label: "Party",       emoji: "🥂" },
+  { key: "vacation",  label: "Vacation",    emoji: "✈️" },
+  { key: "redcarpet", label: "Red carpet",  emoji: "✨" },
+];
+const VIDEO_KEYS = VIDEO_KINDS.map((k) => k.key);
+
 /* ── Minimal body-outline SVG silhouette ── */
 function SilhouetteSVG() {
   return (
@@ -51,7 +63,7 @@ function SilhouetteSVG() {
 }
 
 export default function TryOnModal({ product, onClose, onTryOn, result, loading, error,
-                                     onSpin, video, videoLoading, videoError }) {
+                                     onVideo, video, videoLoadingKind, videoError }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -120,15 +132,17 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const selectedFailed = myResult && !selected && failed[selectedView];
   const anyDone = myResult && Object.keys(views).length > 0;
 
-  // ── Spin (Veo 360° video) ──
+  // ── Videos (Veo): 360° spin + curated scenes ──
   const myVideo = video && video.productId === product.id ? video : null;
-  const onSpinView = selectedView === "spin";
+  const clips = myVideo?.clips || {};
+  const stills = myVideo?.stills || {};
+  const isVideoView = VIDEO_KEYS.includes(selectedView);
   const front = views.front;
-  const handleSpin = () => {
-    setSelectedView("spin");
+  const handleVideo = (kind) => {
+    setSelectedView(kind);
     // Kick off generation the first time (needs the front try-on as the seed).
-    if (!myVideo && !videoLoading && front && onSpin) {
-      onSpin(product.id, front.image, front.mime || "image/png");
+    if (!clips[kind] && videoLoadingKind !== kind && front && onVideo) {
+      onVideo(product.id, front.image, front.mime || "image/png", kind);
     }
   };
 
@@ -156,16 +170,26 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           </p>
         </div>
 
-        {anyDone && onSpinView ? (
-          /* ── Spin video view ── */
+        {anyDone && isVideoView ? (
+          /* ── Video view (spin or scene) ── */
           <div className="tryon-result-stage">
-            {myVideo ? (
+            {clips[selectedView] ? (
               <video
                 className="tryon-result-full"
-                src={`data:${myVideo.mime};base64,${myVideo.video}`}
+                src={`data:${clips[selectedView].mime};base64,${clips[selectedView].video}`}
                 autoPlay loop muted playsInline controls
               />
-            ) : videoError ? (
+            ) : stills[selectedView] ? (
+              /* Scene composite ready — showing it while the clip finishes rendering */
+              <div className="tryon-scene-still-wrap">
+                <img
+                  className="tryon-result-full"
+                  src={`data:${stills[selectedView].mime};base64,${stills[selectedView].image}`}
+                  alt="Scene preview"
+                />
+                <span className="tryon-zoom-hint">✨ Bringing it to life…</span>
+              </div>
+            ) : videoError && videoLoadingKind !== selectedView ? (
               <div className="tryon-result-placeholder">
                 <span className="tryon-product-emoji">🎬</span>
                 <p style={{ color: "#c0103a" }}>{videoError}</p>
@@ -173,7 +197,9 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             ) : (
               <div className="tryon-result-placeholder">
                 <span className="tryon-angle-dot big" aria-hidden="true" />
-                <p>Filming your 360° spin… this takes about a minute 🎬</p>
+                <p>{selectedView === "spin"
+                  ? "Filming your 360° spin… about a minute 🎬"
+                  : "Setting the scene & filming… about a minute 🎬"}</p>
               </div>
             )}
           </div>
@@ -268,18 +294,34 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 </button>
               );
             })}
-            {/* On-demand 360° spin video */}
-            <button
-              role="tab"
-              aria-selected={onSpinView}
-              className={`tryon-angle tryon-angle--spin${onSpinView ? " active" : ""}`}
-              onClick={handleSpin}
-              disabled={!front}
-              title="Generate a 360° spin video (~1 min)"
-            >
-              ✨ Spin
-              {videoLoading && <span className="tryon-angle-dot" aria-hidden="true" />}
-            </button>
+          </div>
+        )}
+
+        {/* Bring it to life — 360° spin + curated scene videos */}
+        {anyDone && (
+          <div className="tryon-scenes-wrap">
+            <p className="tryon-scenes-label">✨ Bring it to life</p>
+            <div className="tryon-scenes" role="tablist" aria-label="Videos and scenes">
+              {VIDEO_KINDS.map(({ key, label, emoji }) => {
+                const ready = !!clips[key];
+                const busy = videoLoadingKind === key;
+                return (
+                  <button
+                    key={key}
+                    role="tab"
+                    aria-selected={selectedView === key}
+                    className={`tryon-angle tryon-scene${selectedView === key ? " active" : ""}${ready ? " ready" : ""}`}
+                    disabled={!front}
+                    onClick={() => handleVideo(key)}
+                    title={`${label} video (~1 min)`}
+                  >
+                    <span aria-hidden="true">{emoji}</span> {label}
+                    {busy && <span className="tryon-angle-dot" aria-hidden="true" />}
+                    {ready && !busy && <span className="tryon-scene-check" aria-hidden="true">▸</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 

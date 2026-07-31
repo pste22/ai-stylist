@@ -1134,11 +1134,26 @@ button.primary.stop { background: var(--accent); }
   border-color: var(--accent); color: var(--accent);
 }
 .tryon-angle.pending { opacity: .6; cursor: default; }
-.tryon-angle--spin {
-  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 16%, transparent), color-mix(in srgb, #7c3aed 14%, transparent));
-  color: var(--accent); font-weight: 800;
+/* "Bring it to life" — spin + scene video pills */
+.tryon-scenes-wrap { margin-top: .5rem; }
+.tryon-scenes-label {
+  margin: 0 0 .4rem; text-align: center;
+  font-size: .74rem; font-weight: 800; letter-spacing: .04em;
+  color: var(--ink-2); text-transform: uppercase;
 }
-.tryon-angle--spin.active { border-color: var(--accent); }
+.tryon-scenes {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem;
+}
+.tryon-scene {
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 12%, transparent), color-mix(in srgb, #7c3aed 12%, transparent));
+  font-size: .78rem;
+}
+.tryon-scene.ready { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.tryon-scene-check { color: var(--accent); font-weight: 900; }
+.tryon-scene-still-wrap { position: relative; width: 100%; }
+.tryon-scene-still-wrap .tryon-zoom-hint {
+  background: rgba(124,58,237,.7);
+}
 .tryon-angle.failed { opacity: .4; cursor: not-allowed; text-decoration: line-through; }
 .tryon-angle-dot {
   width: 7px; height: 7px; border-radius: 50%;

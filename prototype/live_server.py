@@ -1209,10 +1209,14 @@ async def handle(ws) -> None:
         finally:
             await _send_json(ws, type="state", state="idle", mood="neutral")
 
-    async def _try_on_video(product_id: str, image_b64: str, mime: str = "image/png") -> None:
-        """On-demand 360° 'spin' video via Veo, seeded from the FRONT try-on image
-        (sent by the client). Slow (~1-2 min) + costly, so only runs when the user
-        taps ✨ Spin. Never crashes the session.
+    async def _try_on_video(product_id: str, image_b64: str, mime: str = "image/png",
+                            kind: str = "spin") -> None:
+        """On-demand Veo video, seeded from the FRONT try-on image (sent by the client).
+
+        kind == "spin"  → a 360° turntable of the person in the outfit.
+        kind in SCENES  → first composite the person into the scene (still image, sent as
+                          a quick preview), then animate that still into a cinematic clip.
+        Slow (~1-2 min) + costly, so only runs on explicit user tap. Never crashes.
         """
         import base64, time
         import tryon as _tryon
@@ -1220,21 +1224,41 @@ async def handle(ws) -> None:
         from google.genai import types as _types
 
         product = _BY_ID.get(product_id) or {}
+        name = product.get("name", "the outfit")
         if not image_b64:
-            await _send_json(ws, type="try_on_video_error", product_id=product_id,
-                             message="Generate a try-on first, then spin it.")
+            await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
+                             message="Generate a try-on first, then bring it to life.")
             return
 
-        prompt = _tryon.spin_prompt(product.get("name", "the outfit"))
-        print(f"  [try_on_video] starting — product={product.get('name')!r} model={_VEO_MODEL}")
+        is_scene = kind in _tryon.SCENES
+        print(f"  [try_on_video] starting — kind={kind} product={name!r} model={_VEO_MODEL}")
         await _send_json(ws, type="state", state="thinking", mood="focused")
 
-        def _blocking_spin():
-            client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+        def _new_client():
+            return _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+
+        def _gen_scene_still():
+            client = _new_client()
+            resp = client.models.generate_content(
+                model=_TRYON_MODEL,
+                contents=[
+                    _types.Part.from_bytes(data=base64.b64decode(image_b64), mime_type=mime),
+                    _tryon.scene_still_prompt(name, kind),
+                ],
+                config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
+            )
+            cand = (resp.candidates or [None])[0]
+            for p in getattr(getattr(cand, "content", None), "parts", None) or []:
+                inl = getattr(p, "inline_data", None)
+                if inl and inl.data:
+                    return inl.data, (inl.mime_type or "image/png")
+            return None, None
+
+        def _gen_video(seed_bytes, seed_mime, prompt):
+            client = _new_client()
             op = client.models.generate_videos(
-                model=_VEO_MODEL,
-                prompt=prompt,
-                image=_types.Image(image_bytes=base64.b64decode(image_b64), mime_type=mime),
+                model=_VEO_MODEL, prompt=prompt,
+                image=_types.Image(image_bytes=seed_bytes, mime_type=seed_mime),
                 config=_types.GenerateVideosConfig(
                     number_of_videos=1, aspect_ratio="9:16", person_generation="allow_adult"
                 ),
@@ -1254,21 +1278,36 @@ async def handle(ws) -> None:
             return vb
 
         try:
-            vb = await asyncio.to_thread(_blocking_spin)
-            if vb:
-                await _send_json(ws, type="try_on_video_result", product_id=product_id,
-                                 video=base64.b64encode(vb).decode(), mime="video/mp4")
-                print(f"  💰 [try_on_video] success — {len(vb)}b, 1 Veo clip ≈ ${_VEO_COST_PER_CLIP:.2f} "
-                      f"(estimate; model={_VEO_MODEL})")
+            if is_scene:
+                # Step 1 — composite into the scene, stream the still as a fast preview.
+                still_bytes, still_mime = await asyncio.to_thread(_gen_scene_still)
+                if not still_bytes:
+                    await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
+                                     message="Couldn't set the scene — try another.")
+                    return
+                await _send_json(ws, type="try_on_video_still", product_id=product_id, kind=kind,
+                                 image=base64.b64encode(still_bytes).decode(), mime=still_mime)
+                seed_bytes, seed_mime = still_bytes, still_mime
+                prompt = _tryon.scene_motion_prompt(name, kind)
             else:
-                await _send_json(ws, type="try_on_video_error", product_id=product_id,
-                                 message="Couldn't generate the spin video. Please try again.")
+                seed_bytes, seed_mime = base64.b64decode(image_b64), mime
+                prompt = _tryon.spin_prompt(name)
+
+            vb = await asyncio.to_thread(_gen_video, seed_bytes, seed_mime, prompt)
+            if vb:
+                await _send_json(ws, type="try_on_video_result", product_id=product_id, kind=kind,
+                                 video=base64.b64encode(vb).decode(), mime="video/mp4")
+                est = _VEO_COST_PER_CLIP + (_IMG_OUT_RATE * 1290 / 1e6 if is_scene else 0)
+                print(f"  💰 [try_on_video] {kind} done — {len(vb)}b ≈ ${est:.2f} (est; model={_VEO_MODEL})")
+            else:
+                await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
+                                 message="Couldn't generate the video. Please try again.")
         except Exception as e:
             import traceback as _tb
-            print(f"  ! try_on_video failed: {e}")
+            print(f"  ! try_on_video ({kind}) failed: {e}")
             _tb.print_exc()
-            await _send_json(ws, type="try_on_video_error", product_id=product_id,
-                             message="Something went wrong generating the spin video. Please try again.")
+            await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
+                             message="Something went wrong generating the video. Please try again.")
         finally:
             await _send_json(ws, type="state", state="idle", mood="neutral")
 
@@ -1730,8 +1769,9 @@ async def handle(ws) -> None:
                         img = data.get("image", "")
                         mime = data.get("mime", "image/png")
                         pid = data.get("product_id", "")
+                        kind = (data.get("kind") or "spin").strip().lower()
                         if img and pid:
-                            asyncio.ensure_future(_try_on_video(pid, img, mime))
+                            asyncio.ensure_future(_try_on_video(pid, img, mime, kind))
                     elif data.get("type") == "outfit_assembled":
                         # User assembled a look from catalog items in the Outfit Builder.
                         # The product cards are already on screen (client-side

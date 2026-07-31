@@ -25,6 +25,47 @@ def view_label(view: str) -> str:
     return _VIEW_LABELS.get(view, view.title())
 
 
+# Curated, occasion-led scenes for the "see it in a setting" videos.
+# India-aspirational and tasteful; each is art-directed (locked lighting/vibe).
+SCENES = ("sangeet", "beach", "date", "office", "vacation", "redcarpet")
+
+_SCENE_SETTINGS = {
+    "sangeet":   "at a joyful Indian sangeet celebration — warm fairy lights and softly blurred "
+                 "marigold and floral decor behind, festive golden-hour ambiance",
+    "beach":     "standing on a sandy beach at golden hour — gentle waves and warm low sunlight behind",
+    "date":      "at an intimate candle-lit rooftop restaurant at night — soft city bokeh lights behind, "
+                 "warm romantic ambiance",
+    "office":    "at an elegant evening cocktail / office party — a stylish modern venue with soft "
+                 "ambient lighting and gentle bokeh",
+    "vacation":  "exploring a picturesque travel destination — a sunlit heritage palace courtyard, "
+                 "natural daylight and a scenic backdrop",
+    "redcarpet": "on a glamorous red carpet — an elegant backdrop with soft camera-flash sparkle",
+}
+
+
+def scene_still_prompt(product_name: str, scene: str) -> str:
+    """Prompt to relocate the person (from the front try-on) into a scene as a still."""
+    name = (product_name or "the outfit").strip() or "the outfit"
+    setting = _SCENE_SETTINGS.get(scene, "in a beautiful, elegant setting")
+    return (
+        f"Re-render the SAME person wearing the SAME {name} from the input image, now {setting}. "
+        f"Keep their face, hair, body and the exact outfit identical to the input. "
+        f"Full body in frame, natural confident pose, photorealistic and editorial. "
+        f"No text, no logos, no watermark."
+    )
+
+
+def scene_motion_prompt(product_name: str, scene: str) -> str:
+    """Prompt to animate the scene still into a short cinematic clip (subtle ambient motion)."""
+    name = (product_name or "the outfit").strip() or "the outfit"
+    return (
+        f"A short, photorealistic cinematic video of the person in the {name}. "
+        f"Subtle, natural ambient motion — a gentle breeze moving hair and fabric, a soft smile, "
+        f"the surroundings quietly alive — while the person stays elegantly in place, full body in "
+        f"frame. Keep identity and outfit consistent throughout. No text or logos."
+    )
+
+
 def spin_prompt(product_name: str) -> str:
     """Prompt for the Veo 360° 'spin' video, seeded from the front try-on image."""
     name = (product_name or "the outfit").strip() or "the outfit"

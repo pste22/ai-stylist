@@ -452,17 +452,35 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             setTryOnLoading(false);
             setTryOnError(msg.message || "Try-on failed. Please try again.");
             break;
-          case "try_on_video_result":
+          case "try_on_video_still": {
+            // Scene composite preview — shown while the clip renders.
+            const k = msg.kind || "spin";
+            setTryOnVideo((prev) => {
+              const base = prev && prev.productId === msg.product_id
+                ? prev : { productId: msg.product_id, clips: {}, stills: {} };
+              return { ...base, stills: { ...base.stills, [k]: { image: msg.image, mime: msg.mime || "image/png" } } };
+            });
+            break;
+          }
+          case "try_on_video_result": {
             if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
-            setTryOnVideoLoading(false);
+            const k = msg.kind || "spin";
+            setTryOnVideoLoadingKind((cur) => (cur === k ? null : cur));
             setTryOnVideoError(null);
-            setTryOnVideo({ productId: msg.product_id, video: msg.video, mime: msg.mime || "video/mp4" });
+            setTryOnVideo((prev) => {
+              const base = prev && prev.productId === msg.product_id
+                ? prev : { productId: msg.product_id, clips: {}, stills: {} };
+              return { ...base, clips: { ...base.clips, [k]: { video: msg.video, mime: msg.mime || "video/mp4" } } };
+            });
             break;
-          case "try_on_video_error":
+          }
+          case "try_on_video_error": {
             if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
-            setTryOnVideoLoading(false);
-            setTryOnVideoError(msg.message || "Spin video failed. Please try again.");
+            const k = msg.kind || "spin";
+            setTryOnVideoLoadingKind((cur) => (cur === k ? null : cur));
+            setTryOnVideoError(msg.message || "Video failed. Please try again.");
             break;
+          }
           case "quick_replies":
             setQuickReplies(msg.options || []);
             break;
@@ -502,8 +520,10 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const [tryOnLoading, setTryOnLoading] = useState(false);
   const [tryOnError, setTryOnError] = useState(null);
   const tryOnTimeoutRef = useRef(null);
-  const [tryOnVideo, setTryOnVideo] = useState(null);     // { productId, video, mime }
-  const [tryOnVideoLoading, setTryOnVideoLoading] = useState(false);
+  // Videos keyed by kind ("spin" | scene keys). clips = finished mp4s; stills = scene
+  // preview images shown while the clip renders.
+  const [tryOnVideo, setTryOnVideo] = useState(null);     // { productId, clips:{}, stills:{} }
+  const [tryOnVideoLoadingKind, setTryOnVideoLoadingKind] = useState(null);
   const [tryOnVideoError, setTryOnVideoError] = useState(null);
   const tryOnVideoTimeoutRef = useRef(null);
 
@@ -513,23 +533,22 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     setTryOnLoading(false);
     setTryOnVideo(null);
     setTryOnVideoError(null);
-    setTryOnVideoLoading(false);
+    setTryOnVideoLoadingKind(null);
     if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
     if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
   }, []);
 
-  const sendTryOnVideo = useCallback((productId, imageBase64, mime = "image/png") => {
+  const sendTryOnVideo = useCallback((productId, imageBase64, mime = "image/png", kind = "spin") => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !productId || !imageBase64) return;
-    setTryOnVideo(null);
     setTryOnVideoError(null);
-    setTryOnVideoLoading(true);
-    ws.send(JSON.stringify({ type: "try_on_video", product_id: productId, image: imageBase64, mime }));
+    setTryOnVideoLoadingKind(kind);
+    ws.send(JSON.stringify({ type: "try_on_video", product_id: productId, image: imageBase64, mime, kind }));
     if (tryOnVideoTimeoutRef.current) clearTimeout(tryOnVideoTimeoutRef.current);
     tryOnVideoTimeoutRef.current = setTimeout(() => {
       tryOnVideoTimeoutRef.current = null;
-      setTryOnVideoLoading(false);
-      setTryOnVideoError((e) => e || "Spin video timed out. Please try again.");
+      setTryOnVideoLoadingKind(null);
+      setTryOnVideoError((e) => e || "Video timed out. Please try again.");
     }, 240000);
   }, []);
 
@@ -659,6 +678,6 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
     sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
-    sendTryOnVideo, tryOnVideo, tryOnVideoLoading, tryOnVideoError,
+    sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
   };
 }

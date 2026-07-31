@@ -1286,7 +1286,7 @@ export default function App() {
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
     sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
-    sendTryOnVideo, tryOnVideo, tryOnVideoLoading, tryOnVideoError,
+    sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
   } = useMiraVoice({
     userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
     onVisualSearchResults: (items, query, note) => { setVsResults(items); setVsQuery(query); setVsCatalogNote(note || null); setVsLoading(false); },
@@ -1722,9 +1722,9 @@ export default function App() {
           result={tryOnResult}
           loading={tryOnLoading}
           error={tryOnError}
-          onSpin={sendTryOnVideo}
+          onVideo={sendTryOnVideo}
           video={tryOnVideo}
-          videoLoading={tryOnVideoLoading}
+          videoLoadingKind={tryOnVideoLoadingKind}
           videoError={tryOnVideoError}
         />
       )}
