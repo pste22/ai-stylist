@@ -3521,6 +3521,64 @@ button.primary.stop { background: var(--accent); }
 @media (max-width: 420px) {
   .product-grid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* ══════════════════════════════════════════════════════════
+   EDITORIAL GRID (A2) — full-bleed, card-less, magazine feel
+   (appended last so it overrides the card styles above)
+══════════════════════════════════════════════════════════ */
+.product-grid {
+  grid-template-columns: repeat(2, 1fr);   /* fewer, bigger images */
+  gap: 1.9rem .9rem;                        /* generous vertical whitespace */
+  padding-top: .5rem;
+}
+
+/* Card → card-less: no background/border/shadow/radius/lift */
+.card { background: transparent; border: none; box-shadow: none; border-radius: 0; }
+.card:hover { transform: none; box-shadow: none; border-color: transparent; }
+.card.loved, .card.highlighted { background: transparent; border: none; box-shadow: none; transform: none; }
+
+/* Image → full-bleed, taller editorial ratio, calmer zoom */
+.card-thumb { aspect-ratio: 3 / 4; border-radius: 0; background: var(--bg-alt); }
+.card:hover .card-img { transform: scale(1.03); }
+.card.loved .card-thumb, .card.highlighted .card-thumb {
+  outline: 1.5px solid var(--ink); outline-offset: -1.5px;
+}
+
+/* Strip noise: badges, category chip, colour pill */
+.card-badge, .card-chip-row, .card-swatch-pill { display: none; }
+
+/* Minimal info block, edge-aligned under the image */
+.card-body { padding: .55rem .1rem .2rem; gap: .2rem; }
+.card-name {
+  font-size: .78rem; font-weight: 400; -webkit-line-clamp: 1;
+  color: var(--ink); line-height: 1.3;
+}
+.card-meta-row { justify-content: flex-start; }
+.card-price { font-size: .82rem; font-weight: 600; letter-spacing: 0; }
+
+/* Quiet, flat actions (no loud pills) */
+.card-ctas { gap: .4rem; margin-top: .45rem; }
+.card-try-btn, .card-cart-btn {
+  background: transparent; border: 1px solid var(--border); color: var(--ink);
+  border-radius: 2px; padding: .4rem .5rem; box-shadow: none;
+}
+.card-try-btn:hover, .card-cart-btn:hover { background: var(--ink); color: #fff; border-color: var(--ink); }
+.card-cart-btn.in-cart { background: transparent; border-color: var(--ink); color: var(--ink-2); }
+.card-buy-btn {
+  border-radius: 2px; font-size: .66rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .1em; padding: .5rem .5rem;
+}
+
+/* Heart → flat overlay, no glass/pill */
+.card-heart {
+  background: transparent; border: none; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none;
+  color: #fff; width: 30px; height: 30px; top: .4rem; right: .4rem;
+  text-shadow: 0 1px 5px rgba(0,0,0,.45);
+}
+.card-heart:hover { background: transparent; box-shadow: none; transform: scale(1.12); color: #fff; }
+.card-heart.is-loved { background: transparent; box-shadow: none; color: var(--accent); animation: none; }
+.card-img-overlay { display: none; }   /* imagery stays clean */
 /* legacy msg-products kept for any old renders */
 .msg-products {
   display: grid; grid-template-columns: repeat(3, 1fr);
