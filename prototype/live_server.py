@@ -327,8 +327,11 @@ _VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-pro")
 # the Gemini Developer API we use an image-output model ("Nano Banana") via
 # generate_content: person photo + garment image + prompt → edited try-on image.
 _TRYON_MODEL = os.environ.get("GEMINI_TRYON_MODEL", "gemini-2.5-flash-image")
-# Veo model for the on-demand "spin" video (image-to-video 360° turntable).
-_VEO_MODEL = os.environ.get("GEMINI_VEO_MODEL", "veo-3.1-fast-generate-preview")
+# Veo model for the on-demand "spin"/scene video (image-to-video).
+# Default = Lite (~$0.03-0.05/sec ≈ 3-4x cheaper than Fast) to keep video costs
+# sustainable. Bump to veo-3.1-fast-generate-preview or veo-3.1-generate-preview
+# via GEMINI_VEO_MODEL for a "premium" quality tier once demand is validated.
+_VEO_MODEL = os.environ.get("GEMINI_VEO_MODEL", "veo-3.1-lite-generate-preview")
 
 # ── Isolated generation pool + upstream resilience (Stage 0 hardening) ──────────
 # Heavy model calls (try-on images, Veo videos, vision) run on a DEDICATED thread
@@ -387,7 +390,7 @@ async def _gen_run(fn, *args, **kwargs):
 # Image cost is derived from real token usage; video is a flat per-clip estimate.
 _IMG_IN_RATE  = float(os.environ.get("GEMINI_IMG_INPUT_RATE", "0.30"))    # $/1M input tokens
 _IMG_OUT_RATE = float(os.environ.get("GEMINI_IMG_OUTPUT_RATE", "30.0"))   # $/1M output (image) tokens
-_VEO_COST_PER_CLIP = float(os.environ.get("GEMINI_VEO_COST_PER_CLIP", "1.20"))  # ~8s Veo 3.1 Fast clip (~$0.15/sec). THE expensive op — verify on ai.google.dev/pricing
+_VEO_COST_PER_CLIP = float(os.environ.get("GEMINI_VEO_COST_PER_CLIP", "0.40"))  # ~8s Veo 3.1 Lite (~$0.03-0.05/sec). Fast≈$1.20, Quality more — verify on ai.google.dev/pricing
 
 
 def _img_gen_cost(response) -> float:
@@ -439,7 +442,7 @@ def _cache_put(key: str, data: bytes, mime: str) -> None:
 # ── Spend guardrails: per-user + global daily caps + kill switch ────────────────
 # Enforced budgets (not just logging) so a loop/spike can't drain credits again.
 _EST_IMAGE = float(os.environ.get("MIRA_EST_IMAGE_USD", "0.04"))
-_EST_VIDEO = float(os.environ.get("MIRA_EST_VIDEO_USD", "1.20"))   # ~8s Veo Fast clip — the pricey op
+_EST_VIDEO = float(os.environ.get("MIRA_EST_VIDEO_USD", "0.40"))   # ~8s Veo Lite clip (default model)
 # Conservative defaults given real video cost (~$1.20/clip). Raise via env as budget grows.
 _GEN_DAILY_USER_USD   = float(os.environ.get("MIRA_GEN_DAILY_USER_USD", "1.5"))   # ~1 video or ~30 images/user/day
 _GEN_DAILY_GLOBAL_USD = float(os.environ.get("MIRA_GEN_DAILY_GLOBAL_USD", "15.0")) # hard daily ceiling
