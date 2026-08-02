@@ -387,7 +387,7 @@ async def _gen_run(fn, *args, **kwargs):
 # Image cost is derived from real token usage; video is a flat per-clip estimate.
 _IMG_IN_RATE  = float(os.environ.get("GEMINI_IMG_INPUT_RATE", "0.30"))    # $/1M input tokens
 _IMG_OUT_RATE = float(os.environ.get("GEMINI_IMG_OUTPUT_RATE", "30.0"))   # $/1M output (image) tokens
-_VEO_COST_PER_CLIP = float(os.environ.get("GEMINI_VEO_COST_PER_CLIP", "0.15"))  # $/spin clip (veo fast; tune to real billing)
+_VEO_COST_PER_CLIP = float(os.environ.get("GEMINI_VEO_COST_PER_CLIP", "1.20"))  # ~8s Veo 3.1 Fast clip (~$0.15/sec). THE expensive op — verify on ai.google.dev/pricing
 
 
 def _img_gen_cost(response) -> float:
@@ -439,9 +439,10 @@ def _cache_put(key: str, data: bytes, mime: str) -> None:
 # ── Spend guardrails: per-user + global daily caps + kill switch ────────────────
 # Enforced budgets (not just logging) so a loop/spike can't drain credits again.
 _EST_IMAGE = float(os.environ.get("MIRA_EST_IMAGE_USD", "0.04"))
-_EST_VIDEO = float(os.environ.get("MIRA_EST_VIDEO_USD", "0.20"))
-_GEN_DAILY_USER_USD   = float(os.environ.get("MIRA_GEN_DAILY_USER_USD", "3.0"))
-_GEN_DAILY_GLOBAL_USD = float(os.environ.get("MIRA_GEN_DAILY_GLOBAL_USD", "50.0"))
+_EST_VIDEO = float(os.environ.get("MIRA_EST_VIDEO_USD", "1.20"))   # ~8s Veo Fast clip — the pricey op
+# Conservative defaults given real video cost (~$1.20/clip). Raise via env as budget grows.
+_GEN_DAILY_USER_USD   = float(os.environ.get("MIRA_GEN_DAILY_USER_USD", "1.5"))   # ~1 video or ~30 images/user/day
+_GEN_DAILY_GLOBAL_USD = float(os.environ.get("MIRA_GEN_DAILY_GLOBAL_USD", "15.0")) # hard daily ceiling
 _GEN_DISABLED = os.environ.get("MIRA_GEN_DISABLED", "").strip().lower() in ("1", "true", "yes", "on")
 _spend = {"day": None, "total": 0.0, "users": {}}
 _SPEND_MSG = {
@@ -1450,7 +1451,8 @@ async def handle(ws) -> None:
                 model=_VEO_MODEL, prompt=prompt,
                 image=_types.Image(image_bytes=seed_bytes, mime_type=seed_mime),
                 config=_types.GenerateVideosConfig(
-                    number_of_videos=1, aspect_ratio="9:16", person_generation="allow_adult"
+                    number_of_videos=1, aspect_ratio="9:16", person_generation="allow_adult",
+                    generate_audio=False,   # silent spin — audio is pointless here and raises the per-second rate
                 ),
             )
             t0 = time.time()
