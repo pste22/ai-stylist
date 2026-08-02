@@ -7,6 +7,48 @@ compare), Stage 0 hardening, content-hash cache, enforced spend caps, `/health`.
 
 ---
 
+## 🚦 Launch gate (panel review 2026-08-02: GTM · presales · architect)
+
+**Verdict: NO-GO today → CONDITIONAL GO after the non-negotiables (~2–3 focused days).**
+Product magic is real and (over-)built; the *launch* isn't ready — flying blind
+(no analytics/alerting) with a confirmed data hole. Lead all messaging with the
+**virtual try-on** ("see it on you before you buy"), not "AI stylist."
+
+**3 technical non-negotiables (architect — must fix before real strangers):**
+- [x] **Supabase RLS policies** — RLS was on with NO policies → data exposure/breakage
+      via the public anon key. Fix written: `prototype/migrate_rls_policies.sql`
+      (owner-scoped `auth.uid()` policies for all user + chat tables).
+      **→ ACTION: apply it in Supabase SQL editor, then verify cross-account isolation.**
+- [ ] **Observability + alerting** — put an external uptime monitor + spend alert on
+      `/health` (UptimeRobot/BetterStack) + a Google Cloud billing budget alert.
+      Can't launch blind with real money.
+- [ ] **Rotate Gemini key → your own billed secret** (also de-risks demos; the `AQ.…`
+      token's billing isn't yours to hard-cap).
+
+**GTM P0 (before public flip-on):**
+- [x] **OG/Twitter meta tags** on `index.html` — done. **→ ACTION: add a real
+      `web/public/og-cover.jpg` (1200×630)**; per-try-on dynamic OG later.
+- [ ] **Product analytics + 5 funnel events** (activation, try-on completion,
+      click-out/affiliate CTR, share rate, referral-visit) — PostHog/Plausible.
+      Can't learn from launch without it.
+- [ ] **Affiliate click-out tracking/attribution** — count every retailer click-out
+      (proves intent to networks, measures CTR, needed for Amazon's 3-sale unlock).
+- [ ] **Gate first PAID generation behind sign-in** + near-cap alert — anonymous
+      guest video gen is a cost-DoS vector.
+- [ ] **Manual catalog freshness sweep** of surfaced products; confirm the "AI
+      preview, not exact fit" label is on every output + the share card.
+
+**Demo prep (presales — before any live demo):** pre-generate the demo look (cache
+hits = instant), record a full-flow fallback video, set `min_machines_running=1`
+for demo week (or warm via `/health`+one try-on), lock one photo+product combo that
+renders cleanly, raise spend-cap env for rehearsal.
+
+**Do NOT block launch on:** broader affiliate networks, Amazon PA-API, men's catalog,
+automated availability cron (manual sweep ok), Stage-1 scale, dynamic OG images,
+voice-mode polish.
+
+---
+
 ## 🔴 Before real launch (security / ops)
 
 - [ ] **Rotate `GEMINI_API_KEY` → Codespaces secret.** Current key is an `AQ.…`
