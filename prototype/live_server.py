@@ -24,6 +24,8 @@ Needs: GEMINI_API_KEY in prototype/.env  +  websockets, google-genai (already in
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
+import functools
 import json
 import os
 import re
@@ -325,6 +327,59 @@ _TRYON_MODEL = os.environ.get("GEMINI_TRYON_MODEL", "gemini-2.5-flash-image")
 # Veo model for the on-demand "spin" video (image-to-video 360° turntable).
 _VEO_MODEL = os.environ.get("GEMINI_VEO_MODEL", "veo-3.1-fast-generate-preview")
 
+# ── Isolated generation pool + upstream resilience (Stage 0 hardening) ──────────
+# Heavy model calls (try-on images, Veo videos, vision) run on a DEDICATED thread
+# pool so a burst of minute-long generations can never starve the default pool —
+# which serves Supabase, PIN lookups, login, and chat for *every* user. Bounded
+# workers also cap concurrent generation and queue the rest (backpressure).
+_GEN_WORKERS   = int(os.environ.get("MIRA_GEN_WORKERS", "6"))
+_GEN_RETRIES   = int(os.environ.get("MIRA_GEN_RETRIES", "2"))   # transient-only
+_CB_THRESHOLD  = int(os.environ.get("MIRA_GEN_CB_THRESHOLD", "6"))   # fails → open circuit
+_CB_COOLDOWN   = float(os.environ.get("MIRA_GEN_CB_COOLDOWN", "30")) # seconds circuit stays open
+_GEN_POOL = concurrent.futures.ThreadPoolExecutor(
+    max_workers=_GEN_WORKERS, thread_name_prefix="gen"
+)
+_cb = {"fails": 0, "open_until": 0.0}   # simple circuit breaker on upstream (Gemini/Veo)
+
+
+class GenBusy(Exception):
+    """Raised when the generation circuit is open (upstream throttling/errors)."""
+
+
+def _is_transient(exc: Exception) -> bool:
+    s = repr(exc).lower()
+    return any(k in s for k in (
+        "429", "resource_exhausted", "resourceexhausted", "resource exhausted",
+        "unavailable", "503", "500", "internal", "deadline", "timeout", "quota",
+    ))
+
+
+async def _gen_run(fn, *args, **kwargs):
+    """Run a blocking generation call on the isolated pool with retry/backoff on
+    transient upstream errors and a circuit breaker. Keeps expensive gen off the
+    default thread pool (DB/login) and shields users from Gemini/Veo throttling."""
+    if time.time() < _cb["open_until"]:
+        raise GenBusy("generation circuit open")
+    loop = asyncio.get_event_loop()
+    last = None
+    for attempt in range(_GEN_RETRIES + 1):
+        try:
+            res = await loop.run_in_executor(_GEN_POOL, functools.partial(fn, *args, **kwargs))
+            _cb["fails"] = 0            # success resets the breaker
+            return res
+        except Exception as exc:        # noqa: BLE001 — we re-raise below
+            last = exc
+            if not _is_transient(exc) or attempt == _GEN_RETRIES:
+                break
+            await asyncio.sleep(min(2 ** attempt, 8))   # 1s, 2s, 4s…
+    _cb["fails"] += 1
+    if _cb["fails"] >= _CB_THRESHOLD:
+        _cb["open_until"] = time.time() + _CB_COOLDOWN
+        _cb["fails"] = 0
+        print(f"  ⚡ generation circuit OPEN for {_CB_COOLDOWN:.0f}s (upstream errors)")
+    raise last
+
+
 # Cost ESTIMATES for logging only (USD) — verify live rates at ai.google.dev/pricing.
 # Image cost is derived from real token usage; video is a flat per-clip estimate.
 _IMG_IN_RATE  = float(os.environ.get("GEMINI_IMG_INPUT_RATE", "0.30"))    # $/1M input tokens
@@ -342,6 +397,10 @@ def _img_gen_cost(response) -> float:
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
 _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
+# Cap inbound WS message size (person photos / outfit uploads) so a huge or
+# malicious payload can't spike memory on the 512MB box. Generous enough for a
+# high-res phone photo; blocks abuse. Outbound (our generated media) is unaffected.
+_WS_MAX_SIZE = int(os.environ.get("MIRA_WS_MAX_SIZE", str(16 * 1024 * 1024)))  # 16 MB
 
 # Cost guardrails — both configurable via env so you can tighten as usage grows.
 # Idle timeout: close Live session (and stop billing) after N seconds of silence.
@@ -790,7 +849,7 @@ async def handle(ws) -> None:
         try:
             _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
             img_bytes = base64.b64decode(image_b64)
-            response = await asyncio.to_thread(
+            response = await _gen_run(
                 _client.models.generate_content,
                 model=_VISION_MODEL,
                 contents=[
@@ -985,7 +1044,7 @@ async def handle(ws) -> None:
         try:
             _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
             img_bytes = base64.b64decode(image_b64)
-            response = await asyncio.to_thread(
+            response = await _gen_run(
                 _client.models.generate_content,
                 model=_VISION_MODEL,
                 contents=[
@@ -1171,7 +1230,7 @@ async def handle(ws) -> None:
             person_bytes = base64.b64decode(image_b64)
 
             # ── FRONT: person photo + garment ──
-            front_resp = await asyncio.to_thread(
+            front_resp = await _gen_run(
                 _client.models.generate_content,
                 model=_TRYON_MODEL,
                 contents=[
@@ -1196,7 +1255,7 @@ async def handle(ws) -> None:
             # ── OTHER ANGLES: re-render the FRONT result from each angle, in parallel ──
             async def _angle(view):
                 try:
-                    resp = await asyncio.to_thread(
+                    resp = await _gen_run(
                         _client.models.generate_content,
                         model=_TRYON_MODEL,
                         contents=[
@@ -1221,6 +1280,9 @@ async def handle(ws) -> None:
             await asyncio.gather(*[_angle(v) for v in views if v != "front"])
             print(f"  💰 [try_on] TOTAL ≈ ${sum(_costs):.4f} for {len(_costs)} image(s) "
                   f"— product={payload['product_name']!r}")
+        except GenBusy:
+            await _send_json(ws, type="try_on_error", product_id=product_id,
+                             message="Mira's studio is busy right now — please try again in a moment.")
         except Exception as e:
             import traceback as _tb
             print(f"  ! try_on failed: {e}")
@@ -1301,7 +1363,7 @@ async def handle(ws) -> None:
         try:
             if is_scene:
                 # Step 1 — composite into the scene, stream the still as a fast preview.
-                still_bytes, still_mime = await asyncio.to_thread(_gen_scene_still)
+                still_bytes, still_mime = await _gen_run(_gen_scene_still)
                 if not still_bytes:
                     await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
                                      message="Couldn't set the scene — try another.")
@@ -1314,7 +1376,7 @@ async def handle(ws) -> None:
                 seed_bytes, seed_mime = base64.b64decode(image_b64), mime
                 prompt = _tryon.spin_prompt(name)
 
-            vb = await asyncio.to_thread(_gen_video, seed_bytes, seed_mime, prompt)
+            vb = await _gen_run(_gen_video, seed_bytes, seed_mime, prompt)
             if vb:
                 await _send_json(ws, type="try_on_video_result", product_id=product_id, kind=kind,
                                  video=base64.b64encode(vb).decode(), mime="video/mp4")
@@ -1323,6 +1385,9 @@ async def handle(ws) -> None:
             else:
                 await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
                                  message="Couldn't generate the video. Please try again.")
+        except GenBusy:
+            await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
+                             message="Mira's studio is busy right now — please try again in a moment.")
         except Exception as e:
             import traceback as _tb
             print(f"  ! try_on_video ({kind}) failed: {e}")
@@ -2291,6 +2356,17 @@ async def _rl_release(ip: str) -> None:
 
 async def process_request(connection, request):
     """Serve the LiveAvatar session token over plain HTTP; everything else upgrades to WS."""
+    # Health check — for Fly.io checks / load balancers. Reports gen circuit state.
+    if request.path.rstrip("/") == "/health":
+        healthy = time.time() >= _cb["open_until"]
+        body = json.dumps({
+            "status": "ok" if healthy else "degraded",
+            "gen_circuit_open": not healthy,
+            "gen_workers": _GEN_WORKERS,
+        })
+        resp = connection.respond(200 if healthy else 503, body)
+        resp.headers["Content-Type"] = "application/json"
+        return resp
     if request.path.startswith("/api/browse"):
         from urllib.parse import urlparse, parse_qs
         parsed = urlparse(request.path)
@@ -2350,7 +2426,7 @@ async def process_request(connection, request):
 async def main() -> None:
     print(f"  Mira voice bridge → ws://{_HOST}:{_PORT}")
     print(f"  model={_MODEL}  (LiveAvatar renders Mira)")
-    async with serve(handle, _HOST, _PORT, max_size=None, process_request=process_request):
+    async with serve(handle, _HOST, _PORT, max_size=_WS_MAX_SIZE, process_request=process_request):
         await asyncio.Future()  # run forever
 
 

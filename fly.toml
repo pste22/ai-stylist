@@ -26,6 +26,6 @@ primary_region = "iad"   # US East — lowest latency to Gemini's US endpoints
     soft_limit = 80
 
 [[vm]]
-  memory   = "512mb"
+  memory   = "1024mb"   # bumped from 512mb — media base64 (images/videos) + concurrent gen exceed 512
   cpu_kind = "shared"
   cpus     = 1
