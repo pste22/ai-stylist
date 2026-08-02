@@ -4,6 +4,8 @@ __pycache__/
 .venv/
 venv/
 .env
+# web/.env only has public keys (Supabase anon key) — safe to commit
+!web/.env
 *.log
 .DS_Store
 models/

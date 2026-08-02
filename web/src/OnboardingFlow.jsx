@@ -60,7 +60,7 @@ function SizeRow({ label, sizes, selected, onSelect }) {
   );
 }
 
-const TOTAL_STEPS = 4; // style, focus, size, budget
+const TOTAL_STEPS = 5; // style, focus, size, budget, pin
 
 export default function OnboardingFlow({ userName, onComplete }) {
   const [step, setStep]           = useState(0); // 0=welcome
@@ -69,11 +69,35 @@ export default function OnboardingFlow({ userName, onComplete }) {
   const [topSize, setTopSize]     = useState(null);
   const [bottomSize, setBottom]   = useState(null);
   const [budget, setBudget]       = useState(null);
+  const [pinCode, setPinCode]     = useState("");
+  const [pinCity, setPinCity]     = useState(null);
+  const [pinLoading, setPinLoading] = useState(false);
   const [saving, setSaving]       = useState(false);
+
+  const resolvePin = async (pin) => {
+    if (pin.length !== 6) { setPinCity(null); return; }
+    setPinLoading(true);
+    try {
+      const r = await fetch(`https://api.postalpincode.in/pincode/${pin}`);
+      const d = await r.json();
+      if (d?.[0]?.Status === "Success") {
+        const po = d[0].PostOffice?.[0];
+        setPinCity(po ? `${po.District}, ${po.State}` : null);
+      } else { setPinCity(null); }
+    } catch { setPinCity(null); }
+    setPinLoading(false);
+  };
+
+  const handlePinChange = (val) => {
+    const clean = val.replace(/\D/g, "").slice(0, 6);
+    setPinCode(clean);
+    if (clean.length === 6) resolvePin(clean);
+    else setPinCity(null);
+  };
 
   const finish = async () => {
     setSaving(true);
-    await onComplete({ styleVibe, shoppingFocus, topSize, bottomSize, budget });
+    await onComplete({ styleVibe, shoppingFocus, topSize, bottomSize, budget, pinCode: pinCode || null });
   };
 
   const pip = (active) => (
@@ -105,7 +129,7 @@ export default function OnboardingFlow({ userName, onComplete }) {
       {/* ── Step 1: Style vibe ── */}
       {step === 1 && (
         <div className="ob-card">
-          <div className="ob-progress">{pip(true)}{pip(false)}{pip(false)}{pip(false)}</div>
+          <div className="ob-progress">{pip(true)}{pip(false)}{pip(false)}{pip(false)}{pip(false)}</div>
           <p className="ob-step-label">1 of {TOTAL_STEPS}</p>
           <h2 className="ob-q">What's your style?</h2>
           <p className="ob-hint">Pick the one that feels most like you</p>
@@ -117,7 +141,7 @@ export default function OnboardingFlow({ userName, onComplete }) {
       {/* ── Step 2: Shopping focus ── */}
       {step === 2 && (
         <div className="ob-card">
-          <div className="ob-progress">{pip(true)}{pip(true)}{pip(false)}{pip(false)}</div>
+          <div className="ob-progress">{pip(true)}{pip(true)}{pip(false)}{pip(false)}{pip(false)}</div>
           <p className="ob-step-label">2 of {TOTAL_STEPS}</p>
           <h2 className="ob-q">What do you shop for most?</h2>
           <p className="ob-hint">Mira focuses suggestions here first</p>
@@ -129,7 +153,7 @@ export default function OnboardingFlow({ userName, onComplete }) {
       {/* ── Step 3: Sizes ── */}
       {step === 3 && (
         <div className="ob-card">
-          <div className="ob-progress">{pip(true)}{pip(true)}{pip(true)}{pip(false)}</div>
+          <div className="ob-progress">{pip(true)}{pip(true)}{pip(true)}{pip(false)}{pip(false)}</div>
           <p className="ob-step-label">3 of {TOTAL_STEPS}</p>
           <h2 className="ob-q">What sizes do you wear?</h2>
           <p className="ob-hint">So Mira only shows things that fit</p>
@@ -147,14 +171,47 @@ export default function OnboardingFlow({ userName, onComplete }) {
       {/* ── Step 4: Budget ── */}
       {step === 4 && (
         <div className="ob-card">
-          <div className="ob-progress">{pip(true)}{pip(true)}{pip(true)}{pip(true)}</div>
+          <div className="ob-progress">{pip(true)}{pip(true)}{pip(true)}{pip(true)}{pip(false)}</div>
           <p className="ob-step-label">4 of {TOTAL_STEPS}</p>
           <h2 className="ob-q">What's your budget per piece?</h2>
           <p className="ob-hint">Mira won't suggest things out of range</p>
           <TileGrid options={BUDGET_OPTIONS} selected={budget} onSelect={setBudget} />
-          <button className="ob-btn" disabled={!budget || saving} onClick={finish}>
+          <button className="ob-btn" disabled={!budget} onClick={() => setStep(5)}>Next →</button>
+        </div>
+      )}
+
+      {/* ── Step 5: Pin code ── */}
+      {step === 5 && (
+        <div className="ob-card">
+          <div className="ob-progress">{pip(true)}{pip(true)}{pip(true)}{pip(true)}{pip(true)}</div>
+          <p className="ob-step-label">5 of {TOTAL_STEPS}</p>
+          <h2 className="ob-q">Where are you shopping from?</h2>
+          <p className="ob-hint">Mira uses your PIN code to show products available near you</p>
+          <div className="ob-pin-wrap">
+            <input
+              className="ob-pin-input"
+              type="text"
+              inputMode="numeric"
+              maxLength={6}
+              placeholder="Enter 6-digit PIN code"
+              value={pinCode}
+              onChange={(e) => handlePinChange(e.target.value)}
+            />
+            <div className={`ob-city-box ${pinLoading ? "loading" : ""} ${pinCity ? "resolved" : ""} ${pinCode.length === 6 && !pinCity && !pinLoading ? "error" : ""}`}>
+              {pinLoading
+                ? <><span className="ob-city-spinner" />Looking up location…</>
+                : pinCity
+                  ? <><span className="ob-city-pin-icon">📍</span>{pinCity}</>
+                  : pinCode.length === 6
+                    ? <><span className="ob-city-pin-icon">❌</span>PIN not found — check and re-enter</>
+                    : <span className="ob-city-placeholder">City / town will appear here</span>
+              }
+            </div>
+          </div>
+          <button className="ob-btn" disabled={saving} onClick={finish}>
             {saving ? "Setting up…" : "Meet Mira ✦"}
           </button>
+          <p className="ob-skip" onClick={finish}>Skip for now</p>
         </div>
       )}
 

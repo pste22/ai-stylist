@@ -7,17 +7,20 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "crawl": "node crawl_bugs.mjs"
   },
   "dependencies": {
     "@heygen/liveavatar-web-sdk": "^0.0.18",
     "@rive-app/react-canvas": "^4.29.3",
     "@supabase/supabase-js": "^2.109.0",
+    "posthog-js": "^1.409.5",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.1",
+    "playwright": "^1.62.0",
     "vite": "^5.4.0"
   }
 }

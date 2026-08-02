@@ -35,6 +35,7 @@ create table if not exists user_preferences (
   top_size       text,
   bottom_size    text,
   budget         text,
+  pin_code       text,
   updated_at timestamptz default now()
 );
 
@@ -45,6 +46,7 @@ alter table user_preferences add column if not exists shopping_focus text;
 alter table user_preferences add column if not exists top_size text;
 alter table user_preferences add column if not exists bottom_size text;
 alter table user_preferences add column if not exists budget text;
+alter table user_preferences add column if not exists pin_code text;
 
 -- ------------------------------------------------------------
 -- 3. USER HISTORY (per-user product interaction log)

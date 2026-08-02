@@ -10,15 +10,14 @@ primary_region = "iad"   # US East — lowest latency to Gemini's US endpoints
   # These are non-secret (Supabase anon key + public URL) — safe to commit.
   [build.args]
     VITE_SUPABASE_URL      = "https://tizhjpycyygoysqbxulr.supabase.co"
+    VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRpemhqcHljeXlnb3lzcWJ4dWxyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODMwMTg3MDcsImV4cCI6MjA5ODU5NDcwN30.uN-ptgBjEY9pdRFNNEzuwYAE-9557pgLcxH4CMdqwRs"
     VITE_HEYGEN_AVATAR_ID  = "Wayne_20240711"
-    # VITE_SUPABASE_ANON_KEY is passed via `fly deploy --build-arg` or set below.
-    # It's a PUBLIC key (safe in browser) but kept out of the repo for hygiene.
 
 [http_service]
   internal_port       = 8080
   force_https         = true
-  auto_stop_machines  = "stop"    # scale to zero when idle (saves cost)
-  auto_start_machines = true      # cold-start on first request
+  auto_stop_machines  = "suspend"  # suspend (not stop) — resumes in ~1s vs ~10s
+  auto_start_machines = true
   min_machines_running = 0
 
   [http_service.concurrency]
@@ -27,6 +26,6 @@ primary_region = "iad"   # US East — lowest latency to Gemini's US endpoints
     soft_limit = 80
 
 [[vm]]
-  memory   = "512mb"
+  memory   = "1024mb"   # bumped from 512mb — media base64 (images/videos) + concurrent gen exceed 512
   cpu_kind = "shared"
   cpus     = 1

@@ -16,7 +16,7 @@ export function useOnboarding(userId) {
     if (!userId) return;
     supabase
       .from("user_preferences")
-      .select("style_vibe, shopping_focus, top_size, bottom_size, budget, budget_min, budget_max, vibes")
+      .select("style_vibe, shopping_focus, top_size, bottom_size, budget, pin_code")
       .eq("user_id", userId)
       .maybeSingle()
       .then(({ data, error }) => {
@@ -26,7 +26,7 @@ export function useOnboarding(userId) {
       });
   }, [userId]);
 
-  const completeOnboarding = async ({ styleVibe, shoppingFocus, topSize, bottomSize, budget } = {}) => {
+  const completeOnboarding = async ({ styleVibe, shoppingFocus, topSize, bottomSize, budget, pinCode } = {}) => {
     if (!userId) return;
     const band = BUDGET_BANDS[budget] || {};
     const updates = {
@@ -35,8 +35,7 @@ export function useOnboarding(userId) {
       top_size:       topSize       ?? null,
       bottom_size:    bottomSize    ?? null,
       budget:         budget        ?? null,
-      // Keep the canonical fields in sync with the legacy web-flow names. The
-      // voice bridge reads these fields when it constructs persistent memory.
+      pin_code:       pinCode       ?? null,
       vibes:          styleVibe ? [styleVibe] : [],
       budget_min:     band.min ?? null,
       budget_max:     band.max ?? null,

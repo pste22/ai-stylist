@@ -1,31 +1,45 @@
-#!/bin/bash
-# Start the Mira dev environment.
-# Usage: ./dev.sh
-# Runs both servers in background and tails their logs.
+#!/usr/bin/env bash
+# Hot-reload dev environment — no deploy needed.
+# Backend auto-restarts on any .py change; frontend has Vite HMR.
+#
+# Usage:  ./dev.sh
+# Then open the Codespaces forwarded URL for port 5173.
 
 set -e
+REPO=$(cd "$(dirname "$0")" && pwd)
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
-LOG_DIR="/tmp/mira-dev"
-mkdir -p "$LOG_DIR"
+# ── Kill any stale process on port 8765 ──────────────────────────────────────
+STALE=$(lsof -ti:8765 2>/dev/null || true)
+if [ -n "$STALE" ]; then
+  echo "⚠ Port 8765 already in use — killing stale process ($STALE)"
+  kill "$STALE" 2>/dev/null || true
+  sleep 1
+fi
 
-# Kill any previous instances
-pkill -f "python live_server.py" 2>/dev/null || true
-pkill -f "vite" 2>/dev/null || true
-sleep 1
+# ── Backend ───────────────────────────────────────────────────────────────────
+echo "▶ Starting Python backend with auto-reload on :8765"
+cd "$REPO/prototype"
+source .venv/bin/activate
+# watchfiles re-runs the command whenever any .py file in prototype/ changes
+watchfiles "python live_server.py" . &
+BACKEND_PID=$!
 
-echo "→ Starting Python voice bridge..."
-cd "$ROOT/prototype"
-nohup python live_server.py > "$LOG_DIR/live_server.log" 2>&1 &
-echo "  PID $! — logs: $LOG_DIR/live_server.log"
+# ── Frontend ──────────────────────────────────────────────────────────────────
+echo "▶ Starting Vite dev server with HMR on :5173"
+cd "$REPO/web"
+npm run dev &
+FRONTEND_PID=$!
 
-echo "→ Starting Vite dev server..."
-cd "$ROOT/web"
-nohup npm run dev > "$LOG_DIR/vite.log" 2>&1 &
-echo "  PID $! — logs: $LOG_DIR/vite.log"
+# ── Cleanup on Ctrl-C ─────────────────────────────────────────────────────────
+trap "echo; echo 'Stopping...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit 0" INT TERM
 
 echo ""
-echo "Both servers started. Tailing logs (Ctrl+C to stop tailing — servers keep running):"
-echo "──────────────────────────────────────────────────────"
-sleep 2
-tail -f "$LOG_DIR/live_server.log" "$LOG_DIR/vite.log"
+echo "✦ Dev servers running"
+echo "  Frontend (HMR):  http://localhost:5173"
+echo "  Backend (WS):    ws://localhost:8765"
+echo ""
+echo "  In Codespaces: open the forwarded port 5173 URL"
+echo "  Press Ctrl-C to stop both."
+echo ""
+
+wait
