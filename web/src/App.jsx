@@ -1759,6 +1759,8 @@ export default function App() {
           onClose={() => setShowFittingRoom(false)}
           onOpenTryOn={(product) => openTryOn(product)}
           onCountChange={setFittingRoomCount}
+          onAddToCart={(p) => { addToCart(p); setShowFittingRoom(false); setShowCart(true); }}
+          inCart={inCart}
         />
       )}
       {signInPrompt && (

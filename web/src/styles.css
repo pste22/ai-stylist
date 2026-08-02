@@ -1260,6 +1260,18 @@ button.primary.stop { background: var(--accent); }
 .fr-tile-date { font-size: .66rem; opacity: .8; }
 .fr-tile-dots { position: absolute; top: .55rem; left: 50%; transform: translateX(-50%);
   color: rgba(255,255,255,.85); font-size: .6rem; letter-spacing: 2px; }
+.fr-tile-cart {
+  margin-top: .5rem; width: 100%; font: inherit; font-size: .74rem; font-weight: 800;
+  cursor: pointer; padding: .4rem .5rem; border-radius: 2px;
+  background: #fff; color: var(--ink); border: none;
+  text-transform: uppercase; letter-spacing: .06em; transition: background .12s, color .12s;
+}
+.fr-tile-cart:hover { background: var(--accent); color: #fff; }
+.fr-tile-cart.in-cart { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.5); cursor: default; }
+/* In the compare column the tile-cart sits on light bg */
+.fr-cmp-col .fr-tile-cart { background: var(--ink); color: #fff; }
+.fr-cmp-col .fr-tile-cart:hover { background: var(--accent); }
+.fr-cmp-col .fr-tile-cart.in-cart { background: transparent; color: var(--ink); border: 1px solid var(--border); }
 .fr-empty { text-align: center; padding: 3rem 1.5rem; color: var(--ink-2); }
 .fr-empty-glow { font-size: 2.5rem; margin-bottom: .5rem; }
 .fr-empty-head { margin: 0 0 .3rem; font-size: 1.05rem; font-weight: 800; color: var(--ink); }

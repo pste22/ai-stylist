@@ -24,7 +24,7 @@ const CMP_ANGLES = [
   { key: "back", label: "Back" },
 ];
 
-export default function FittingRoom({ onClose, onOpenTryOn, onCountChange }) {
+export default function FittingRoom({ onClose, onOpenTryOn, onCountChange, onAddToCart, inCart }) {
   const overlayRef = useRef(null);
   const [items, setItems] = useState(null); // null = loading
   const [sort, setSort] = useState("recent"); // "recent" | "product"
@@ -144,6 +144,14 @@ export default function FittingRoom({ onClose, onOpenTryOn, onCountChange }) {
                         <span className="fr-tile-price">{price(rec.product || {})}</span>
                         <span className="fr-tile-date">{timeAgo(rec.ts)}</span>
                       </div>
+                      {!selectMode && onAddToCart && (
+                        <button
+                          className={`fr-tile-cart${inCart?.(rec.productId) ? " in-cart" : ""}`}
+                          onClick={(e) => { e.stopPropagation(); if (!inCart?.(rec.productId)) onAddToCart(rec.product); }}
+                        >
+                          {inCart?.(rec.productId) ? "🛒 In cart" : "🛒 Add to cart"}
+                        </button>
+                      )}
                       {angles > 1 && <span className="fr-tile-dots">{"•".repeat(angles)}</span>}
                     </div>
                   </button>
@@ -187,6 +195,12 @@ export default function FittingRoom({ onClose, onOpenTryOn, onCountChange }) {
                     : <div className="fr-cmp-img fr-tile-img--ph">🛍️</div>}
                   <p className="fr-cmp-name">{rec.product?.name}</p>
                   <p className="fr-cmp-price">{price(rec.product || {})}</p>
+                  {onAddToCart && (
+                    <button className={`fr-tile-cart${inCart?.(rec.productId) ? " in-cart" : ""}`}
+                      onClick={() => { if (!inCart?.(rec.productId)) onAddToCart(rec.product); }}>
+                      {inCart?.(rec.productId) ? "🛒 In cart" : "🛒 Add to cart"}
+                    </button>
+                  )}
                   <button className="fr-cmp-remove" onClick={() => toggleSelect(rec.productId)}>Remove</button>
                 </div>
               );
