@@ -5,6 +5,21 @@ import react from "@vitejs/plugin-react";
 // (see docs/14-ui-strategy.md) — UI and backend stay independent in the monorepo.
 export default defineConfig({
   plugins: [react()],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          // posthog is dynamically imported — don't force an empty named chunk
+          if (id.includes("posthog")) return;
+          if (id.includes("@rive-app")) return "rive";
+          if (id.includes("@heygen")) return "heygen";
+          if (id.includes("@supabase")) return "supabase";
+          if (id.includes("react-dom") || id.includes("/react/")) return "react-vendor";
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     headers: {

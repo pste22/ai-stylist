@@ -1,33 +1,37 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import RiveAvatar from "./RiveAvatar.jsx";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import ProductCard from "./ProductCard.jsx";
 import LoginScreen from "./LoginScreen.jsx";
-import OnboardingFlow from "./OnboardingFlow.jsx";
-import EventBriefFlow from "./EventBriefFlow.jsx";
-import ChatHistory from "./ChatHistory.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
 import { useAuth } from "./useAuth.js";
 import { useOnboarding } from "./useOnboarding.js";
 import { useIdleTimeout } from "./useIdleTimeout.js";
 import { useChatHistory } from "./useChatHistory.js";
-import PrivacyPolicy from "./PrivacyPolicy.jsx";
-import ProductQuickView from "./ProductQuickView.jsx";
-import CartPanel from "./CartPanel.jsx";
 import { useCart } from "./useCart.js";
 import { usePhotoProfile } from "./usePhotoProfile.js";
 import { saveTryOn, getTryOn, listTryOns, photoSignature } from "./tryOnDB.js";
-import FittingRoom from "./FittingRoom.jsx";
 import { track, identify } from "./analytics.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
-import { install as installWatcher } from "./SessionWatcher.js";
-import { SessionWatcherPanel } from "./SessionWatcherPanel.jsx";
 import { ReasonPicker } from "./ReasonPicker.jsx";
-import { OutfitBuilder } from "./OutfitBuilder.jsx";
-import TryOnModal from "./TryOnModal.jsx";
+
+// Modal / rare flows — keep off the critical path so first paint stays light.
+const OnboardingFlow = lazy(() => import("./OnboardingFlow.jsx"));
+const EventBriefFlow = lazy(() => import("./EventBriefFlow.jsx"));
+const ChatHistory = lazy(() => import("./ChatHistory.jsx"));
+const PrivacyPolicy = lazy(() => import("./PrivacyPolicy.jsx"));
+const ProductQuickView = lazy(() => import("./ProductQuickView.jsx"));
+const CartPanel = lazy(() => import("./CartPanel.jsx"));
+const FittingRoom = lazy(() => import("./FittingRoom.jsx"));
+const OutfitBuilder = lazy(() => import("./OutfitBuilder.jsx"));
+const TryOnModal = lazy(() => import("./TryOnModal.jsx"));
+const SessionWatcherPanel = lazy(() =>
+  import("./SessionWatcherPanel.jsx").then((m) => ({ default: m.SessionWatcherPanel }))
+);
 
 // Activate in dev mode or when ?debug appears in the URL
 const DEBUG_MODE = import.meta.env.DEV || new URLSearchParams(location.search).has("debug");
-if (DEBUG_MODE) installWatcher();
+if (DEBUG_MODE) {
+  import("./SessionWatcher.js").then((m) => m.install());
+}
 
 // ─── User avatar menu (dropdown) ─────────────────────────────────────────────
 function UserMenu({ userName, userEmail, userAvatar, onSignOut, onDeleteAccount }) {
@@ -476,13 +480,6 @@ const CATEGORY_EMOJI = {
   shoes: "👟", bags: "👜", accessories: "✨", activewear: "🏃",
 };
 
-// ─── Deterministic social-proof numbers (stable per product id) ──────────────
-function pseudoRandom(id, seed) {
-  let h = seed | 0;
-  for (const c of String(id || "")) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
-  return Math.abs(h);
-}
-
 // ─── Empty right-panel state ──────────────────────────────────────────────────
 function EmptyProductSpot({ onSendPrompt }) {
   const prompts = [
@@ -520,26 +517,15 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
     product.image_url.includes("images.pexels.com")
   );
 
-  const savedCount  = pseudoRandom(product.id, 1337) % 40 + 8;
-  const ratingTenths = pseudoRandom(product.id, 4242) % 13 + 37;
-  const rating      = (ratingTenths / 10).toFixed(1);
-  const filledStars = Math.floor(ratingTenths / 10);
-  const starStr     = "★".repeat(filledStars) + "☆".repeat(5 - filledStars);
-  const isTrending  = pseudoRandom(product.id, 7777) % 5 === 0;
-  const isNew       = pseudoRandom(product.id, 9999) % 8 === 0 && !isTrending;
-
   return (
     <div className="fp-product">
       <div className="fp-img-wrap">
         {usePhoto
-          ? <img className="fp-img" src={product.image_url} alt={product.name} loading="lazy" />
+          ? <img className="fp-img" src={product.image_url} alt={product.name} loading="lazy" decoding="async" />
           : <div className="fp-cat-thumb" style={{ "--swatch": swatchColor(product.color) }}>
               <span className="fp-cat-emoji">{CATEGORY_EMOJI[product.category] || "🛍️"}</span>
             </div>
         }
-
-        {isTrending && <span className="fp-badge fp-badge--hot">🔥 Trending</span>}
-        {isNew      && <span className="fp-badge fp-badge--new">✦ New In</span>}
 
         <button
           className={`fp-heart${isLoved ? " is-loved" : ""}`}
@@ -569,14 +555,7 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
       </div>
 
       <div className="fp-details">
-        <div className="fp-miras-pick">✦ Mira's Pick</div>
-
-        <div className="fp-social">
-          <span className="fp-stars">{starStr}</span>
-          <span className="fp-rating">{rating}</span>
-          <span className="fp-sep">·</span>
-          <span className="fp-saved">{savedCount} saved this week</span>
-        </div>
+        <div className="fp-miras-pick">✦ Mira's edit</div>
 
         {reason && (
           <div className="fp-why">
@@ -983,7 +962,7 @@ function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart }) 
   return (
     <div className="trending-strip">
       <div className="trending-strip-header">
-        <span className="trending-strip-title">🔥 Trending now</span>
+        <span className="trending-strip-title">✦ From Mira's edit</span>
       </div>
       <div className="trending-strip-scroll">
         {products.map(p => (
@@ -1020,16 +999,20 @@ function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart }) 
 
 const OCCASION_CHIPS = [
   { emoji: "💍", label: "Wedding guest",    prompt: "I need an outfit for a wedding — suggest something elegant and appropriate." },
+  { emoji: "🍷", label: "Date night",       prompt: "I have a date tonight — suggest something stylish and flattering." },
+  { emoji: "☕", label: "Casual everyday",  prompt: "I want a comfortable but stylish everyday casual outfit." },
   { emoji: "💼", label: "Office look",      prompt: "Help me put together a polished office outfit for work." },
   { emoji: "🌅", label: "Beach holiday",    prompt: "I'm going on a beach holiday — what should I pack and wear?" },
-  { emoji: "🍷", label: "Date night",       prompt: "I have a date tonight — suggest something stylish and flattering." },
   { emoji: "🎉", label: "Party / festival", prompt: "I'm going to a party or festival — help me find a fun, standout look." },
-  { emoji: "☕", label: "Casual everyday",  prompt: "I want a comfortable but stylish everyday casual outfit." },
   { emoji: "🎓", label: "Graduation",       prompt: "I need an outfit for a graduation ceremony — something smart and celebratory." },
-  { emoji: "🛍️", label: "Just browsing",   prompt: "Show me what's trending right now — I'm looking for inspiration." },
+  { emoji: "🛍️", label: "Just browsing",   prompt: "Show me stylish picks for inspiration — I'm just browsing." },
 ];
 
-function ChatWelcome({ onEventBrief, onOccasion, textMode }) {
+const PRIMARY_OCCASIONS = OCCASION_CHIPS.slice(0, 3);
+
+function ChatWelcome({ onOccasion, onEventBrief, textMode }) {
+  const [showMore, setShowMore] = useState(false);
+  const chips = showMore ? OCCASION_CHIPS : PRIMARY_OCCASIONS;
   return (
     <div className="hero-welcome">
       <div className="hero-figure" aria-hidden="true">
@@ -1040,14 +1023,14 @@ function ChatWelcome({ onEventBrief, onOccasion, textMode }) {
       </div>
 
       <div className="hero-content">
-        <span className="hero-eyebrow">✦ AI-Powered Style</span>
+        <span className="hero-eyebrow">✦ Mira</span>
         <h1 className="hero-heading">
-          Your Personal<br/>Style Expert
+          Tell Mira your<br/>occasion
         </h1>
-        <p className="hero-sub">What are you dressing for today?</p>
+        <p className="hero-sub">One tap — tailored picks in seconds.</p>
 
         <div className="occasion-chips">
-          {OCCASION_CHIPS.map(({ emoji, label, prompt }) => (
+          {chips.map(({ emoji, label, prompt }) => (
             <button
               key={label}
               className="occasion-chip"
@@ -1059,8 +1042,21 @@ function ChatWelcome({ onEventBrief, onOccasion, textMode }) {
           ))}
         </div>
 
+        <div className="hero-secondary-actions">
+          {!showMore && (
+            <button type="button" className="hero-more-occasions" onClick={() => setShowMore(true)}>
+              More occasions
+            </button>
+          )}
+          {onEventBrief && (
+            <button type="button" className="hero-more-occasions" onClick={onEventBrief}>
+              Plan an event
+            </button>
+          )}
+        </div>
+
         <p className="hero-cta-hint">
-          {textMode ? "or type a message below" : "or tap Start Talking"}
+          {textMode ? "or type below" : "or tap Start chatting"}
         </p>
       </div>
     </div>
@@ -1264,6 +1260,8 @@ export default function App() {
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [showCart, setShowCart]           = useState(false);
   const [activeFilter, setActiveFilter]   = useState("all");
+  // Defer discovery shelves so the occasion CTA paints first.
+  const [showDiscovery, setShowDiscovery] = useState(false);
   const pendingOccasionRef = useRef(null);
   const pendingOccasionStartRef = useRef(false);
   const pendingTryOnStartRef = useRef(false);
@@ -1458,6 +1456,21 @@ export default function App() {
   // Fitting Room badge count on mount.
   useEffect(() => { listTryOns().then((r) => setFittingRoomCount(r.length)); }, []);
 
+  useEffect(() => {
+    let idleId;
+    let timeoutId;
+    const reveal = () => setShowDiscovery(true);
+    if (typeof window !== "undefined" && "requestIdleCallback" in window) {
+      idleId = requestIdleCallback(reveal, { timeout: 1500 });
+    } else {
+      timeoutId = setTimeout(reveal, 400);
+    }
+    return () => {
+      if (idleId != null && "cancelIdleCallback" in window) cancelIdleCallback(idleId);
+      if (timeoutId != null) clearTimeout(timeoutId);
+    };
+  }, []);
+
   // Analytics: identify the signed-in user so events tie to them.
   useEffect(() => { if (userId) identify(userId, { name: userName }); }, [userId, userName]);
 
@@ -1513,11 +1526,19 @@ export default function App() {
 
   // New user → show onboarding
   if (needsOnboarding) {
-    return <OnboardingFlow userName={userName} onComplete={completeOnboarding} />;
+    return (
+      <Suspense fallback={<div className="auth-loading"><span>✦</span></div>}>
+        <OnboardingFlow userName={userName} onComplete={completeOnboarding} />
+      </Suspense>
+    );
   }
 
   if (showEventBrief) {
-    return <EventBriefFlow onStart={startEventEdit} onCancel={() => setShowEventBrief(false)} />;
+    return (
+      <Suspense fallback={<div className="auth-loading"><span>✦</span></div>}>
+        <EventBriefFlow onStart={startEventEdit} onCancel={() => setShowEventBrief(false)} />
+      </Suspense>
+    );
   }
 
   // ── Unified chat-first layout ────────────────────────────────────────────────
@@ -1527,10 +1548,12 @@ export default function App() {
         <SessionWarning countdown={countdown} onStay={staySignedIn} onLeave={signOut} />
       )}
       {showHistory && (
-        <ChatHistory
-          {...history}
-          onClose={() => setShowHistory(false)}
-        />
+        <Suspense fallback={null}>
+          <ChatHistory
+            {...history}
+            onClose={() => setShowHistory(false)}
+          />
+        </Suspense>
       )}
 
       <div className="app-chat">
@@ -1592,7 +1615,7 @@ export default function App() {
             <p className="shelf-title">💜 Your saved items</p>
             <div className="grid">
               {savedProducts.map((p) => (
-                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} onSelect={setQuickViewProduct} inCart={inCart(p.id)} onAddToCart={addToCart} />
+                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} onSelect={setQuickViewProduct} inCart={inCart(p.id)} onAddToCart={addToCart} onTryOn={openTryOn} />
               ))}
             </div>
           </div>
@@ -1634,7 +1657,9 @@ export default function App() {
           )}
 
           {messages.length === 0 && (
-            <ChatWelcome onEventBrief={() => setShowEventBrief(true)} onOccasion={(prompt) => {
+            <ChatWelcome
+              onEventBrief={() => setShowEventBrief(true)}
+              onOccasion={(prompt) => {
                 if (!connected) {
                   if (!textMode) {
                     // Force text mode so no mic popup blocks the experience.
@@ -1649,12 +1674,14 @@ export default function App() {
                 } else {
                   sendText(prompt);
                 }
-              }} textMode={textMode} />
+              }}
+              textMode={textMode}
+            />
           )}
-          {messages.length === 0 && trendingProducts.length > 0 && (
+          {messages.length === 0 && showDiscovery && trendingProducts.length > 0 && (
             <TrendingStrip products={trendingProducts} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} />
           )}
-          {messages.length === 0 && editorialLooks.length > 0 && (
+          {messages.length === 0 && showDiscovery && editorialLooks.length > 0 && (
             <ShopTheLookStrip
               looks={editorialLooks}
               loved={loved}
@@ -1733,35 +1760,41 @@ export default function App() {
         />
       )}
       {quickViewProduct && (
-        <ProductQuickView
-          product={quickViewProduct}
-          loved={loved.has(quickViewProduct.id)}
-          inCart={inCart(quickViewProduct.id)}
-          onLove={wouldBuy}
-          onBuy={buyClick}
-          onAddToCart={addToCart}
-          onClose={() => setQuickViewProduct(null)}
-          prefs={effectivePrefs}
-          onSetSize={setUserSize}
-        />
+        <Suspense fallback={null}>
+          <ProductQuickView
+            product={quickViewProduct}
+            loved={loved.has(quickViewProduct.id)}
+            inCart={inCart(quickViewProduct.id)}
+            onLove={wouldBuy}
+            onBuy={buyClick}
+            onAddToCart={addToCart}
+            onClose={() => setQuickViewProduct(null)}
+            prefs={effectivePrefs}
+            onSetSize={setUserSize}
+          />
+        </Suspense>
       )}
       {showCart && (
-        <CartPanel
-          items={cartItems}
-          onRemove={removeFromCart}
-          onClear={clearCart}
-          onClose={() => setShowCart(false)}
-          onTryOn={openTryOn}
-        />
+        <Suspense fallback={null}>
+          <CartPanel
+            items={cartItems}
+            onRemove={removeFromCart}
+            onClear={clearCart}
+            onClose={() => setShowCart(false)}
+            onTryOn={openTryOn}
+          />
+        </Suspense>
       )}
       {showFittingRoom && (
-        <FittingRoom
-          onClose={() => setShowFittingRoom(false)}
-          onOpenTryOn={(product) => openTryOn(product)}
-          onCountChange={setFittingRoomCount}
-          onAddToCart={(p) => { addToCart(p); setShowFittingRoom(false); setShowCart(true); }}
-          inCart={inCart}
-        />
+        <Suspense fallback={null}>
+          <FittingRoom
+            onClose={() => setShowFittingRoom(false)}
+            onOpenTryOn={(product) => openTryOn(product)}
+            onCountChange={setFittingRoomCount}
+            onAddToCart={(p) => { addToCart(p); setShowFittingRoom(false); setShowCart(true); }}
+            inCart={inCart}
+          />
+        </Suspense>
       )}
       {signInPrompt && (
         <div className="delete-overlay" onClick={(e) => { if (e.target.classList.contains("delete-overlay")) setSignInPrompt(false); }}>
@@ -1781,7 +1814,11 @@ export default function App() {
           </div>
         </div>
       )}
-      {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
+      {showPrivacy && (
+        <Suspense fallback={null}>
+          <PrivacyPolicy onClose={() => setShowPrivacy(false)} />
+        </Suspense>
+      )}
       {showDeleteModal && (
         <DeleteAccountModal
           onConfirm={deleteAccount}
@@ -1790,8 +1827,10 @@ export default function App() {
       )}
 
       <footer className="app-footer" style={{ textAlign: "center", padding: ".5rem", fontSize: ".75rem", color: "var(--ink-3)" }}>
-        state: <code>{state}</code> · mood: <code>{mood}</code> ·{" "}
-        {connected ? (textMode ? "text" : "live") : "offline"} ·{" "}
+        {DEBUG_MODE && (
+          <>state: <code>{state}</code> · mood: <code>{mood}</code> ·{" "}
+          {connected ? (textMode ? "text" : "live") : "offline"} ·{" "}</>
+        )}
         <button className="privacy-link" onClick={() => setShowPrivacy(true)}>Privacy</button>
       </footer>
 
@@ -1811,43 +1850,51 @@ export default function App() {
         </div>
       )}
       {tryOnProduct && (
-        <TryOnModal
-          product={tryOnProduct}
-          onClose={() => { setTryOnProduct(null); clearTryOn(); }}
-          onTryOn={sendTryOn}
-          result={tryOnResult}
-          loading={tryOnLoading}
-          error={tryOnError}
-          onVideo={sendTryOnVideo}
-          video={tryOnVideo}
-          videoLoadingKind={tryOnVideoLoadingKind}
-          videoError={tryOnVideoError}
-          savedPhoto={savedPhoto}
-          onSavePhoto={savePhoto}
-          onClearPhoto={clearPhoto}
-          savedTryOn={savedTryOn}
-          savedStale={savedTryOnStale}
-          userPrefs={effectivePrefs}
-          onSetSize={setUserSize}
-        />
+        <Suspense fallback={null}>
+          <TryOnModal
+            product={tryOnProduct}
+            onClose={() => { setTryOnProduct(null); clearTryOn(); }}
+            onTryOn={sendTryOn}
+            result={tryOnResult}
+            loading={tryOnLoading}
+            error={tryOnError}
+            onVideo={sendTryOnVideo}
+            video={tryOnVideo}
+            videoLoadingKind={tryOnVideoLoadingKind}
+            videoError={tryOnVideoError}
+            savedPhoto={savedPhoto}
+            onSavePhoto={savePhoto}
+            onClearPhoto={clearPhoto}
+            savedTryOn={savedTryOn}
+            savedStale={savedTryOnStale}
+            userPrefs={effectivePrefs}
+            onSetSize={setUserSize}
+          />
+        </Suspense>
       )}
       {outfitAnatomy && (
-        <OutfitBuilder
-          anatomy={outfitAnatomy}
-          onClose={() => setOutfitAnatomy(null)}
-          onTellMira={(products) => {
-            if (!products?.length) return;
-            // Show the assembled look cards immediately, then let the server
-            // trigger ONE clean Mira response (comment + offer similar items).
-            // We send product IDs — NOT a verbose fake-user message — so Mira
-            // knows these are catalog items and doesn't greet or say she can't
-            // find them.
-            addAssembledLookToChat(products);
-            sendOutfitAssembled(products.map((p) => p.id));
-          }}
-        />
+        <Suspense fallback={null}>
+          <OutfitBuilder
+            anatomy={outfitAnatomy}
+            onClose={() => setOutfitAnatomy(null)}
+            onTellMira={(products) => {
+              if (!products?.length) return;
+              // Show the assembled look cards immediately, then let the server
+              // trigger ONE clean Mira response (comment + offer similar items).
+              // We send product IDs — NOT a verbose fake-user message — so Mira
+              // knows these are catalog items and doesn't greet or say she can't
+              // find them.
+              addAssembledLookToChat(products);
+              sendOutfitAssembled(products.map((p) => p.id));
+            }}
+          />
+        </Suspense>
       )}
-      {DEBUG_MODE && <SessionWatcherPanel />}
+      {DEBUG_MODE && (
+        <Suspense fallback={null}>
+          <SessionWatcherPanel />
+        </Suspense>
+      )}
     </>
   );
 }

@@ -1,5 +1,4 @@
 import { useState } from "react";
-import TryOnModal from "./TryOnModal";
 
 const CATEGORY_EMOJI = {
   dresses:     "👗",
@@ -25,12 +24,6 @@ const SWATCH_COLORS = {
 
 function swatchHex(color) {
   return SWATCH_COLORS[color?.toLowerCase()] || "#cbb9a8";
-}
-
-function pseudoRandom(id, seed) {
-  let h = seed | 0;
-  for (const c of String(id || "")) h = (Math.imul(31, h) + c.charCodeAt(0)) | 0;
-  return Math.abs(h);
 }
 
 function isRealProductPhoto(url) {
@@ -73,13 +66,10 @@ function isInUserSize(productName, userSize) {
 }
 
 export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact, userSize, onTryOn }) {
-  const [tryOnOpen, setTryOnOpen] = useState(false);
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError]   = useState(false);
 
   const usePhoto     = isRealProductPhoto(product.image_url) && !imgError;
-  const isTrending   = pseudoRandom(product.id, 7777) % 6 === 0;
-  const isNew        = pseudoRandom(product.id, 9999) % 9 === 0 && !isTrending;
   const isUserSize   = isInUserSize(product.name, userSize);
   const priceStr   = formatPrice(product.price, product.currency);
 
@@ -91,6 +81,7 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
         src={product.image_url}
         alt={product.name}
         loading="lazy"
+        decoding="async"
         onLoad={() => setImgLoaded(true)}
         onError={() => { setImgError(true); setImgLoaded(true); }}
       />
@@ -134,7 +125,6 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
 
   /* ── Portrait card: full editorial grid card ── */
   return (
-    <>
       <div
         className={`card${loved ? " loved" : ""}${highlighted ? " highlighted" : ""}`}
         onClick={() => onSelect?.(product)}
@@ -146,10 +136,6 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
 
           {/* Gradient overlay — fades in on hover */}
           <div className="card-img-overlay" aria-hidden="true" />
-
-          {/* Trend / New badge — top-left */}
-          {isTrending && <span className="card-badge card-badge--hot">🔥 Trending</span>}
-          {isNew      && <span className="card-badge card-badge--new">✦ New</span>}
 
           {/* Heart — top-right */}
           <button
@@ -195,9 +181,10 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
             <button
               className="card-try-btn"
               type="button"
-              onClick={(e) => { e.stopPropagation(); onTryOn ? onTryOn(product) : setTryOnOpen(true); }}
+              onClick={(e) => { e.stopPropagation(); onTryOn?.(product); }}
               aria-label="Virtual try on"
               title="Virtual Try On"
+              disabled={!onTryOn}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 {/* Person silhouette */}
@@ -225,13 +212,5 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
           </div>
         </div>
       </div>
-
-      {tryOnOpen && (
-        <TryOnModal
-          product={product}
-          onClose={() => setTryOnOpen(false)}
-        />
-      )}
-    </>
   );
 }

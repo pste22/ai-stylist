@@ -141,6 +141,8 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
   const [selectedView, setSelectedView] = useState("front");
   const [zoom, setZoom] = useState(false); // fullscreen magnified result
+  const [showAngles, setShowAngles] = useState(false);
+  const [showVideos, setShowVideos] = useState(false);
 
   /* Close on Escape key */
   useEffect(() => {
@@ -157,9 +159,6 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
       document.body.style.overflow = "";
     };
   }, [onClose, zoom]);
-
-  /* Reset to the front angle whenever a new product's try-on begins */
-  useEffect(() => { setSelectedView("front"); }, [product.id]);
 
   /* Close on backdrop click */
   function handleOverlayClick(e) {
@@ -227,6 +226,15 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const isVideoView = VIDEO_KEYS.includes(selectedView);
   const front = views.front;
   const [hd, setHd] = useState(false);
+
+  /* Reset progressive UI whenever a new product's try-on begins */
+  useEffect(() => {
+    setSelectedView("front");
+    setShowAngles(false);
+    setShowVideos(false);
+    setHd(false);
+  }, [product.id]);
+
   const handleVideo = (kind) => {
     setSelectedView(kind);
     // Generate the first time, or re-render when the requested quality (HD/Lite)
@@ -396,8 +404,20 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           </div>
         )}
 
-        {/* Angle switcher — appears once the first view is ready */}
-        {anyDone && (
+        {/* Angles — progressive disclosure after the first still is ready */}
+        {anyDone && angleKeys.length > 1 && !showAngles && (
+          <div className="tryon-scenes-wrap" style={{ paddingTop: ".25rem" }}>
+            <button
+              type="button"
+              className="tryon-share-btn"
+              style={{ width: "100%" }}
+              onClick={() => setShowAngles(true)}
+            >
+              View angles ({angleKeys.length})
+            </button>
+          </div>
+        )}
+        {anyDone && showAngles && (
           <div className="tryon-angles" role="tablist" aria-label="View angles">
             {angleKeys.map((v) => {
               const ready = !!views[v];
@@ -421,11 +441,27 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           </div>
         )}
 
-        {/* Bring it to life — 360° spin + curated scene videos */}
-        {anyDone && (
+        {/* Video — opt-in; Lite quality by default */}
+        {anyDone && !showVideos && (
+          <div className="tryon-scenes-wrap">
+            <button
+              type="button"
+              className="tryon-notify-btn"
+              style={{ width: "100%" }}
+              disabled={!front}
+              onClick={() => setShowVideos(true)}
+            >
+              Create a video (Lite · ~1 min)
+            </button>
+            <p className="tryon-preview-note" style={{ marginTop: ".4rem" }}>
+              Optional · uses generation credits · HD available inside
+            </p>
+          </div>
+        )}
+        {anyDone && showVideos && (
           <div className="tryon-scenes-wrap">
             <div className="tryon-scenes-head">
-              <p className="tryon-scenes-label">✨ Bring it to life</p>
+              <p className="tryon-scenes-label">Create a video</p>
               <button
                 type="button"
                 className={`tryon-hd-toggle${hd ? " on" : ""}`}
@@ -434,7 +470,6 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 onClick={() => {
                   const next = !hd;
                   setHd(next);
-                  // Re-render the scene in view at the new quality on demand.
                   const cur = clips[selectedView];
                   if (VIDEO_KEYS.includes(selectedView) && front && onVideo &&
                       videoLoadingKind !== selectedView && (!cur || !!cur.hd !== next)) {
