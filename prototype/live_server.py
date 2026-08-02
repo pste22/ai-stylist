@@ -550,6 +550,8 @@ async def handle(ws) -> None:
     session_start_time: float = 0.0
     # Idle timeout — updated on every user mic packet or text message.
     last_activity_time: float = 0.0
+    # Phase 1 — parse the init payload only (no I/O). Everything the first
+    # product render needs (prefs) is right here in the message.
     try:
         raw = await asyncio.wait_for(ws.recv(), timeout=10.0)
         if isinstance(raw, str):
@@ -566,55 +568,6 @@ async def handle(ws) -> None:
                 text_mode        = bool(data.get("text_mode"))
                 event_brief      = data.get("event_brief") or {}
                 initial_request  = (data.get("initial_request") or "").strip()
-                if pin_code and len(pin_code) == 6 and pin_code.isdigit():
-                    try:
-                        location_info = await asyncio.to_thread(_resolve_pincode_sync, pin_code)
-                        if location_info:
-                            print(f"  📍 location: {location_info['city']}, {location_info['state']}")
-                    except Exception:
-                        pass
-                if user_id:
-                    try:
-                        memory, is_returning = await asyncio.to_thread(
-                            user_store.load_user, user_id, user_name
-                        )
-                        label = "↩ returning" if is_returning else "✦ new"
-                        print(f"  {label} user: {user_name}")
-                        if is_returning:
-                            loved_ids = await asyncio.to_thread(
-                                user_store.get_loved_ids, user_id
-                            )
-                            if loved_ids:
-                                loved_products = [
-                                    {
-                                        "id": pid,
-                                        "name": p["name"],
-                                        "category": p.get("category"),
-                                        "color": p.get("color"),
-                                        "price": p.get("price"),
-                                        "image_url": p.get("image_url"),
-                                        "affiliate_url": _affiliate_url(p),
-                                    }
-                                    for pid in loved_ids
-                                    if (p := _BY_ID.get(pid))
-                                ]
-                                # Pre-populate so Mira knows saved items from first message
-                                for pid in loved_ids:
-                                    if (p := _BY_ID.get(pid)):
-                                        session_saved[pid] = p["name"]
-                                # Derive taste profile from saved products
-                                taste = _taste_profile(loved_ids)
-                                await _send_json(
-                                    ws, type="restore_loved",
-                                    ids=loved_ids, products=loved_products,
-                                )
-                    except Exception as exc:
-                        print(f"  ! user_store.load_user failed: {exc}")
-                # Create a chat session row for history tracking
-                if user_id:
-                    chat_session_id = await asyncio.to_thread(
-                        chat_store.create_session, user_id
-                    )
     except (asyncio.TimeoutError, Exception):
         pass  # anonymous session — Mira still works fine
 
@@ -676,6 +629,74 @@ async def handle(ws) -> None:
             break
     if _trending:
         await _send_json(ws, type="trending", items=_trending)
+
+    # Phase 2 — the slower I/O (PIN-code lookup + user memory/loved items).
+    # These feed the Gemini system prompt and the loved-item state, NOT the
+    # first product render above, so they run concurrently off the critical
+    # path. Previously they were awaited sequentially *before* the first
+    # product was sent, adding the PIN-code HTTP call (up to 4s) plus three
+    # Supabase round-trips to time-to-first-product.
+    async def _resolve_location():
+        nonlocal location_info
+        if pin_code and len(pin_code) == 6 and pin_code.isdigit():
+            try:
+                location_info = await asyncio.to_thread(_resolve_pincode_sync, pin_code)
+                if location_info:
+                    print(f"  📍 location: {location_info['city']}, {location_info['state']}")
+            except Exception:
+                pass
+
+    async def _load_user_context():
+        nonlocal memory, taste, chat_session_id
+        if not user_id:
+            return
+        try:
+            memory, is_returning = await asyncio.to_thread(
+                user_store.load_user, user_id, user_name
+            )
+            label = "↩ returning" if is_returning else "✦ new"
+            print(f"  {label} user: {user_name}")
+            if is_returning:
+                loved_ids = await asyncio.to_thread(
+                    user_store.get_loved_ids, user_id
+                )
+                if loved_ids:
+                    loved_products = [
+                        {
+                            "id": pid,
+                            "name": p["name"],
+                            "category": p.get("category"),
+                            "color": p.get("color"),
+                            "price": p.get("price"),
+                            "image_url": p.get("image_url"),
+                            "affiliate_url": _affiliate_url(p),
+                        }
+                        for pid in loved_ids
+                        if (p := _BY_ID.get(pid))
+                    ]
+                    # Pre-populate so Mira knows saved items from first message
+                    for pid in loved_ids:
+                        if (p := _BY_ID.get(pid)):
+                            session_saved[pid] = p["name"]
+                    # Derive taste profile from saved products
+                    taste = _taste_profile(loved_ids)
+                    # The client greys out loved items via restore_loved, so any
+                    # overlap with the already-sent top picks resolves itself.
+                    await _send_json(
+                        ws, type="restore_loved",
+                        ids=loved_ids, products=loved_products,
+                    )
+        except Exception as exc:
+            print(f"  ! user_store.load_user failed: {exc}")
+        # Create a chat session row for history tracking
+        try:
+            chat_session_id = await asyncio.to_thread(
+                chat_store.create_session, user_id
+            )
+        except Exception as exc:
+            print(f"  ! chat_store.create_session failed: {exc}")
+
+    await asyncio.gather(_resolve_location(), _load_user_context())
 
     client, config, types = _build(memory, prefs=prefs, taste=taste, event_brief=event_brief, location_info=location_info, text_mode=text_mode)
     session_id = events.new_session_id()
