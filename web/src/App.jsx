@@ -1711,7 +1711,7 @@ export default function App() {
             <div className="start-row">
               <ModeToggle textMode={textMode} connected={connected} quality={quality}
                 onVoice={switchToVoice} onText={switchToSilent} />
-              <button className="chat-start-btn" onClick={start}>
+              <button className="chat-start-btn" onClick={() => start()}>
                 {textMode ? "Start chatting →" : "Start talking →"}
               </button>
             </div>

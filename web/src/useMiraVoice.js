@@ -231,6 +231,9 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   }, []);
 
   const start = useCallback(async (initialText = null) => {
+    // Defensive: only accept a real string (guards against a click event being
+    // passed when start is used directly as an onClick handler).
+    if (typeof initialText !== "string") initialText = null;
     setError(null);
     setLooks([]);
     setProductTimeline([]);
