@@ -24,8 +24,11 @@ Needs: GEMINI_API_KEY in prototype/.env  +  websockets, google-genai (already in
 from __future__ import annotations
 
 import asyncio
+import collections
 import concurrent.futures
+import datetime
 import functools
+import hashlib
 import json
 import os
 import re
@@ -394,6 +397,85 @@ def _img_gen_cost(response) -> float:
     in_tok  = getattr(um, "prompt_token_count", 0) or 0
     out_tok = getattr(um, "candidates_token_count", 0) or 0
     return in_tok / 1e6 * _IMG_IN_RATE + out_tok / 1e6 * _IMG_OUT_RATE
+
+
+# ── Content-hash cache: identical (photo, product, view/kind) → reuse, skip gen ──
+# Big cost + latency win for repeat try-ons of the same item. Bounded in-memory
+# LRU with a byte budget so it can't grow the process memory unbounded.
+_CACHE_BUDGET = int(os.environ.get("MIRA_GEN_CACHE_MB", "64")) * 1024 * 1024
+_gen_cache: "collections.OrderedDict[str, tuple[bytes, str]]" = collections.OrderedDict()
+_gen_cache_bytes = 0
+
+
+def _cache_key(image_b64: str, product_id: str, kind: str) -> str:
+    h = hashlib.sha256()
+    h.update((product_id or "").encode())
+    h.update(b"|"); h.update((kind or "").encode())
+    h.update(b"|"); h.update((image_b64 or "").encode("utf-8", "ignore"))
+    return h.hexdigest()
+
+
+def _cache_get(key: str):
+    v = _gen_cache.get(key)
+    if v is not None:
+        _gen_cache.move_to_end(key)
+    return v
+
+
+def _cache_put(key: str, data: bytes, mime: str) -> None:
+    global _gen_cache_bytes
+    if not data or len(data) > _CACHE_BUDGET:
+        return
+    if key in _gen_cache:
+        _gen_cache_bytes -= len(_gen_cache[key][0])
+    _gen_cache[key] = (data, mime)
+    _gen_cache.move_to_end(key)
+    _gen_cache_bytes += len(data)
+    while _gen_cache_bytes > _CACHE_BUDGET and _gen_cache:
+        _, (old, _m) = _gen_cache.popitem(last=False)
+        _gen_cache_bytes -= len(old)
+
+
+# ── Spend guardrails: per-user + global daily caps + kill switch ────────────────
+# Enforced budgets (not just logging) so a loop/spike can't drain credits again.
+_EST_IMAGE = float(os.environ.get("MIRA_EST_IMAGE_USD", "0.04"))
+_EST_VIDEO = float(os.environ.get("MIRA_EST_VIDEO_USD", "0.20"))
+_GEN_DAILY_USER_USD   = float(os.environ.get("MIRA_GEN_DAILY_USER_USD", "3.0"))
+_GEN_DAILY_GLOBAL_USD = float(os.environ.get("MIRA_GEN_DAILY_GLOBAL_USD", "50.0"))
+_GEN_DISABLED = os.environ.get("MIRA_GEN_DISABLED", "").strip().lower() in ("1", "true", "yes", "on")
+_spend = {"day": None, "total": 0.0, "users": {}}
+_SPEND_MSG = {
+    "disabled":   "Try-on is paused right now — please check back soon.",
+    "global_cap": "Mira's try-on studio has hit today's limit — back tomorrow! ✨",
+    "user_cap":   "You've reached today's try-on limit — see you tomorrow ✨",
+}
+
+
+def _spend_roll():
+    d = datetime.date.today().isoformat()
+    if _spend["day"] != d:
+        _spend["day"], _spend["total"], _spend["users"] = d, 0.0, {}
+
+
+def _spend_check(user_id: str, est: float) -> str | None:
+    """Return None if the generation is allowed, else a reason key (see _SPEND_MSG)."""
+    if _GEN_DISABLED:
+        return "disabled"
+    _spend_roll()
+    if _spend["total"] + est > _GEN_DAILY_GLOBAL_USD:
+        return "global_cap"
+    if user_id and _spend["users"].get(user_id, 0.0) + est > _GEN_DAILY_USER_USD:
+        return "user_cap"
+    return None
+
+
+def _spend_record(user_id: str, cost: float) -> None:
+    if cost <= 0:
+        return
+    _spend_roll()
+    _spend["total"] += cost
+    if user_id:
+        _spend["users"][user_id] = _spend["users"].get(user_id, 0.0) + cost
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
 _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
@@ -1219,41 +1301,64 @@ async def handle(ws) -> None:
             return None, None
 
         try:
-            # Fetch the garment image bytes (blocking → run in a thread).
-            def _fetch(url):
-                headers = {"User-Agent": "Mozilla/5.0 (Mira try-on)"}
-                r = _req.Request(url, headers=headers)
-                with _req.urlopen(r, timeout=8) as resp:
-                    return resp.read(), resp.headers.get_content_type() or "image/jpeg"
-
-            product_bytes, product_mime = await asyncio.to_thread(_fetch, payload["product_image_url"])
             person_bytes = base64.b64decode(image_b64)
+            key_front = _cache_key(image_b64, product_id, "front")
+            front_hit = _cache_get(key_front)
 
-            # ── FRONT: person photo + garment ──
-            front_resp = await _gen_run(
-                _client.models.generate_content,
-                model=_TRYON_MODEL,
-                contents=[
-                    _types.Part.from_bytes(data=person_bytes, mime_type=mime),
-                    _types.Part.from_bytes(data=product_bytes, mime_type=product_mime),
-                    payload["prompt"],
-                ],
-                config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
-            )
-            front_bytes, front_mime = _extract(front_resp)
-            if not front_bytes:
-                print("  [try_on] no front image in response")
-                await _send_json(ws, type="try_on_error", product_id=product_id,
-                                 message="Try-on couldn't be generated for this photo. Try a clear, front-facing full-body shot.")
-                return
+            # Spend guardrail — only gate ACTUAL generation (cache hits are free).
+            if not front_hit:
+                reason = _spend_check(user_id, 3 * _EST_IMAGE)
+                if reason:
+                    print(f"  [try_on] blocked by guardrail: {reason}")
+                    await _send_json(ws, type="try_on_error", product_id=product_id,
+                                     message=_SPEND_MSG[reason])
+                    return
 
-            _costs = [_img_gen_cost(front_resp)]
-            print(f"  [try_on] front sent — cost≈${_costs[0]:.4f}")
+            _costs = []
+            # ── FRONT: cache hit, else generate from person photo + garment ──
+            if front_hit:
+                front_bytes, front_mime = front_hit
+                print("  [try_on] front — cache hit")
+            else:
+                def _fetch(url):
+                    headers = {"User-Agent": "Mozilla/5.0 (Mira try-on)"}
+                    r = _req.Request(url, headers=headers)
+                    with _req.urlopen(r, timeout=8) as resp:
+                        return resp.read(), resp.headers.get_content_type() or "image/jpeg"
+
+                product_bytes, product_mime = await asyncio.to_thread(_fetch, payload["product_image_url"])
+                front_resp = await _gen_run(
+                    _client.models.generate_content,
+                    model=_TRYON_MODEL,
+                    contents=[
+                        _types.Part.from_bytes(data=person_bytes, mime_type=mime),
+                        _types.Part.from_bytes(data=product_bytes, mime_type=product_mime),
+                        payload["prompt"],
+                    ],
+                    config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
+                )
+                front_bytes, front_mime = _extract(front_resp)
+                if not front_bytes:
+                    print("  [try_on] no front image in response")
+                    await _send_json(ws, type="try_on_error", product_id=product_id,
+                                     message="Try-on couldn't be generated for this photo. Try a clear, front-facing full-body shot.")
+                    return
+                _cache_put(key_front, front_bytes, front_mime)
+                _costs.append(_img_gen_cost(front_resp))
+
             await _send_json(ws, type="try_on_result", product_id=product_id, view="front",
                              total=total, image=base64.b64encode(front_bytes).decode(), mime=front_mime)
 
-            # ── OTHER ANGLES: re-render the FRONT result from each angle, in parallel ──
+            # ── OTHER ANGLES: cache hit, else re-render the FRONT result (parallel) ──
             async def _angle(view):
+                key_v = _cache_key(image_b64, product_id, view)
+                hit = _cache_get(key_v)
+                if hit:
+                    b, m = hit
+                    await _send_json(ws, type="try_on_result", product_id=product_id, view=view,
+                                     total=total, image=base64.b64encode(b).decode(), mime=m)
+                    print(f"  [try_on] {view} — cache hit")
+                    return
                 try:
                     resp = await _gen_run(
                         _client.models.generate_content,
@@ -1265,8 +1370,9 @@ async def handle(ws) -> None:
                         config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
                     )
                     b, m = _extract(resp)
-                    _costs.append(_img_gen_cost(resp))
                     if b:
+                        _cache_put(key_v, b, m)
+                        _costs.append(_img_gen_cost(resp))
                         await _send_json(ws, type="try_on_result", product_id=product_id, view=view,
                                          total=total, image=base64.b64encode(b).decode(), mime=m)
                         print(f"  [try_on] {view} sent")
@@ -1278,7 +1384,8 @@ async def handle(ws) -> None:
                     await _send_json(ws, type="try_on_view_error", product_id=product_id, view=view)
 
             await asyncio.gather(*[_angle(v) for v in views if v != "front"])
-            print(f"  💰 [try_on] TOTAL ≈ ${sum(_costs):.4f} for {len(_costs)} image(s) "
+            _spend_record(user_id, sum(_costs))
+            print(f"  💰 [try_on] TOTAL ≈ ${sum(_costs):.4f} (gen {len(_costs)} img) "
                   f"— product={payload['product_name']!r}")
         except GenBusy:
             await _send_json(ws, type="try_on_error", product_id=product_id,
@@ -1361,6 +1468,24 @@ async def handle(ws) -> None:
             return vb
 
         try:
+            # Cache hit → serve the stored clip instantly, no generation / no spend.
+            key_vid = _cache_key(image_b64, product_id, kind)
+            vid_hit = _cache_get(key_vid)
+            if vid_hit:
+                vb_c, mime_c = vid_hit
+                await _send_json(ws, type="try_on_video_result", product_id=product_id, kind=kind,
+                                 video=base64.b64encode(vb_c).decode(), mime=mime_c)
+                print(f"  [try_on_video] {kind} — cache hit")
+                return
+
+            # Spend guardrail — only gate actual generation.
+            reason = _spend_check(user_id, _EST_VIDEO)
+            if reason:
+                print(f"  [try_on_video] blocked by guardrail: {reason}")
+                await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
+                                 message=_SPEND_MSG[reason])
+                return
+
             if is_scene:
                 # Step 1 — composite into the scene, stream the still as a fast preview.
                 still_bytes, still_mime = await _gen_run(_gen_scene_still)
@@ -1378,9 +1503,11 @@ async def handle(ws) -> None:
 
             vb = await _gen_run(_gen_video, seed_bytes, seed_mime, prompt)
             if vb:
+                _cache_put(key_vid, vb, "video/mp4")
+                est = _VEO_COST_PER_CLIP + (_EST_IMAGE if is_scene else 0)
+                _spend_record(user_id, est)
                 await _send_json(ws, type="try_on_video_result", product_id=product_id, kind=kind,
                                  video=base64.b64encode(vb).decode(), mime="video/mp4")
-                est = _VEO_COST_PER_CLIP + (_IMG_OUT_RATE * 1290 / 1e6 if is_scene else 0)
                 print(f"  💰 [try_on_video] {kind} done — {len(vb)}b ≈ ${est:.2f} (est; model={_VEO_MODEL})")
             else:
                 await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
@@ -2359,10 +2486,16 @@ async def process_request(connection, request):
     # Health check — for Fly.io checks / load balancers. Reports gen circuit state.
     if request.path.rstrip("/") == "/health":
         healthy = time.time() >= _cb["open_until"]
+        _spend_roll()
         body = json.dumps({
             "status": "ok" if healthy else "degraded",
             "gen_circuit_open": not healthy,
             "gen_workers": _GEN_WORKERS,
+            "gen_disabled": _GEN_DISABLED,
+            "cache_items": len(_gen_cache),
+            "cache_mb": round(_gen_cache_bytes / 1024 / 1024, 1),
+            "spend_today_usd": round(_spend["total"], 2),
+            "spend_global_cap_usd": _GEN_DAILY_GLOBAL_USD,
         })
         resp = connection.respond(200 if healthy else 503, body)
         resp.headers["Content-Type"] = "application/json"
