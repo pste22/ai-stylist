@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 import { MicCapture, PcmPlayer } from "./audio.js";
 import { AvatarState, Mood } from "./avatarState.js";
 import { supabase } from "./supabaseClient.js";
+import { track } from "./analytics.js";
 
 function resolveWsUrl() {
   const override = import.meta.env.VITE_MIRA_WS_URL;
@@ -148,6 +149,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const getLevel = useCallback(() => playerRef.current?.getLevel?.() ?? 0, []);
 
   const buyClick = useCallback((product) => {
+    track("affiliate_click_out", { product_id: product?.id, name: product?.name, price: product?.price });
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN)
       ws.send(JSON.stringify({ type: "buy_click", product_id: product.id }));
@@ -427,6 +429,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             setTryOnLoading(false); // first angle arrived — show it immediately
             setTryOnError(null);
             const view = msg.view || "front";
+            if (view === "front") track("try_on_result_shown", { product_id: msg.product_id }); // activation
             setTryOnResult((prev) => {
               const base = prev && prev.productId === msg.product_id
                 ? prev
@@ -465,6 +468,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
           case "try_on_video_result": {
             if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
             const k = msg.kind || "spin";
+            track("try_on_video_generated", { product_id: msg.product_id, kind: k });
             setTryOnVideoLoadingKind((cur) => (cur === k ? null : cur));
             setTryOnVideoError(null);
             setTryOnVideo((prev) => {

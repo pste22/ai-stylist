@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import SizeAdvice from "./SizeAdvice.jsx";
+import { track } from "./analytics.js";
 
 const VIEW_ORDER = ["front", "side", "back"];
 const VIEW_LABEL = { front: "Front", side: "Side", back: "Back" };
@@ -184,6 +185,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
       setUserPhoto(dataUrl);
       const base64 = String(dataUrl).split(",")[1];
       const mime = file.type || "image/jpeg";
+      track("try_on_photo_uploaded", { product_id: product.id, source: "upload" });
       onSavePhoto?.(base64, mime);   // remember for next time (client-side only)
       onTryOn?.(product.id, base64, mime);
     };
@@ -194,6 +196,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   // One-tap "try it on me" using the previously saved photo — no re-upload.
   const tryWithSaved = () => {
     if (!savedPhoto?.image) return;
+    track("try_on_photo_uploaded", { product_id: product.id, source: "saved" });
     setUserPhoto(`data:${savedPhoto.mime};base64,${savedPhoto.image}`);
     onTryOn?.(product.id, savedPhoto.image, savedPhoto.mime || "image/jpeg");
   };
@@ -235,6 +238,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const handleShare = async () => {
     if (sharing) return;
     setSharing(true);
+    track("try_on_shared", { product_id: product.id, kind: selectedView });
     const caption = `Styled by Mira ✦ — ${product.name || "my look"}`;
     try {
       // If a video clip is showing, share the clip itself.

@@ -17,6 +17,7 @@ import { useCart } from "./useCart.js";
 import { usePhotoProfile } from "./usePhotoProfile.js";
 import { saveTryOn, getTryOn, listTryOns, photoSignature } from "./tryOnDB.js";
 import FittingRoom from "./FittingRoom.jsx";
+import { track, identify } from "./analytics.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { install as installWatcher } from "./SessionWatcher.js";
 import { SessionWatcherPanel } from "./SessionWatcherPanel.jsx";
@@ -1287,6 +1288,7 @@ export default function App() {
   const [savedTryOn, setSavedTryOn] = useState(null);   // this product's stored try-on (IndexedDB)
   const [showFittingRoom, setShowFittingRoom] = useState(false);
   const [fittingRoomCount, setFittingRoomCount] = useState(0);
+  const [signInPrompt, setSignInPrompt] = useState(false);   // guest tapped a paid feature
 
   const {
     connected, state, mood, captions, messages,
@@ -1406,6 +1408,13 @@ export default function App() {
   // Open the try-on modal for a product; ensure a session is running so the
   // photo upload can reach the server (text mode → no mic popup).
   const openTryOn = (product) => {
+    // Gate the paid try-on behind sign-in (guest video/image gen is a cost vector).
+    if (!user) {
+      setSignInPrompt(true);
+      track("signin_prompt_shown", { from: "try_on", product_id: product?.id });
+      return;
+    }
+    track("try_on_opened", { product_id: product?.id, category: product?.category });
     clearTryOn();
     setTryOnProduct(product);
     setShowFittingRoom(false);
@@ -1448,6 +1457,9 @@ export default function App() {
 
   // Fitting Room badge count on mount.
   useEffect(() => { listTryOns().then((r) => setFittingRoomCount(r.length)); }, []);
+
+  // Analytics: identify the signed-in user so events tie to them.
+  useEffect(() => { if (userId) identify(userId, { name: userName }); }, [userId, userName]);
 
   const startEventEdit = (brief) => {
     setEventBrief(brief);
@@ -1748,6 +1760,24 @@ export default function App() {
           onOpenTryOn={(product) => openTryOn(product)}
           onCountChange={setFittingRoomCount}
         />
+      )}
+      {signInPrompt && (
+        <div className="delete-overlay" onClick={(e) => { if (e.target.classList.contains("delete-overlay")) setSignInPrompt(false); }}>
+          <div className="delete-modal">
+            <div className="delete-modal-icon">✨</div>
+            <h3 className="delete-modal-title">Sign in to try it on</h3>
+            <p className="delete-modal-body">
+              Create a free account to see outfits on you, save your Fitting Room, and share your looks.
+            </p>
+            <div className="delete-modal-actions">
+              <button className="delete-btn-confirm" style={{ background: "var(--accent)" }}
+                onClick={() => { setSignInPrompt(false); setIsGuest(false); track("signin_prompt_accepted", { from: "try_on" }); }}>
+                Sign in / Sign up
+              </button>
+              <button className="delete-btn-cancel" onClick={() => setSignInPrompt(false)}>Maybe later</button>
+            </div>
+          </div>
+        </div>
       )}
       {showPrivacy && <PrivacyPolicy onClose={() => setShowPrivacy(false)} />}
       {showDeleteModal && (
