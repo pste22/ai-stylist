@@ -471,13 +471,13 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
           case "try_on_video_result": {
             if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
             const k = msg.kind || "spin";
-            track("try_on_video_generated", { product_id: msg.product_id, kind: k });
+            track("try_on_video_generated", { product_id: msg.product_id, kind: k, hd: !!msg.hd });
             setTryOnVideoLoadingKind((cur) => (cur === k ? null : cur));
             setTryOnVideoError(null);
             setTryOnVideo((prev) => {
               const base = prev && prev.productId === msg.product_id
                 ? prev : { productId: msg.product_id, clips: {}, stills: {} };
-              return { ...base, clips: { ...base.clips, [k]: { video: msg.video, mime: msg.mime || "video/mp4" } } };
+              return { ...base, clips: { ...base.clips, [k]: { video: msg.video, mime: msg.mime || "video/mp4", hd: !!msg.hd } } };
             });
             break;
           }
@@ -545,12 +545,12 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     if (tryOnVideoTimeoutRef.current) { clearTimeout(tryOnVideoTimeoutRef.current); tryOnVideoTimeoutRef.current = null; }
   }, []);
 
-  const sendTryOnVideo = useCallback((productId, imageBase64, mime = "image/png", kind = "spin") => {
+  const sendTryOnVideo = useCallback((productId, imageBase64, mime = "image/png", kind = "spin", hd = false) => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !productId || !imageBase64) return;
     setTryOnVideoError(null);
     setTryOnVideoLoadingKind(kind);
-    ws.send(JSON.stringify({ type: "try_on_video", product_id: productId, image: imageBase64, mime, kind }));
+    ws.send(JSON.stringify({ type: "try_on_video", product_id: productId, image: imageBase64, mime, kind, hd }));
     if (tryOnVideoTimeoutRef.current) clearTimeout(tryOnVideoTimeoutRef.current);
     tryOnVideoTimeoutRef.current = setTimeout(() => {
       tryOnVideoTimeoutRef.current = null;

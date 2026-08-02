@@ -332,6 +332,8 @@ _TRYON_MODEL = os.environ.get("GEMINI_TRYON_MODEL", "gemini-2.5-flash-image")
 # sustainable. Bump to veo-3.1-fast-generate-preview or veo-3.1-generate-preview
 # via GEMINI_VEO_MODEL for a "premium" quality tier once demand is validated.
 _VEO_MODEL = os.environ.get("GEMINI_VEO_MODEL", "veo-3.1-lite-generate-preview")
+# Premium "HD" tier — used only when the client requests hd=true (opt-in).
+_VEO_HD_MODEL = os.environ.get("GEMINI_VEO_HD_MODEL", "veo-3.1-fast-generate-preview")
 
 # ── Isolated generation pool + upstream resilience (Stage 0 hardening) ──────────
 # Heavy model calls (try-on images, Veo videos, vision) run on a DEDICATED thread
@@ -442,7 +444,8 @@ def _cache_put(key: str, data: bytes, mime: str) -> None:
 # ── Spend guardrails: per-user + global daily caps + kill switch ────────────────
 # Enforced budgets (not just logging) so a loop/spike can't drain credits again.
 _EST_IMAGE = float(os.environ.get("MIRA_EST_IMAGE_USD", "0.04"))
-_EST_VIDEO = float(os.environ.get("MIRA_EST_VIDEO_USD", "0.40"))   # ~8s Veo Lite clip (default model)
+_EST_VIDEO = float(os.environ.get("MIRA_EST_VIDEO_USD", "0.40"))      # ~8s Veo Lite clip (default)
+_EST_VIDEO_HD = float(os.environ.get("MIRA_EST_VIDEO_HD_USD", "1.20")) # ~8s Veo Fast clip (opt-in HD)
 # Conservative defaults given real video cost (~$1.20/clip). Raise via env as budget grows.
 _GEN_DAILY_USER_USD   = float(os.environ.get("MIRA_GEN_DAILY_USER_USD", "1.5"))   # ~1 video or ~30 images/user/day
 _GEN_DAILY_GLOBAL_USD = float(os.environ.get("MIRA_GEN_DAILY_GLOBAL_USD", "15.0")) # hard daily ceiling
@@ -1404,12 +1407,13 @@ async def handle(ws) -> None:
             await _send_json(ws, type="state", state="idle", mood="neutral")
 
     async def _try_on_video(product_id: str, image_b64: str, mime: str = "image/png",
-                            kind: str = "spin") -> None:
+                            kind: str = "spin", hd: bool = False) -> None:
         """On-demand Veo video, seeded from the FRONT try-on image (sent by the client).
 
         kind == "spin"  → a 360° turntable of the person in the outfit.
         kind in SCENES  → first composite the person into the scene (still image, sent as
                           a quick preview), then animate that still into a cinematic clip.
+        hd → premium Veo tier (Fast) instead of the cheap default (Lite).
         Slow (~1-2 min) + costly, so only runs on explicit user tap. Never crashes.
         """
         import base64, time
@@ -1424,8 +1428,10 @@ async def handle(ws) -> None:
                              message="Generate a try-on first, then bring it to life.")
             return
 
+        video_model = _VEO_HD_MODEL if hd else _VEO_MODEL
+        clip_cost = _EST_VIDEO_HD if hd else _EST_VIDEO
         is_scene = kind in _tryon.SCENES
-        print(f"  [try_on_video] starting — kind={kind} product={name!r} model={_VEO_MODEL}")
+        print(f"  [try_on_video] starting — kind={kind} hd={hd} product={name!r} model={video_model}")
         await _send_json(ws, type="state", state="thinking", mood="focused")
 
         def _new_client():
@@ -1451,7 +1457,7 @@ async def handle(ws) -> None:
         def _gen_video(seed_bytes, seed_mime, prompt):
             client = _new_client()
             op = client.models.generate_videos(
-                model=_VEO_MODEL, prompt=prompt,
+                model=video_model, prompt=prompt,
                 image=_types.Image(image_bytes=seed_bytes, mime_type=seed_mime),
                 config=_types.GenerateVideosConfig(
                     number_of_videos=1, aspect_ratio="9:16", person_generation="allow_adult",
@@ -1474,17 +1480,18 @@ async def handle(ws) -> None:
 
         try:
             # Cache hit → serve the stored clip instantly, no generation / no spend.
-            key_vid = _cache_key(image_b64, product_id, kind)
+            # Keyed by quality so Lite and HD clips are cached separately.
+            key_vid = _cache_key(image_b64, product_id, f"{kind}:hd" if hd else kind)
             vid_hit = _cache_get(key_vid)
             if vid_hit:
                 vb_c, mime_c = vid_hit
                 await _send_json(ws, type="try_on_video_result", product_id=product_id, kind=kind,
-                                 video=base64.b64encode(vb_c).decode(), mime=mime_c)
-                print(f"  [try_on_video] {kind} — cache hit")
+                                 hd=hd, video=base64.b64encode(vb_c).decode(), mime=mime_c)
+                print(f"  [try_on_video] {kind} (hd={hd}) — cache hit")
                 return
 
             # Spend guardrail — only gate actual generation.
-            reason = _spend_check(user_id, _EST_VIDEO)
+            reason = _spend_check(user_id, clip_cost + (_EST_IMAGE if is_scene else 0))
             if reason:
                 print(f"  [try_on_video] blocked by guardrail: {reason}")
                 await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
@@ -1509,11 +1516,11 @@ async def handle(ws) -> None:
             vb = await _gen_run(_gen_video, seed_bytes, seed_mime, prompt)
             if vb:
                 _cache_put(key_vid, vb, "video/mp4")
-                est = _VEO_COST_PER_CLIP + (_EST_IMAGE if is_scene else 0)
+                est = clip_cost + (_EST_IMAGE if is_scene else 0)
                 _spend_record(user_id, est)
                 await _send_json(ws, type="try_on_video_result", product_id=product_id, kind=kind,
-                                 video=base64.b64encode(vb).decode(), mime="video/mp4")
-                print(f"  💰 [try_on_video] {kind} done — {len(vb)}b ≈ ${est:.2f} (est; model={_VEO_MODEL})")
+                                 hd=hd, video=base64.b64encode(vb).decode(), mime="video/mp4")
+                print(f"  💰 [try_on_video] {kind} (hd={hd}) done — {len(vb)}b ≈ ${est:.2f} (est; model={video_model})")
             else:
                 await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
                                  message="Couldn't generate the video. Please try again.")
@@ -1988,8 +1995,9 @@ async def handle(ws) -> None:
                         mime = data.get("mime", "image/png")
                         pid = data.get("product_id", "")
                         kind = (data.get("kind") or "spin").strip().lower()
+                        hd = bool(data.get("hd"))
                         if img and pid:
-                            asyncio.ensure_future(_try_on_video(pid, img, mime, kind))
+                            asyncio.ensure_future(_try_on_video(pid, img, mime, kind, hd))
                     elif data.get("type") == "outfit_assembled":
                         # User assembled a look from catalog items in the Outfit Builder.
                         # The product cards are already on screen (client-side

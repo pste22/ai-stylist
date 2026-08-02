@@ -1134,10 +1134,24 @@ button.primary.stop { background: var(--accent); }
 .tryon-angle.pending { opacity: .6; cursor: default; }
 /* "Bring it to life" — spin + scene video pills */
 .tryon-scenes-wrap { margin-top: .5rem; }
+.tryon-scenes-head {
+  display: flex; align-items: center; justify-content: center; gap: .55rem;
+  margin-bottom: .4rem;
+}
 .tryon-scenes-label {
-  margin: 0 0 .4rem; text-align: center;
+  margin: 0; text-align: center;
   font-size: .74rem; font-weight: 800; letter-spacing: .04em;
   color: var(--ink-2); text-transform: uppercase;
+}
+.tryon-hd-toggle {
+  border: 1px solid var(--line); background: transparent;
+  color: var(--ink-2); border-radius: 999px;
+  padding: .12rem .5rem; font-size: .62rem; font-weight: 800;
+  letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
+  line-height: 1.4;
+}
+.tryon-hd-toggle.on {
+  background: var(--ink); color: var(--bg); border-color: var(--ink);
 }
 .tryon-scenes {
   display: flex; flex-wrap: wrap; justify-content: center; gap: .4rem;

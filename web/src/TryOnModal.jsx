@@ -226,11 +226,15 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const stills = { ...(saved?.stills || {}), ...(myVideo?.stills || {}) };
   const isVideoView = VIDEO_KEYS.includes(selectedView);
   const front = views.front;
+  const [hd, setHd] = useState(false);
   const handleVideo = (kind) => {
     setSelectedView(kind);
-    // Kick off generation the first time (needs the front try-on as the seed).
-    if (!clips[kind] && videoLoadingKind !== kind && front && onVideo) {
-      onVideo(product.id, front.image, front.mime || "image/png", kind);
+    // Generate the first time, or re-render when the requested quality (HD/Lite)
+    // differs from what we already have cached for this scene.
+    const existing = clips[kind];
+    const needsRender = !existing || !!existing.hd !== hd;
+    if (needsRender && videoLoadingKind !== kind && front && onVideo) {
+      onVideo(product.id, front.image, front.mime || "image/png", kind, hd);
     }
   };
 
@@ -420,7 +424,28 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
         {/* Bring it to life — 360° spin + curated scene videos */}
         {anyDone && (
           <div className="tryon-scenes-wrap">
-            <p className="tryon-scenes-label">✨ Bring it to life</p>
+            <div className="tryon-scenes-head">
+              <p className="tryon-scenes-label">✨ Bring it to life</p>
+              <button
+                type="button"
+                className={`tryon-hd-toggle${hd ? " on" : ""}`}
+                role="switch"
+                aria-checked={hd}
+                onClick={() => {
+                  const next = !hd;
+                  setHd(next);
+                  // Re-render the scene in view at the new quality on demand.
+                  const cur = clips[selectedView];
+                  if (VIDEO_KEYS.includes(selectedView) && front && onVideo &&
+                      videoLoadingKind !== selectedView && (!cur || !!cur.hd !== next)) {
+                    onVideo(product.id, front.image, front.mime || "image/png", selectedView, next);
+                  }
+                }}
+                title="HD is sharper but slower and costs more"
+              >
+                HD {hd ? "on" : "off"}
+              </button>
+            </div>
             <div className="tryon-scenes" role="tablist" aria-label="Videos and scenes">
               {VIDEO_KINDS.map(({ key, label, emoji }) => {
                 const ready = !!clips[key];
