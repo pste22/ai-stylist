@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import SizeAdvice from "./SizeAdvice.jsx";
 
 const CATEGORY_EMOJI = {
   dresses: "👗", tops: "👚", bottoms: "👖", outerwear: "🧥",
@@ -41,7 +42,7 @@ function hiResUrl(url) {
   return url.replace(/\._SL\d+_/, "._SL1200_");
 }
 
-export default function ProductQuickView({ product, loved, inCart, onLove, onBuy, onAddToCart, onClose }) {
+export default function ProductQuickView({ product, loved, inCart, onLove, onBuy, onAddToCart, onClose, prefs, onSetSize }) {
   const [cropIdx, setCropIdx] = useState(0);
   const [zoomed, setZoomed]   = useState(false);
   const panelRef = useRef(null);
@@ -135,6 +136,8 @@ export default function ProductQuickView({ product, loved, inCart, onLove, onBuy
             </span>
             <strong className="qv-price">{formatPrice(product.price, product.currency)}</strong>
           </div>
+
+          <SizeAdvice product={product} prefs={prefs} onSetSize={onSetSize} />
 
           <div className="qv-actions">
             <button

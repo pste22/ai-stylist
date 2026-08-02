@@ -1154,9 +1154,33 @@ button.primary.stop { background: var(--accent); }
 .tryon-scene-still-wrap .tryon-zoom-hint {
   background: rgba(124,58,237,.7);
 }
+.tryon-preview-note {
+  margin: .35rem 0 0; font-size: .72rem; color: var(--ink-3); font-style: italic;
+}
 .tryon-stale-nudge {
   margin: 0 0 .4rem; font-size: .8rem; color: var(--ink-2); text-align: center;
 }
+/* ── Size Advisor ── */
+.size-advice {
+  display: flex; align-items: flex-start; gap: .5rem;
+  background: var(--bg, #f7f5f2); border: 1px solid var(--border);
+  border-radius: 12px; padding: .6rem .75rem; margin: .5rem 0;
+  text-align: left;
+}
+.size-advice--fitted { border-color: color-mix(in srgb, #e8824a 40%, transparent); background: color-mix(in srgb, #e8824a 8%, transparent); }
+.size-advice--relaxed { border-color: color-mix(in srgb, #4a90e8 40%, transparent); background: color-mix(in srgb, #4a90e8 8%, transparent); }
+.size-advice-icon { font-size: 1rem; line-height: 1.3; flex-shrink: 0; }
+.size-advice-text { margin: 0; font-size: .82rem; line-height: 1.4; color: var(--ink); }
+.size-advice-text strong { font-weight: 800; }
+.size-advice--pick { flex-direction: column; gap: .45rem; }
+.size-advice-chips { display: flex; flex-wrap: wrap; gap: .35rem; }
+.size-advice-chip {
+  font: inherit; font-size: .8rem; font-weight: 700; cursor: pointer;
+  min-width: 40px; padding: .35rem .6rem; border-radius: var(--r-pill, 999px);
+  border: 1.5px solid var(--border); background: var(--surface); color: var(--ink);
+  transition: all .12s;
+}
+.size-advice-chip:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
 .tryon-stale-link {
   background: none; border: none; padding: 0; font: inherit;
   color: var(--accent); font-weight: 700; cursor: pointer; text-decoration: underline;

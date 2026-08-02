@@ -1271,10 +1271,16 @@ export default function App() {
   const [vsCatalogNote, setVsCatalogNote] = useState(null);
   const { items: cartItems, addItem: addToCart, addItems: addAllToCart, removeItem: removeFromCart, clearCart, inCart } = useCart();
   const { photo: savedPhoto, savePhoto, clearPhoto } = usePhotoProfile();
-  const effectivePrefs = useMemo(
-    () => user ? prefs : { ...(prefs || {}), pin_code: guestPinCode },
-    [user, prefs, guestPinCode]
-  );
+  // Sizes set inline (Size Advisor) — persisted for logged-in users, in-memory for guests.
+  const [sizeOverride, setSizeOverride] = useState({});
+  const effectivePrefs = useMemo(() => {
+    const base = user ? (prefs || {}) : { ...(prefs || {}), pin_code: guestPinCode };
+    return { ...base, ...sizeOverride };
+  }, [user, prefs, guestPinCode, sizeOverride]);
+  const setUserSize = (field, value) => {
+    setSizeOverride((o) => ({ ...o, [field]: value }));
+    if (user) updatePrefs({ [field]: value });
+  };
 
   const [reasonPickerProductId, setReasonPickerProductId] = useState(null);
   const [tryOnProduct, setTryOnProduct] = useState(null);
@@ -1723,6 +1729,8 @@ export default function App() {
           onBuy={buyClick}
           onAddToCart={addToCart}
           onClose={() => setQuickViewProduct(null)}
+          prefs={effectivePrefs}
+          onSetSize={setUserSize}
         />
       )}
       {showCart && (
@@ -1787,6 +1795,8 @@ export default function App() {
           onClearPhoto={clearPhoto}
           savedTryOn={savedTryOn}
           savedStale={savedTryOnStale}
+          userPrefs={effectivePrefs}
+          onSetSize={setUserSize}
         />
       )}
       {outfitAnatomy && (

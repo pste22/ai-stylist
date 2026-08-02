@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import SizeAdvice from "./SizeAdvice.jsx";
 
 const VIEW_ORDER = ["front", "side", "back"];
 const VIEW_LABEL = { front: "Front", side: "Side", back: "Back" };
@@ -133,7 +134,7 @@ function SilhouetteSVG() {
 export default function TryOnModal({ product, onClose, onTryOn, result, loading, error,
                                      onVideo, video, videoLoadingKind, videoError,
                                      savedPhoto, onSavePhoto, onClearPhoto,
-                                     savedTryOn, savedStale }) {
+                                     savedTryOn, savedStale, userPrefs, onSetSize }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -282,6 +283,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           <p className="tryon-subtitle">
             See how the {product.name?.split(" ").slice(0, 4).join(" ")} looks on you.
           </p>
+          <p className="tryon-preview-note">✨ AI style preview — shows the look, not exact fit</p>
         </div>
 
         {anyDone && isVideoView ? (
@@ -467,6 +469,8 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
               Made with your old photo — <button className="tryon-stale-link" onClick={() => fileRef.current?.click()}>refresh with your current one?</button>
             </p>
           )}
+
+          <SizeAdvice product={product} prefs={userPrefs} onSetSize={onSetSize} />
 
           <input
             ref={fileRef}
