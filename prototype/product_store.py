@@ -60,25 +60,46 @@ def _db():
 
 def _load_catalog_from_db() -> list[dict]:
     """Fetch all active products from Supabase (bypasses the default 1000-row page cap)."""
+    from product_facets import enrich_catalog
+
     all_products: list[dict] = []
     page_size = 1000
     start = 0
+    # Prefer brand/facets when migrate_product_facets.sql has been applied.
+    select_full = (
+        "id,source,asin,name,category,color,price,style,gender,image_url,"
+        "affiliate_url,partner_tag,created_at,brand,facets"
+    )
+    select_basic = (
+        "id,source,asin,name,category,color,price,style,gender,image_url,"
+        "affiliate_url,partner_tag,created_at"
+    )
+    select_cols = select_full
     while True:
-        result = (
-            _db()
-            .table("products")
-            .select("id,source,asin,name,category,color,price,style,gender,image_url,affiliate_url,partner_tag")
-            .eq("is_active", True)
-            .order("name")
-            .range(start, start + page_size - 1)
-            .execute()
-        )
+        try:
+            result = (
+                _db()
+                .table("products")
+                .select(select_cols)
+                .eq("is_active", True)
+                .order("name")
+                .range(start, start + page_size - 1)
+                .execute()
+            )
+        except Exception:
+            if select_cols == select_full:
+                select_cols = select_basic
+                start = 0
+                all_products = []
+                continue
+            raise
         page = result.data or []
         all_products.extend(page)
         if len(page) < page_size:
             break
         start += page_size
-    print(f"[product_store] catalog loaded: {len(all_products)} active products")
+    all_products = enrich_catalog(all_products)
+    print(f"[product_store] catalog loaded: {len(all_products)} active products (faceted)")
     return all_products
 
 
@@ -112,9 +133,10 @@ def _fallback_local() -> list[dict]:
     """Load affiliate_products.json as a last-resort fallback."""
     import json
     from pathlib import Path
+    from product_facets import enrich_catalog
     p = Path(__file__).parent / "data" / "affiliate_products.json"
     if p.exists():
-        return json.loads(p.read_text())
+        return enrich_catalog(json.loads(p.read_text()))
     return []
 
 
@@ -129,6 +151,8 @@ def search_products(
     gender: str | None = None,
     max_price: float | None = None,
     limit: int = 8,
+    filters: dict | None = None,
+    offset: int = 0,
 ) -> list[dict]:
     """Search the in-memory catalog.  All filters are AND-combined.
 
@@ -138,10 +162,19 @@ def search_products(
         gender:     women | men | unisex.  'unisex' items match all gender queries.
         max_price:  Upper price bound (inclusive).
         limit:      Max results to return.
+        filters:    Optional Zara-style facet dict (brand, colour, fit, …).
+        offset:     Skip first N matches (browse pagination).
 
     Returns list of product dicts with the same schema as the products table.
     """
+    from product_facets import filter_catalog, product_matches
+
     catalog = _get_catalog()
+    facet_filters = dict(filters or {})
+    if category:
+        facet_filters["category"] = category
+    if max_price is not None:
+        facet_filters["max_price"] = max_price
 
     # Normalise style to a set
     style_set: set[str] = set()
@@ -150,27 +183,44 @@ def search_products(
     elif style:
         style_set = {s.lower() for s in style}
 
-    results: list[dict] = []
-    for p in catalog:
-        if category and p.get("category") != category:
-            continue
-        if gender:
-            pg = (p.get("gender") or "unisex").lower()
-            if pg != "unisex" and pg != gender.lower():
-                continue
-        if max_price is not None:
-            pp = p.get("price")
-            if pp is not None and float(pp) > max_price:
-                continue
-        if style_set:
-            product_styles = {s.lower() for s in (p.get("style") or [])}
-            if not style_set.intersection(product_styles):
-                continue
-        results.append(p)
-        if len(results) >= limit:
-            break
+    # When only classic args are used (voice/spotlight), keep prior semantics.
+    if not facet_filters and not style_set and not gender:
+        return catalog[offset: offset + limit] if limit else catalog
 
-    return results
+    if style_set or gender:
+        narrowed = []
+        for p in catalog:
+            if not product_matches(p, facet_filters):
+                continue
+            if gender:
+                pg = (p.get("gender") or "unisex").lower()
+                if pg != "unisex" and pg != gender.lower():
+                    continue
+            if style_set:
+                product_styles = {s.lower() for s in (p.get("style") or [])}
+                if not style_set.intersection(product_styles):
+                    continue
+            narrowed.append(p)
+        return narrowed[offset: offset + limit]
+
+    matched, _total = filter_catalog(catalog, facet_filters, limit=limit, offset=offset)
+    return matched
+
+
+def browse_products(
+    filters: dict | None = None,
+    *,
+    limit: int = 24,
+    offset: int = 0,
+) -> tuple[list[dict], int, dict]:
+    """Faceted browse: products + total + available filter options."""
+    from product_facets import facet_options, filter_catalog
+
+    catalog = _get_catalog()
+    filters = filters or {}
+    matched, total = filter_catalog(catalog, filters, limit=limit, offset=offset)
+    options = facet_options(catalog, filters)
+    return matched, total, options
 
 
 def vector_search(

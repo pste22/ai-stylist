@@ -1,48 +1,111 @@
+import { useEffect, useState } from "react";
+
+/**
+ * Zara-inspired first screen: full-bleed editorial photo + oversized brand.
+ * Auth is a secondary sheet so the hero stays one clean composition.
+ */
 export default function LoginScreen({ onGoogle, onFacebook, onGithub, onGuest }) {
+  const [showAuth, setShowAuth] = useState(false);
+
+  useEffect(() => {
+    if (!showAuth) return;
+    const onKey = (e) => { if (e.key === "Escape") setShowAuth(false); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [showAuth]);
+
   return (
-    <div className="login-screen">
-      <div className="login-card">
+    <div className="mira-home">
+      <picture className="mira-home-media">
+        <source media="(max-width: 720px)" srcSet="/hero-home-sm.jpg" />
+        <img
+          className="mira-home-img"
+          src="/hero-home.jpg"
+          alt=""
+          width={1600}
+          height={900}
+          fetchPriority="high"
+          decoding="async"
+        />
+      </picture>
 
-        {/* ── Branding ── */}
-        <div className="login-brand">
-          <div className="login-avatar-ring">
-            <div className="login-avatar-face">
-              <div className="login-eyes">
-                <span /><span />
-              </div>
-              <div className="login-smile" />
-            </div>
-          </div>
-          <h1 className="login-title">Meet Mira</h1>
-          <p className="login-sub">Your personal AI stylist — sign in to save your picks and get style advice that remembers you.</p>
-        </div>
-
-        {/* ── OAuth buttons ── */}
-        <div className="login-actions">
-          <button className="oauth-btn oauth-github" onClick={onGithub}>
-            <GithubIcon />
-            Continue with GitHub
-          </button>
-          <button className="oauth-btn oauth-google" onClick={onGoogle}>
-            <GoogleIcon />
-            Continue with Google
-          </button>
-          <button className="oauth-btn oauth-facebook" onClick={onFacebook}>
-            <FacebookIcon />
-            Continue with Facebook
-          </button>
-        </div>
-
-        <button className="login-guest-btn" onClick={onGuest}>
-          Browse without signing in →
+      <header className="mira-home-bar">
+        <button
+          type="button"
+          className="mira-home-menu"
+          aria-label="Menu"
+          onClick={() => setShowAuth(true)}
+        >
+          <span />
+          <span />
         </button>
+        <nav className="mira-home-nav" aria-label="Account">
+          <button type="button" className="mira-home-nav-link" onClick={() => setShowAuth(true)}>
+            Log in
+          </button>
+          <button type="button" className="mira-home-nav-link" onClick={onGuest}>
+            Enter
+          </button>
+        </nav>
+      </header>
 
-        <p className="login-legal">
-          By signing in you agree to our{" "}
-          <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
-          We never post on your behalf.
-        </p>
+      <div className="mira-home-stage">
+        <p className="mira-home-line">Your AI stylist</p>
+        <h1 className="mira-home-brand" aria-label="Mira">MIRA</h1>
+        <div className="mira-home-cta">
+          <button type="button" className="mira-home-enter" onClick={onGuest}>
+            Start styling
+          </button>
+        </div>
       </div>
+
+      {showAuth && (
+        <div
+          className="mira-home-auth"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Sign in"
+          onClick={(e) => { if (e.target === e.currentTarget) setShowAuth(false); }}
+        >
+          <div className="mira-home-auth-panel">
+            <button
+              type="button"
+              className="mira-home-auth-close"
+              aria-label="Close"
+              onClick={() => setShowAuth(false)}
+            >
+              ✕
+            </button>
+            <p className="mira-home-auth-eyebrow">✦ Mira</p>
+            <h2 className="mira-home-auth-title">Sign in</h2>
+            <p className="mira-home-auth-sub">
+              Save picks, try-ons, and a stylist that remembers you.
+            </p>
+            <div className="login-actions">
+              <button className="oauth-btn oauth-github" onClick={onGithub}>
+                <GithubIcon />
+                Continue with GitHub
+              </button>
+              <button className="oauth-btn oauth-google" onClick={onGoogle}>
+                <GoogleIcon />
+                Continue with Google
+              </button>
+              <button className="oauth-btn oauth-facebook" onClick={onFacebook}>
+                <FacebookIcon />
+                Continue with Facebook
+              </button>
+            </div>
+            <button className="login-guest-btn" onClick={onGuest}>
+              Browse without signing in →
+            </button>
+            <p className="login-legal">
+              By signing in you agree to our{" "}
+              <a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+              We never post on your behalf.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

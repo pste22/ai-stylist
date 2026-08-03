@@ -86,6 +86,15 @@ create table if not exists products (
   updated_at    timestamptz default now()
 );
 
+-- Faceted browse (Zara-style filters). Idempotent for existing projects.
+alter table products add column if not exists brand text;
+alter table products add column if not exists facets jsonb not null default '{}'::jsonb;
+create index if not exists idx_products_brand
+  on products (brand)
+  where is_active = true and brand is not null;
+create index if not exists idx_products_facets_gin
+  on products using gin (facets jsonb_path_ops);
+
 -- Composite index: the most common filter is (category, gender) + price sort
 create index if not exists idx_products_cat_gender
   on products(category, gender)

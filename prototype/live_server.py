@@ -68,9 +68,12 @@ from festival_calendar import festival_greeting_line, upcoming_festival  # noqa:
 # Ground the voice on the ACTIVE source (env PRODUCT_SOURCE: local / curated / amazon),
 # not just the bundled demo catalog — so curated SiteStripe / PA-API items Mira can
 # actually earn on flow straight into the spoken conversation. See docs/10-sourcing.
+from product_facets import enrich_catalog as _enrich_catalog  # noqa: E402
+
 _SOURCE = get_source()
 # Full catalog for "Show 10 more" paging — never put all of this in the AI prompt.
-_CATALOG = _SOURCE.search(limit=5000)
+# Facet labels are attached once so /api/browse stays sub-ms in-memory.
+_CATALOG = _enrich_catalog(_SOURCE.search(limit=5000))
 # Curated spotlight (≤60 products, ~5 per category) for the grounding prompt so
 # Mira has focused, speakable recommendations without a 40k-token product dump.
 _SPOTLIGHT_PER_CAT = 6
@@ -2513,32 +2516,82 @@ async def process_request(connection, request):
         resp = connection.respond(200 if healthy else 503, body)
         resp.headers["Content-Type"] = "application/json"
         return resp
-    if request.path.startswith("/api/browse"):
+    if request.path.startswith("/api/browse") or request.path.startswith("/api/filters"):
         from urllib.parse import urlparse, parse_qs
+        from product_facets import facet_options, filter_catalog
+
         parsed = urlparse(request.path)
         params = parse_qs(parsed.query)
-        cat = (params.get("category", [""])[0]).strip().lower()
-        limit = min(int(params.get("limit", ["6"])[0]), 20)
-        exclude_raw = params.get("exclude", [""])[0]
-        exclude_ids = set(exclude_raw.split(",")) - {""}
 
+        def _one(key: str, default: str = "") -> str:
+            return (params.get(key, [default])[0] or default).strip()
+
+        filters = {
+            "category": _one("category"),
+            "sort": _one("sort", "featured"),
+            "brand": _one("brand"),
+            "colour": _one("colour") or _one("color"),
+            "material": _one("material"),
+            "size": _one("size"),
+            "price": _one("price"),
+            "specialty_size": _one("specialty_size"),
+            "collection": _one("collection"),
+            "length": _one("length"),
+            "pattern": _one("pattern"),
+            "campaigns": _one("campaigns"),
+            "fit": _one("fit"),
+            "shape": _one("shape"),
+            "collar": _one("collar"),
+            "occasion": _one("occasion"),
+            "product_standard": _one("product_standard"),
+            "delivery": _one("delivery"),
+            "new_in": _one("new_in"),
+            "multipack": _one("multipack"),
+            "adaptive": _one("adaptive"),
+            "licensed": _one("licensed"),
+        }
+        # Drop empties so facet_options ignores inactive keys
+        filters = {k: v for k, v in filters.items() if v not in ("", None)}
+
+        catalog = _CATALOG
+
+        if request.path.startswith("/api/filters"):
+            body = json.dumps({
+                "total": len(catalog),
+                "filters": facet_options(catalog, filters),
+            })
+            resp = connection.respond(200, body)
+            resp.headers["Content-Type"] = "application/json"
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            resp.headers["Cache-Control"] = "public, max-age=30"
+            return resp
+
+        limit = min(int(_one("limit", "24") or 24), 48)
+        offset = max(int(_one("offset", "0") or 0), 0)
+        exclude_ids = set(_one("exclude").split(",")) - {""}
+
+        matched, total = filter_catalog(catalog, filters, limit=limit + len(exclude_ids), offset=offset)
         batch = []
-        total_in_cat = 0
-        for p in _CATALOG:
-            if p.get("category") != cat:
-                continue
-            total_in_cat += 1
+        for p in matched:
             if p["id"] in exclude_ids:
                 continue
-            if len(batch) < limit:
-                batch.append({
-                    "id": p["id"], "name": p["name"],
-                    "category": p["category"], "color": p.get("color"),
-                    "price": p.get("price"),
-                    "image_url": p.get("image_url"),
-                    "affiliate_url": _affiliate_url(p),
-                })
-        resp_data = json.dumps({"products": batch, "show_more": total_in_cat > limit + len(exclude_ids)})
+            batch.append({
+                "id": p["id"], "name": p["name"],
+                "category": p["category"], "color": p.get("color"),
+                "price": p.get("price"),
+                "brand": p.get("brand"),
+                "facets": p.get("facets") or {},
+                "image_url": p.get("image_url"),
+                "affiliate_url": _affiliate_url(p),
+            })
+            if len(batch) >= limit:
+                break
+        resp_data = json.dumps({
+            "products": batch,
+            "total": total,
+            "show_more": offset + len(batch) < total,
+            "filters": facet_options(catalog, filters),
+        })
         resp = connection.respond(200, resp_data)
         resp.headers["Content-Type"] = "application/json"
         resp.headers["Access-Control-Allow-Origin"] = "*"

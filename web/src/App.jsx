@@ -13,6 +13,8 @@ import { track, identify } from "./analytics.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { ReasonPicker } from "./ReasonPicker.jsx";
 
+const CatalogFilters = lazy(() => import("./CatalogFilters.jsx"));
+
 // Modal / rare flows — keep off the critical path so first paint stays light.
 const OnboardingFlow = lazy(() => import("./OnboardingFlow.jsx"));
 const EventBriefFlow = lazy(() => import("./EventBriefFlow.jsx"));
@@ -854,32 +856,6 @@ function ModeToggle({ textMode, connected, quality, onVoice, onText }) {
   );
 }
 
-// ─── Chat welcome / empty state — shown before first message ─────────────────
-const FILTER_CATS = [
-  { key: "all",       label: "All",        emoji: "✦" },
-  { key: "dresses",   label: "Dresses",    emoji: "👗" },
-  { key: "tops",      label: "Tops",       emoji: "👚" },
-  { key: "bottoms",   label: "Bottoms",    emoji: "👖" },
-  { key: "bags",      label: "Bags",       emoji: "👜" },
-  { key: "shoes",     label: "Shoes",      emoji: "👟" },
-  { key: "outerwear", label: "Outerwear",  emoji: "🧥" },
-];
-
-function FilterBar({ active, onChange, onFetchCategory }) {
-  return (
-    <div className="filter-bar">
-      {FILTER_CATS.map(({ key, label, emoji }) => (
-        <button
-          key={key}
-          className={`filter-chip${active === key ? " active" : ""}`}
-          onClick={() => { onChange(key); if (key !== "all") onFetchCategory(key); }}
-        >
-          <span>{emoji}</span> {label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 function YouMightLike({ data, onBuy, onLove, loved, onAddToCart, inCart, onDismiss }) {
   if (!data?.items?.length) return null;
@@ -1014,48 +990,50 @@ function ChatWelcome({ onOccasion, onEventBrief, textMode }) {
   const [showMore, setShowMore] = useState(false);
   const chips = showMore ? OCCASION_CHIPS : PRIMARY_OCCASIONS;
   return (
-    <div className="hero-welcome">
-      <div className="hero-figure" aria-hidden="true">
-        <div className="hero-fig-glow" />
-        <div className="hero-fig-head" />
-        <div className="hero-fig-body" />
-        <div className="hero-fig-hair" />
-      </div>
+    <div className="hero-welcome hero-welcome--photo">
+      <picture className="hero-welcome-media" aria-hidden="true">
+        <source media="(max-width: 720px)" srcSet="/hero-home-sm.jpg" />
+        <img
+          className="hero-welcome-img"
+          src="/hero-home.jpg"
+          alt=""
+          width={1600}
+          height={900}
+          loading="eager"
+          decoding="async"
+        />
+      </picture>
 
-      <div className="hero-content">
-        <span className="hero-eyebrow">✦ Mira</span>
-        <h1 className="hero-heading">
-          Tell Mira your<br/>occasion
-        </h1>
-        <p className="hero-sub">One tap — tailored picks in seconds.</p>
+      <div className="hero-content hero-content--over">
+        <h1 className="hero-brand-mark" aria-label="Mira">MIRA</h1>
+        <p className="hero-sub hero-sub--light">Tell Mira your occasion</p>
 
-        <div className="occasion-chips">
-          {chips.map(({ emoji, label, prompt }) => (
+        <div className="occasion-chips occasion-chips--editorial">
+          {chips.map(({ label, prompt }) => (
             <button
               key={label}
-              className="occasion-chip"
+              className="occasion-chip occasion-chip--editorial"
               onClick={() => onOccasion(prompt)}
             >
-              <span className="occasion-chip-emoji">{emoji}</span>
-              <span className="occasion-chip-label">{label}</span>
+              {label}
             </button>
           ))}
         </div>
 
         <div className="hero-secondary-actions">
           {!showMore && (
-            <button type="button" className="hero-more-occasions" onClick={() => setShowMore(true)}>
+            <button type="button" className="hero-more-occasions hero-more-occasions--light" onClick={() => setShowMore(true)}>
               More occasions
             </button>
           )}
           {onEventBrief && (
-            <button type="button" className="hero-more-occasions" onClick={onEventBrief}>
+            <button type="button" className="hero-more-occasions hero-more-occasions--light" onClick={onEventBrief}>
               Plan an event
             </button>
           )}
         </div>
 
-        <p className="hero-cta-hint">
+        <p className="hero-cta-hint hero-cta-hint--light">
           {textMode ? "or type below" : "or tap Start chatting"}
         </p>
       </div>
@@ -1260,6 +1238,7 @@ export default function App() {
   const [quickViewProduct, setQuickViewProduct] = useState(null);
   const [showCart, setShowCart]           = useState(false);
   const [activeFilter, setActiveFilter]   = useState("all");
+  const [filterResults, setFilterResults] = useState(null); // { products, total } from faceted browse
   // Defer discovery shelves so the occasion CTA paints first.
   const [showDiscovery, setShowDiscovery] = useState(false);
   const pendingOccasionRef = useRef(null);
@@ -1621,13 +1600,89 @@ export default function App() {
           </div>
         )}
 
-        <FilterBar
-          active={activeFilter}
-          onChange={setActiveFilter}
-          onFetchCategory={browseCategory}
-        />
+        <Suspense fallback={<div className="filter-bar" />}>
+          <CatalogFilters
+            category={activeFilter}
+            onCategory={setActiveFilter}
+            onResults={(data) => {
+              if (!data) { setFilterResults(null); return; }
+              setFilterResults({
+                products: data.products || [],
+                total: data.total ?? (data.products || []).length,
+                summary: data.summary || null,
+                showMore: !!data.show_more,
+                reachedEnd: !!data.reachedEnd,
+                onLoadMore: data.onLoadMore || null,
+              });
+              // Jump only on a fresh filter (not when appending pages).
+              if (!data.append) {
+                requestAnimationFrame(() => {
+                  threadRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
+                });
+              }
+            }}
+          />
+        </Suspense>
 
         <div className="chat-thread" ref={threadRef}>
+          {filterResults && (
+            <div className="cf-results" id="cf-results-panel">
+              <div className="cf-results-head">
+                <div>
+                  <p className="cf-results-title">
+                    Showing {filterResults.products.length.toLocaleString("en-IN")}
+                    {filterResults.total != null ? ` of ${filterResults.total.toLocaleString("en-IN")}` : ""} matching items
+                  </p>
+                  {filterResults.summary && (
+                    <p className="cf-results-summary">{filterResults.summary}</p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="cf-results-close"
+                  onClick={() => { setFilterResults(null); setActiveFilter("all"); }}
+                >✕</button>
+              </div>
+              {filterResults.products.length > 0 ? (
+                <>
+                  <ProductGrid
+                    products={filterResults.products}
+                    loved={loved}
+                    onLove={handleLove}
+                    onBuy={buyClick}
+                    onSelect={setQuickViewProduct}
+                    inCart={inCart}
+                    onAddToCart={addToCart}
+                    showAll
+                    userSize={effectivePrefs?.top_size || effectivePrefs?.bottom_size || null}
+                    onTryOn={openTryOn}
+                  />
+                  {filterResults.showMore && filterResults.onLoadMore && (
+                    <div className="cf-end-actions">
+                      <button
+                        type="button"
+                        className="show-more-btn"
+                        onClick={() => filterResults.onLoadMore()}
+                      >
+                        Show more →
+                      </button>
+                    </div>
+                  )}
+                  {filterResults.reachedEnd && (
+                    <p className="cf-end-note" role="status">
+                      You’ve reached the end — no more products to show.
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p className="cf-results-empty">No items match these filters. Clear one filter and try again.</p>
+              )}
+            </div>
+          )}
+
+          {/* When filters are active, hide unfiltered discovery so results aren't ambiguous */}
+          {!filterResults && (
+            <>
           {/* Visual search — loading / results / empty */}
           {vsLoading && (
             <div className="vs-loading">
@@ -1705,6 +1760,8 @@ export default function App() {
                   onTryOn={openTryOn} />
           )}
           {state === "thinking" && <ThinkingBubble />}
+            </>
+          )}
           {/* Scroll anchor — always at the very bottom of thread content */}
           <div ref={msgsEndRef} style={{ height: 0 }} />
         </div>
@@ -1715,9 +1772,16 @@ export default function App() {
             dbg: connected={String(connected)} canShowMore={String(canShowMore)}
           </div>
         )}
-        {canShowMore && (
+        {!filterResults && canShowMore && (
           <div className="show-more-strip">
             <button className="show-more-btn" onClick={showMore}>Show 3 more →</button>
+          </div>
+        )}
+        {!filterResults && !canShowMore && products.length > 0 && (
+          <div className="show-more-strip">
+            <p className="cf-end-note" role="status">
+              You’ve reached the end — no more products to show.
+            </p>
           </div>
         )}
 
