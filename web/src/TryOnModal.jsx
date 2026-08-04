@@ -135,7 +135,8 @@ function SilhouetteSVG() {
 export default function TryOnModal({ product, onClose, onTryOn, result, loading, error,
                                      onVideo, video, videoLoadingKind, videoError,
                                      savedPhoto, onSavePhoto, onClearPhoto,
-                                     savedTryOn, savedStale, userPrefs, onSetSize }) {
+                                     savedTryOn, savedStale, userPrefs, onSetSize,
+                                     onCompleteLook }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -511,7 +512,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             <p className="tryon-magic-text">Styling it on you… this takes a few seconds 🪄</p>
           ) : anyDone ? (
             angleKeys.every((v) => views[v] || failed[v]) ? (
-              <p className="tryon-magic-text">Here's how it looks — from every angle! ✨</p>
+              <p className="tryon-magic-text">That's the upgrade — you look amazing in this ✨</p>
             ) : (
               <p className="tryon-magic-text">Front's ready — spinning up the other angles… ✨</p>
             )
@@ -564,6 +565,15 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             {canShare && (
               <button className="tryon-share-btn" type="button" onClick={handleShare} disabled={sharing}>
                 {sharing ? "Preparing…" : "Share ✦"}
+              </button>
+            )}
+            {anyDone && onCompleteLook && (
+              <button
+                className="tryon-share-btn"
+                type="button"
+                onClick={() => { onCompleteLook(product); onClose?.(); }}
+              >
+                Complete the look
               </button>
             )}
             {savedPhoto?.image && !anyDone && !loading && (

@@ -12,3 +12,6 @@ models/
 
 # Spike audio recordings (large binaries)
 prototype/spikes/_recordings/
+
+# Shopper functional eval reports (regenerated locally)
+prototype/functional/reports/

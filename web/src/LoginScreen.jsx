@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import ForBrands from "./ForBrands.jsx";
 
 /**
  * Zara-inspired first screen: full-bleed editorial photo + oversized brand.
@@ -6,6 +7,7 @@ import { useEffect, useState } from "react";
  */
 export default function LoginScreen({ onGoogle, onFacebook, onGithub, onGuest }) {
   const [showAuth, setShowAuth] = useState(false);
+  const [showBrands, setShowBrands] = useState(false);
 
   useEffect(() => {
     if (!showAuth) return;
@@ -40,6 +42,9 @@ export default function LoginScreen({ onGoogle, onFacebook, onGithub, onGuest })
           <span />
         </button>
         <nav className="mira-home-nav" aria-label="Account">
+          <button type="button" className="mira-home-nav-link" onClick={() => setShowBrands(true)}>
+            For brands
+          </button>
           <button type="button" className="mira-home-nav-link" onClick={() => setShowAuth(true)}>
             Log in
           </button>
@@ -105,6 +110,13 @@ export default function LoginScreen({ onGoogle, onFacebook, onGithub, onGuest })
             </p>
           </div>
         </div>
+      )}
+
+      {showBrands && (
+        <ForBrands
+          onClose={() => setShowBrands(false)}
+          onStartDemo={() => { setShowBrands(false); onGuest?.(); }}
+        />
       )}
     </div>
   );

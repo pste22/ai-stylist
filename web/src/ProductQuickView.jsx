@@ -1,5 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import SizeAdvice from "./SizeAdvice.jsx";
+import ReviewComposer from "./ReviewComposer.jsx";
+import AffiliateDisclosure from "./AffiliateDisclosure.jsx";
+import { formatFitLabel, useProductReviews } from "./useProductReviews.js";
+import { shopLabel, trackedAffiliateUrl } from "./retailer.js";
+import { hdProductImageUrl, isProductPhotoUrl } from "./imageUrl.js";
 
 const CATEGORY_EMOJI = {
   dresses: "👗", tops: "👚", bottoms: "👖", outerwear: "🧥",
@@ -24,32 +29,80 @@ function formatPrice(price, currency) {
   return isINR ? "₹" + num.toLocaleString("en-IN") : "$" + num.toLocaleString("en-US");
 }
 
-/* Simulate 4 different "angles" using object-position crops */
-const CROPS = [
-  { label: "Full",   pos: "center center", zoom: "1" },
-  { label: "Detail", pos: "center top",    zoom: "1.15" },
-  { label: "Mid",    pos: "center 40%",    zoom: "1.2" },
-  { label: "Hem",    pos: "center bottom", zoom: "1.15" },
+function formatCount(n) {
+  const num = Number(n) || 0;
+  if (num >= 1000) return `${(num / 1000).toFixed(num >= 10000 ? 0 : 1).replace(/\.0$/, "")}k`;
+  return String(num);
+}
+
+const ASK_CHIPS = [
+  { key: "suit", label: "Does this suit me?" },
+  { key: "wear", label: "When would I wear this?" },
+  { key: "pair", label: "What goes with it?" },
 ];
 
 function isRealPhoto(url) {
-  return url && (url.includes("m.media-amazon.com") || url.includes("images.pexels.com"));
+  return isProductPhotoUrl(url);
 }
 
-/* High-res Amazon URL swap: _SL500_ → _SL1200_ */
 function hiResUrl(url) {
-  if (!url) return url;
-  return url.replace(/\._SL\d+_/, "._SL1200_");
+  return hdProductImageUrl(url, { longest: 1600 });
 }
 
-export default function ProductQuickView({ product, loved, inCart, onLove, onBuy, onAddToCart, onClose, prefs, onSetSize }) {
-  const [cropIdx, setCropIdx] = useState(0);
+function Stars({ value, size = "md", interactive = false, onPick }) {
+  const n = Math.max(0, Math.min(5, Number(value) || 0));
+  const full = Math.floor(n);
+  const half = n - full >= 0.4 && n - full < 0.9;
+  return (
+    <span className={`qv-stars qv-stars--${size}${interactive ? " qv-stars--interactive" : ""}`} aria-label={`${n} out of 5`}>
+      {[1, 2, 3, 4, 5].map((i) => {
+        let cls = "qv-star";
+        if (i <= full) cls += " is-on";
+        else if (i === full + 1 && half) cls += " is-half";
+        return (
+          <button
+            key={i}
+            type="button"
+            className={cls}
+            disabled={!interactive}
+            onClick={() => interactive && onPick?.(i)}
+            aria-label={interactive ? `Rate ${i} stars` : undefined}
+            tabIndex={interactive ? 0 : -1}
+          >
+            ★
+          </button>
+        );
+      })}
+    </span>
+  );
+}
+
+export default function ProductQuickView({
+  product, loved, inCart, onLove, onBuy, onAddToCart, onClose, prefs, onSetSize, onAskMira,
+}) {
   const [zoomed, setZoomed]   = useState(false);
+  const [imgIdx, setImgIdx]   = useState(0);
+  const [writingReview, setWritingReview] = useState(false);
   const panelRef = useRef(null);
-  const hasPhoto = isRealPhoto(product.image_url);
-  const imgSrc   = hasPhoto ? hiResUrl(product.image_url) : null;
+  const gallery = (() => {
+    const raw = Array.isArray(product.image_urls) ? product.image_urls : [];
+    const urls = raw.filter(Boolean);
+    if (urls.length) return urls;
+    return product.image_url ? [product.image_url] : [];
+  })();
+  const activeUrl = gallery[Math.min(imgIdx, Math.max(gallery.length - 1, 0))] || product.image_url;
+  const hasPhoto = isRealPhoto(activeUrl);
+  const imgSrc   = hasPhoto ? hiResUrl(activeUrl) : null;
   const emoji    = CATEGORY_EMOJI[product.category] || "🛍️";
-  const crop     = CROPS[cropIdx];
+
+  const amazonRating = Number(product.rating) || 0;
+  const amazonCount  = Number(product.ratings_total) || 0;
+  const { reviews, aggregate, addReview } = useProductReviews(product.id);
+
+  useEffect(() => {
+    setImgIdx(0);
+    setZoomed(false);
+  }, [product.id]);
 
   useEffect(() => {
     function onKey(e) { if (e.key === "Escape") onClose(); }
@@ -70,14 +123,12 @@ export default function ProductQuickView({ product, loved, inCart, onLove, onBuy
       <div className="qv-panel" ref={panelRef}>
         <button className="qv-close" onClick={onClose} aria-label="Close">✕</button>
 
-        {/* ── Image area ── */}
-        <div className="qv-img-wrap">
+        <div className={`qv-img-wrap${zoomed ? " qv-img-wrap--zoomed" : ""}`}>
           {hasPhoto ? (
             <img
               className={`qv-img${zoomed ? " qv-img--zoomed" : ""}`}
               src={imgSrc}
               alt={product.name}
-              style={{ objectPosition: crop.pos, transform: zoomed ? `scale(${crop.zoom}) translate(0,5%)` : "scale(1)" }}
               onClick={() => setZoomed(v => !v)}
               title={zoomed ? "Click to zoom out" : "Click to zoom in"}
             />
@@ -87,12 +138,10 @@ export default function ProductQuickView({ product, loved, inCart, onLove, onBuy
             </div>
           )}
 
-          {/* Zoom hint */}
           {hasPhoto && !zoomed && (
             <span className="qv-zoom-hint" aria-hidden="true">🔍 Tap to zoom</span>
           )}
 
-          {/* Love button overlaid */}
           <button
             className={`qv-heart${loved ? " is-loved" : ""}`}
             onClick={() => onLove(product)}
@@ -102,32 +151,54 @@ export default function ProductQuickView({ product, loved, inCart, onLove, onBuy
           </button>
         </div>
 
-        {/* ── Crop thumbnails ── */}
-        {hasPhoto && (
-          <div className="qv-thumbs" role="tablist" aria-label="Image views">
-            {CROPS.map((c, i) => (
+        {gallery.length > 1 && (
+          <div className="qv-thumbs" role="tablist" aria-label="Product photos">
+            {gallery.slice(0, 8).map((url, i) => (
               <button
-                key={c.label}
-                className={`qv-thumb${i === cropIdx ? " qv-thumb--active" : ""}`}
-                onClick={() => { setCropIdx(i); setZoomed(false); }}
+                key={`${url}-${i}`}
+                type="button"
+                className={`qv-thumb${i === imgIdx ? " qv-thumb--active" : ""}`}
+                onClick={() => { setImgIdx(i); setZoomed(false); }}
                 role="tab"
-                aria-selected={i === cropIdx}
-                title={c.label}
+                aria-selected={i === imgIdx}
+                title={`Photo ${i + 1}`}
               >
-                <img
-                  src={imgSrc}
-                  alt={c.label}
-                  style={{ objectPosition: c.pos }}
-                />
+                <img src={hiResUrl(url)} alt="" loading="lazy" />
               </button>
             ))}
           </div>
         )}
 
-        {/* ── Product info ── */}
         <div className="qv-info">
           <span className="qv-cat-chip">{emoji} {product.category || "Fashion"}</span>
           <h2 className="qv-name">{product.name}</h2>
+
+          {/* Ratings row: Mira first-party, Amazon cold-start */}
+          <div className="qv-rating-row">
+            {aggregate ? (
+              <div className="qv-rating-block">
+                <Stars value={aggregate.avg} />
+                <span className="qv-rating-meta">
+                  <strong>{aggregate.avg.toFixed(1)}</strong>
+                  {" · "}
+                  {aggregate.count} Mira {aggregate.count === 1 ? "review" : "reviews"}
+                  {aggregate.topFit ? ` · ${formatFitLabel(aggregate.topFit)}` : ""}
+                </span>
+              </div>
+            ) : amazonRating > 0 ? (
+              <div className="qv-rating-block">
+                <Stars value={amazonRating} />
+                <span className="qv-rating-meta">
+                  <strong>{amazonRating.toFixed(1)}</strong>
+                  {amazonCount > 0 ? ` · ${formatCount(amazonCount)}` : ""}
+                  {" · "}
+                  <span className="qv-rating-src">Amazon</span>
+                </span>
+              </div>
+            ) : (
+              <p className="qv-rating-empty">No reviews yet — be the first</p>
+            )}
+          </div>
 
           <div className="qv-meta-row">
             <span className="qv-swatch-pill">
@@ -136,6 +207,25 @@ export default function ProductQuickView({ product, loved, inCart, onLove, onBuy
             </span>
             <strong className="qv-price">{formatPrice(product.price, product.currency)}</strong>
           </div>
+
+          {/* Ask Mira — product-scoped chat */}
+          {onAskMira && (
+            <div className="qv-ask">
+              <p className="qv-ask-label">Ask Mira</p>
+              <div className="qv-ask-chips">
+                {ASK_CHIPS.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    className="qv-ask-chip"
+                    onClick={() => onAskMira(product, c.key)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <SizeAdvice product={product} prefs={prefs} onSetSize={onSetSize} />
 
@@ -155,13 +245,58 @@ export default function ProductQuickView({ product, loved, inCart, onLove, onBuy
           </div>
           <a
             className="qv-shop-btn qv-shop-btn--full"
-            href={product.affiliate_url}
+            href={trackedAffiliateUrl(product)}
             target="_blank"
             rel="noopener noreferrer nofollow sponsored"
             onClick={() => onBuy?.(product)}
           >
-            Shop on Amazon →
+            {shopLabel(product)}
           </a>
+          <AffiliateDisclosure compact />
+
+          {/* Reviews section */}
+          <section className="qv-reviews" aria-label="Reviews">
+            <div className="qv-reviews-head">
+              <h3 className="qv-reviews-title">Reviews</h3>
+              {!writingReview && (
+                <button type="button" className="qv-reviews-write" onClick={() => setWritingReview(true)}>
+                  Write a review
+                </button>
+              )}
+            </div>
+
+            {writingReview ? (
+              <ReviewComposer
+                product={product}
+                onCancel={() => setWritingReview(false)}
+                onSubmit={(data) => {
+                  addReview(product.id, data);
+                  setWritingReview(false);
+                }}
+              />
+            ) : (
+              <>
+                {reviews.length === 0 ? (
+                  <p className="qv-reviews-empty">
+                    Share fit &amp; real photos — helps the next person decide.
+                  </p>
+                ) : (
+                  <ul className="qv-review-list">
+                    {reviews.slice(0, 5).map((r) => (
+                      <li key={r.id} className="qv-review-item">
+                        <div className="qv-review-item-top">
+                          <Stars value={r.stars} size="sm" />
+                          {r.fit && <span className="qv-review-fit">{formatFitLabel(r.fit)}</span>}
+                        </div>
+                        {r.text && <p className="qv-review-body">{r.text}</p>}
+                        {r.photo && <img className="qv-review-img" src={r.photo} alt="" />}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </>
+            )}
+          </section>
         </div>
       </div>
     </div>

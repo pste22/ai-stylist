@@ -3,17 +3,21 @@ Seed the products database with real Amazon fashion products.
 
 Supports two backends (auto-detected from .env):
   1. Rainforest API  — works immediately, no sales requirement
-                       Free trial = 100 requests ≈ 1 000 products
-  2. PA-API          — free but needs 10 qualifying sales in 30 days
+                       Free trial ≈ 100 requests (~1k products)
+                       Business $50/mo ≈ 5k requests — enough for ~20k SKUs
+  2. PA-API          — free but needs qualifying sales (often 10 / 30 days)
 
 Usage:
   cd prototype
-  python seed_from_amazon.py              # up to 1 000 products
-  python seed_from_amazon.py --limit 200  # smaller batch to test
-  python seed_from_amazon.py --dry-run    # print without writing to DB
-  python seed_from_amazon.py --replace    # clear existing amazon rows first
-  python seed_from_amazon.py --backend rainforest  # force Rainforest API
-  python seed_from_amazon.py --backend paapi       # force PA-API
+  python seed_from_amazon.py --limit 200                 # small test
+  python seed_from_amazon.py --limit 20000 --pages 5     # expand toward +20k
+  python seed_from_amazon.py --dry-run
+  python seed_from_amazon.py --backend rainforest
+  python seed_from_amazon.py --backend paapi
+
+Requires in prototype/.env:
+  SUPABASE_URL, SUPABASE_SECRET_KEY, AMAZON_PARTNER_TAG
+  + RAINFOREST_API_KEY  OR  AMAZON_ACCESS_KEY + AMAZON_SECRET_KEY
 """
 from __future__ import annotations
 
@@ -519,18 +523,62 @@ def _detect_backend() -> str:
     return "none"
 
 
-def _fetch(backend: str, query: str, sort_by: str = "average_review") -> list[dict]:
+def _fetch(
+    backend: str,
+    query: str,
+    *,
+    page: int = 1,
+    sort_by: str = "average_review",
+) -> list[dict]:
     if backend == "rainforest":
         from rainforest_products import search_products
-        return search_products(query, sort_by=sort_by)
+        return search_products(query, page=page, sort_by=sort_by)
     if backend == "paapi":
+        # PA-API SearchItems has no deep pagination here — page>1 returns []
+        if page > 1:
+            return []
         from amazon_pa_api import search_items
         return search_items(query)
     raise EnvironmentError("no-backend")
 
 
-def run(limit: int = 1000, dry_run: bool = False,
-        replace: bool = False, backend: str = "auto") -> None:
+def _load_existing_asins(sb) -> set[str]:
+    """Page through Supabase — select('*') caps around 1k rows otherwise."""
+    seen: set[str] = set()
+    page_size = 1000
+    start = 0
+    while True:
+        end = start + page_size - 1
+        res = sb.table("products").select("asin").range(start, end).execute()
+        rows = res.data or []
+        for r in rows:
+            if r.get("asin"):
+                seen.add(r["asin"])
+        if len(rows) < page_size:
+            break
+        start += page_size
+    return seen
+
+
+def _flush_batch(sb, batch: list[dict], dry_run: bool) -> int:
+    if not batch:
+        return 0
+    if dry_run:
+        return len(batch)
+    sb.table("products").upsert(batch, on_conflict="id").execute()
+    return len(batch)
+
+
+def run(
+    limit: int = 1000,
+    dry_run: bool = False,
+    replace: bool = False,
+    backend: str = "auto",
+    pages: int = 1,
+    min_price: float = 1500.0,
+    sleep_s: float = 1.2,
+    batch_size: int = 40,
+) -> None:
 
     from supabase import create_client
     sb  = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SECRET_KEY"])
@@ -541,109 +589,157 @@ def run(limit: int = 1000, dry_run: bool = False,
 
     if backend == "none":
         print("""
-❌  No product API credentials found.
+❌  No product API credentials found — cannot pull Amazon products yet.
 
-Choose one of these options:
+You already have ~1k SKUs in Supabase. To add ~20k MORE real Amazon affiliates:
 
-  Option A — Rainforest API (recommended, works immediately):
-    1. Sign up free at https://www.rainforestapi.com/
-       Free trial = 100 requests ≈ 1 000 products
+  Option A — Rainforest API (fastest path to 20k):
+    1. https://www.rainforestapi.com/  → start trial / Business plan
+       Free trial ≈ 100 requests (~1k products)
+       ~20k new SKUs needs ~2–2.5k search requests (pages × queries)
+       Business ($50/mo, 5k req) is enough for one expansion run
     2. Add to prototype/.env:
          RAINFOREST_API_KEY=your_key_here
-    3. Re-run:  python seed_from_amazon.py
+    3. Re-run:
+         .venv/bin/python seed_from_amazon.py --limit 20000 --pages 5
 
-  Option B — Amazon PA-API (free but needs 10 sales in 30 days):
-    1. Drive 10 qualifying purchases via your affiliate links
-    2. Return to https://associates.amazon.com → Tools → PA-API
-    3. Add credentials to prototype/.env:
-         AMAZON_ACCESS_KEY=...
-         AMAZON_SECRET_KEY=...
-    4. Re-run:  python seed_from_amazon.py
+  Option B — Amazon PA-API (free, sales-gated):
+    1. Qualify for API access (typically ~10 sales / 30 days)
+    2. Add AMAZON_ACCESS_KEY + AMAZON_SECRET_KEY to prototype/.env
+    3. Re-run (fewer unique SKUs per query — may need more query days)
 
-  Option C — Amazon Creators API (alternative free route):
-    1. Visit the Creators API link on your PA-API page
-    2. Follow their registration process
+Partner tag alone is NOT enough — Amazon will not let us invent ASINs.
 """)
         sys.exit(1)
 
+    pages = max(1, pages)
+    if backend == "paapi" and pages > 1:
+        print("Note: PA-API path only uses page 1 per query in this script.")
+        pages = 1
+
+    est_requests = len(QUERIES) * pages
     print(f"Backend: {backend.upper()}  |  Partner tag: {tag or '(none)'}")
+    print(f"Target new inserts: {limit}  |  pages/query: {pages}  |  "
+          f"max API calls ≈ {est_requests}  |  min price ₹{min_price:.0f}")
 
     if replace and not dry_run:
         print("Clearing existing amazon-source products…")
         sb.table("products").delete().eq("source", "amazon").execute()
 
-    existing   = sb.table("products").select("asin").execute()
-    seen_asins = {r["asin"] for r in (existing.data or []) if r.get("asin")}
-    print(f"Products already in DB: {len(seen_asins)}\n")
+    seen_asins = _load_existing_asins(sb)
+    print(f"Products already in DB (with ASIN): {len(seen_asins)}\n")
 
-    inserted = skipped = errors = 0
+    inserted = skipped = errors = requests_made = 0
+    batch: list[dict] = []
 
     for query, category, gender in QUERIES:
         if inserted >= limit:
             break
-        print(f"🔍  {query!r} → {category}/{gender}", flush=True)
-        try:
-            items = _fetch(backend, query, sort_by="average_review")
-        except EnvironmentError as e:
-            print(f"\n❌  {e}")
-            sys.exit(1)
-        except RuntimeError as e:
-            print(f"   API error: {e}")
-            errors += 1
-            time.sleep(3)
-            continue
-
-        for item in items:
+        for page in range(1, pages + 1):
             if inserted >= limit:
                 break
-            asin = item.get("asin", "")
-            if not asin or asin in seen_asins:
-                skipped += 1
-                continue
-            if not item.get("image_url"):
-                skipped += 1
-                continue
-            price = item.get("price", 0)
-            if not price or price < 1500:  # premium only — skip under ₹1,500
-                skipped += 1
+            print(f"🔍  {query!r}  p{page} → {category}/{gender}", flush=True)
+            try:
+                items = _fetch(backend, query, page=page, sort_by="average_review")
+                requests_made += 1
+            except EnvironmentError as e:
+                print(f"\n❌  {e}")
+                sys.exit(1)
+            except RuntimeError as e:
+                print(f"   API error: {e}")
+                errors += 1
+                time.sleep(max(3.0, sleep_s * 2))
                 continue
 
-            seen_asins.add(asin)
-            row = {
-                "id":            _make_id(asin),
-                "source":        "amazon",
-                "asin":          asin,
-                "name":          item["name"],
-                "category":      category,
-                "color":         _extract_color(item["name"]),
-                "price":         price,
-                "currency":      "INR",
-                "style":         [],
-                "gender":        gender,
-                "image_url":     item["image_url"],
-                "affiliate_url": item["affiliate_url"],
-                "partner_tag":   tag,
-                "is_active":     True,
-            }
-            if dry_run:
-                print(f"  DRY  {asin}  ₹{price:>8.0f}  {item['name'][:60]}")
-            else:
-                safe_row = {k: v for k, v in row.items()
-                            if k not in ("rating", "ratings_total")}
-                sb.table("products").upsert(safe_row, on_conflict="id").execute()
-                print(f"  ✓  {asin}  ₹{price:>8.0f}  {item['name'][:60]}")
-            inserted += 1
+            if not items:
+                print("   (empty page — stopping deeper pages for this query)")
+                break
 
-        time.sleep(1.2)   # be polite to both APIs
+            for item in items:
+                if inserted >= limit:
+                    break
+                asin = item.get("asin", "")
+                if not asin or asin in seen_asins:
+                    skipped += 1
+                    continue
+                if not item.get("image_url"):
+                    skipped += 1
+                    continue
+                price = item.get("price", 0)
+                if not price or float(price) < min_price:
+                    skipped += 1
+                    continue
 
-    print(f"\n{'[DRY RUN] ' if dry_run else ''}✅  inserted={inserted}  skipped={skipped}  errors={errors}")
+                seen_asins.add(asin)
+                row = {
+                    "id":            _make_id(asin),
+                    "source":        "amazon",
+                    "asin":          asin,
+                    "name":          item["name"],
+                    "category":      category,
+                    "color":         _extract_color(item["name"]),
+                    "price":         price,
+                    "currency":      "INR",
+                    "style":         [],
+                    "gender":        gender,
+                    "image_url":     item["image_url"],
+                    "affiliate_url": item["affiliate_url"],
+                    "partner_tag":   tag,
+                    "is_active":     True,
+                }
+                if dry_run:
+                    print(f"  DRY  {asin}  ₹{price:>8.0f}  {item['name'][:60]}")
+                    inserted += 1
+                else:
+                    batch.append(row)
+                    inserted += 1
+                    if len(batch) >= batch_size:
+                        _flush_batch(sb, batch, dry_run=False)
+                        print(f"  ⬆ flushed {len(batch)}  (total new={inserted})")
+                        batch.clear()
+
+            time.sleep(sleep_s)
+
+        if inserted and inserted % 500 < batch_size:
+            print(f"… progress: inserted={inserted}  skipped={skipped}  "
+                  f"api_calls={requests_made}", flush=True)
+
+    if batch and not dry_run:
+        _flush_batch(sb, batch, dry_run=False)
+        print(f"  ⬆ flushed final {len(batch)}")
+
+    print(
+        f"\n{'[DRY RUN] ' if dry_run else ''}"
+        f"✅  inserted={inserted}  skipped={skipped}  errors={errors}  "
+        f"api_calls={requests_made}"
+    )
+    if inserted < limit:
+        print(
+            f"⚠️  Only got {inserted}/{limit}. "
+            "Raise --pages, add more QUERIES, or lower --min-price."
+        )
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Seed DB with real Amazon fashion products")
-    ap.add_argument("--limit",   type=int,  default=1000, help="max products to insert")
-    ap.add_argument("--dry-run", action="store_true",     help="print without writing to DB")
-    ap.add_argument("--replace", action="store_true",     help="delete existing amazon rows first")
-    ap.add_argument("--backend", choices=["auto","rainforest","paapi"], default="auto")
+    ap.add_argument("--limit", type=int, default=1000,
+                    help="max NEW products to insert (use 20000 for big expand)")
+    ap.add_argument("--pages", type=int, default=1,
+                    help="Rainforest result pages per query (use 5 for ~20k scale)")
+    ap.add_argument("--min-price", type=float, default=1500.0,
+                    help="skip items cheaper than this INR amount")
+    ap.add_argument("--sleep", type=float, default=1.2,
+                    help="seconds between API calls")
+    ap.add_argument("--dry-run", action="store_true", help="print without writing to DB")
+    ap.add_argument("--replace", action="store_true", help="delete existing amazon rows first")
+    ap.add_argument("--backend", choices=["auto", "rainforest", "paapi"], default="auto")
     args = ap.parse_args()
-    run(limit=args.limit, dry_run=args.dry_run, replace=args.replace, backend=args.backend)
+    run(
+        limit=args.limit,
+        dry_run=args.dry_run,
+        replace=args.replace,
+        backend=args.backend,
+        pages=args.pages,
+        min_price=args.min_price,
+        sleep_s=args.sleep,
+    )

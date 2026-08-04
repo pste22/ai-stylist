@@ -12,8 +12,23 @@ import { saveTryOn, getTryOn, listTryOns, photoSignature } from "./tryOnDB.js";
 import { track, identify } from "./analytics.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { ReasonPicker } from "./ReasonPicker.jsx";
+import { usePlatformPulse } from "./usePlatformPulse.js";
+import PlatformPulse from "./PlatformPulse.jsx";
+import ChatSketchWallpaper from "./ChatSketchWallpaper.jsx";
+import { hdProductImageUrl, isProductPhotoUrl } from "./imageUrl.js";
+import { shopLabel, trackedAffiliateUrl } from "./retailer.js";
+import { BrandsStrip, BrandsSheet, useBrandOptions } from "./BrandsDiscovery.jsx";
+import LookProgressStrip, { FinishLookNudge } from "./LookProgressStrip.jsx";
+import {
+  assignProductToSlot,
+  isLookIncomplete,
+  isStripHiddenThisSession,
+  loadLookProgress,
+  shouldShowFinishNudge,
+} from "./lookProgress.js";
 
 const CatalogFilters = lazy(() => import("./CatalogFilters.jsx"));
+const ForBrands = lazy(() => import("./ForBrands.jsx"));
 
 // Modal / rare flows — keep off the critical path so first paint stays light.
 const OnboardingFlow = lazy(() => import("./OnboardingFlow.jsx"));
@@ -333,7 +348,7 @@ function LookSlot({ slotKey, product, loved, onLove, onBuy, onAddToCart, inCart 
       <div className="look-slot-card" onClick={() => onBuy?.(product)}>
         <img
           className="look-slot-img"
-          src={product.image_url}
+          src={hdProductImageUrl(product.image_url, { longest: 1000 }) || product.image_url}
           alt={product.name}
           loading="lazy"
           onError={(e) => { e.target.style.display = "none"; }}
@@ -514,16 +529,13 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
   if (!product) return <EmptyProductSpot onSendPrompt={onSendPrompt} />;
 
   const isLoved = loved.has(product.id);
-  const usePhoto = product.image_url && (
-    product.image_url.includes("m.media-amazon.com") ||
-    product.image_url.includes("images.pexels.com")
-  );
+  const usePhoto = isProductPhotoUrl(product.image_url);
 
   return (
     <div className="fp-product">
       <div className="fp-img-wrap">
         {usePhoto
-          ? <img className="fp-img" src={product.image_url} alt={product.name} loading="lazy" decoding="async" />
+          ? <img className="fp-img" src={hdProductImageUrl(product.image_url, { longest: 1500 })} alt={product.name} loading="lazy" decoding="async" />
           : <div className="fp-cat-thumb" style={{ "--swatch": swatchColor(product.color) }}>
               <span className="fp-cat-emoji">{CATEGORY_EMOJI[product.category] || "🛍️"}</span>
             </div>
@@ -548,11 +560,11 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
           </div>
           <a
             className="fp-bar-cta"
-            href={product.affiliate_url}
+            href={trackedAffiliateUrl(product)}
             target="_blank"
             rel="noopener noreferrer nofollow sponsored"
             onClick={() => onBuy?.(product)}
-          >Shop →</a>
+          >{shopLabel(product, { short: true })}</a>
         </div>
       </div>
 
@@ -568,12 +580,12 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
 
         <a
           className="fp-cta"
-          href={product.affiliate_url}
+          href={trackedAffiliateUrl(product)}
           target="_blank"
           rel="noopener noreferrer nofollow sponsored"
           onClick={() => onBuy?.(product)}
         >
-          Shop Now
+          {shopLabel(product)}
           <span className="fp-cta-arrow">→</span>
         </a>
 
@@ -881,7 +893,7 @@ function YouMightLike({ data, onBuy, onLove, loved, onAddToCart, inCart, onDismi
             <p className="yml-name">{p.name}</p>
             <div className="yml-footer">
               <span className="yml-price">₹{Number(p.price).toLocaleString("en-IN")}</span>
-              <a className="yml-shop" href={p.affiliate_url} target="_blank" rel="noopener noreferrer nofollow sponsored" onClick={() => onBuy?.(p)}>Shop →</a>
+              <a className="yml-shop" href={trackedAffiliateUrl(p)} target="_blank" rel="noopener noreferrer nofollow sponsored" onClick={() => onBuy?.(p)}>{shopLabel(p, { short: true })}</a>
             </div>
           </div>
         ))}
@@ -960,11 +972,11 @@ function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart }) 
               </span>
               <a
                 className="trending-card-shop"
-                href={p.affiliate_url}
+                href={trackedAffiliateUrl(p)}
                 target="_blank"
                 rel="noopener noreferrer nofollow sponsored"
                 onClick={() => onBuy?.(p)}
-              >Shop →</a>
+              >{shopLabel(p, { short: true })}</a>
             </div>
           </div>
         ))}
@@ -1107,7 +1119,7 @@ function ThinkingBubble() {
 }
 
 // ─── Text input row (silent mode) ────────────────────────────────────────────
-function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitSearch, onOutfitUrl, vsLoading, outfitLoading }) {
+function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitSearch, onOutfitUrl, vsLoading, outfitLoading, placeholder }) {
   const [draft, setDraft] = useState("");
   const [outfitPopover, setOutfitPopover] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
@@ -1135,7 +1147,7 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitS
       <button className="mode-switch-btn" onClick={onSwitchVoice} title="Switch to voice">🎙️</button>
       <input className="chat-input" value={draft} onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-        placeholder="Message Mira…" autoFocus />
+        placeholder={placeholder || "Message Mira…"} autoFocus />
       <button className="send-btn" onClick={send} disabled={!draft.trim()}>Send</button>
 
       {/* Visual search — single item */}
@@ -1225,7 +1237,7 @@ export default function App() {
   const threadRef                         = useRef(null);
   const msgsEndRef                        = useRef(null); // sentinel above show-more button
   const [isGuest, setIsGuest]             = useState(false);
-  const [textMode, setTextMode]           = useState(false);
+  const [textMode, setTextMode]           = useState(true); // default silent chat — voice is opt-in
   const [networkToast, setNetworkToast]   = useState(null);
   const [showSaved, setShowSaved]         = useState(false);
   const [showHistory, setShowHistory]     = useState(false);
@@ -1241,9 +1253,35 @@ export default function App() {
   const [filterResults, setFilterResults] = useState(null); // { products, total } from faceted browse
   // Defer discovery shelves so the occasion CTA paints first.
   const [showDiscovery, setShowDiscovery] = useState(false);
+  const [brandFocus, setBrandFocus] = useState(null); // apply Brand filter from discovery strip/sheet
+  const [brandsSheetOpen, setBrandsSheetOpen] = useState(false);
+  const brandOptions = useBrandOptions();
+  const [lookProgress, setLookProgress] = useState(() => loadLookProgress());
+  const [lookStripHidden, setLookStripHidden] = useState(() => isStripHiddenThisSession());
+  const [finishNudgeVisible, setFinishNudgeVisible] = useState(false);
+  const [uiMode, setUiMode] = useState(() => {
+    try { return localStorage.getItem("mira.uiMode") || "atelier"; } catch { return "atelier"; }
+  });
+
+  useEffect(() => {
+    document.documentElement.dataset.mira = uiMode === "classic" ? "classic" : "atelier";
+    try { localStorage.setItem("mira.uiMode", uiMode); } catch { /* */ }
+  }, [uiMode]);
+
+  useEffect(() => {
+    // Soft return nudge once/day when look is incomplete
+    setFinishNudgeVisible(shouldShowFinishNudge(lookProgress));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const addToLookProgress = (product) => {
+    if (!product) return;
+    setLookProgress((prev) => assignProductToSlot(prev, product));
+    setLookStripHidden(false);
+  };
   const pendingOccasionRef = useRef(null);
   const pendingOccasionStartRef = useRef(false);
   const pendingTryOnStartRef = useRef(false);
+  const pendingAskRef = useRef(null); // { product, promptKey } after Quick View Ask Mira
   const [vsResults, setVsResults]         = useState([]);
   const [vsQuery, setVsQuery]             = useState("");
   const [vsCatalogNote, setVsCatalogNote] = useState(null);
@@ -1266,6 +1304,18 @@ export default function App() {
   const [showFittingRoom, setShowFittingRoom] = useState(false);
   const [fittingRoomCount, setFittingRoomCount] = useState(0);
   const [signInPrompt, setSignInPrompt] = useState(false);   // guest tapped a paid feature
+  const [showForBrands, setShowForBrands] = useState(false);
+  const pulseBlocked = !!(quickViewProduct || tryOnProduct || showCart || showFittingRoom || signInPrompt || showForBrands);
+  const {
+    visible: pulseVisible,
+    step: pulseStep,
+    recordAction: recordPulseAction,
+    dismiss: dismissPulse,
+    submitHelpful,
+    submitWhy,
+    submitMiss,
+  } = usePlatformPulse({ enabled: true });
+  const youMsgCountRef = useRef(0);
 
   const {
     connected, state, mood, captions, messages,
@@ -1275,7 +1325,7 @@ export default function App() {
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, browseCategory, sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies,
-    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
+    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat, askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
     sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
     sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
@@ -1289,6 +1339,16 @@ export default function App() {
     const el = threadRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  // Count user chat turns toward the occasional platform pulse
+  useEffect(() => {
+    const youCount = messages.filter((m) => m.role === "you").length;
+    if (youCount > youMsgCountRef.current) {
+      const gained = youCount - youMsgCountRef.current;
+      youMsgCountRef.current = youCount;
+      for (let i = 0; i < gained; i++) recordPulseAction("chat");
+    }
+  }, [messages, recordPulseAction]);
 
   // ── Mode switch functions (no stop/restart — switchAudio handles it) ────────
   const switchToVoice = async () => {
@@ -1318,6 +1378,30 @@ export default function App() {
     setTextMode(true);
     if (connected) await switchAudio(false);
     if (messages.length > 0) addSystemEvent("⌨️ Switched to text");
+  };
+
+  // Silent chat entry: always surface the bubble; auto-start WS in text mode if needed.
+  const sendChat = (text) => {
+    const trimmed = (text || "").trim();
+    if (!trimmed) return;
+    // Catalog filter panel was hiding the thread — close it so chat is visible
+    if (filterResults) {
+      setFilterResults(null);
+      setActiveFilter("all");
+    }
+    if (!connected) {
+      sendText(trimmed); // queues + shows bubble (pendingTextRef in useMiraVoice)
+      if (!textMode) {
+        // Wait for textMode flip so start() opens with text_mode: true
+        pendingOccasionStartRef.current = true;
+        setTextMode(true);
+      } else {
+        start(); // already text mode — boot now; queued text becomes initial_request
+      }
+      return;
+    }
+    if (!textMode) setTextMode(true);
+    sendText(trimmed);
   };
 
   // Network degradation — auto-switch to text
@@ -1382,9 +1466,18 @@ export default function App() {
     }
   }, [textMode, connected, start]);
 
+  // Flush deferred Ask Mira once the websocket is up (UI already injected).
+  useEffect(() => {
+    if (!connected || !pendingAskRef.current) return;
+    const { product, promptKey } = pendingAskRef.current;
+    pendingAskRef.current = null;
+    askAboutProduct(product, promptKey, { inject: false });
+  }, [connected, askAboutProduct]);
+
   // Open the try-on modal for a product; ensure a session is running so the
   // photo upload can reach the server (text mode → no mic popup).
   const openTryOn = (product) => {
+    recordPulseAction("try_on");
     // Gate the paid try-on behind sign-in (guest video/image gen is a cost vector).
     if (!user) {
       setSignInPrompt(true);
@@ -1412,6 +1505,7 @@ export default function App() {
     const hasViews = r && Object.keys(r.views || {}).length > 0;
     const hasClips = v && Object.keys(v.clips || {}).length > 0;
     if (!hasViews && !hasClips) return;
+    if (hasViews) addToLookProgress(tryOnProduct);
     const p = tryOnProduct;
     saveTryOn({
       productId: p.id,
@@ -1463,7 +1557,9 @@ export default function App() {
   const handleLove = (product) => {
     const wasLoved = loved.has(product.id);
     wouldBuy(product);
+    if (!wasLoved) recordPulseAction("save");
     if (!wasLoved) {
+      addToLookProgress(product);
       // Always clear previous picker first so no two pickers are visible at once,
       // then set the new one in the next tick so React re-mounts it fresh.
       setReasonPickerProductId(null);
@@ -1540,6 +1636,14 @@ export default function App() {
           <MiraDot state={state} mood={mood} audioActive={!textMode && connected} />
           <span className="chat-title">Mira</span>
           <div className="chat-header-right">
+            <button
+              type="button"
+              className="ui-mode-toggle"
+              title="Preview Premium Atelier vs classic UI — easy to flip back"
+              onClick={() => setUiMode((m) => (m === "atelier" ? "classic" : "atelier"))}
+            >
+              {uiMode === "atelier" ? "Atelier" : "Classic"}
+            </button>
             {/* Fitting Room — past try-ons ("seen on me") */}
             {fittingRoomCount > 0 && (
               <button className="cart-icon-btn" onClick={() => setShowFittingRoom(true)} title={`Fitting Room (${fittingRoomCount})`}>
@@ -1604,6 +1708,10 @@ export default function App() {
           <CatalogFilters
             category={activeFilter}
             onCategory={setActiveFilter}
+            brandFocus={brandFocus}
+            onBrandFocusConsumed={() => setBrandFocus(null)}
+            onBrowseBrands={() => setBrandsSheetOpen(true)}
+            calm={uiMode === "atelier" && !filterResults}
             onResults={(data) => {
               if (!data) { setFilterResults(null); return; }
               setFilterResults({
@@ -1624,7 +1732,20 @@ export default function App() {
           />
         </Suspense>
 
-        <div className="chat-thread" ref={threadRef}>
+        <div className="chat-canvas">
+          <ChatSketchWallpaper />
+          <div className="chat-thread" ref={threadRef}>
+          {finishNudgeVisible && isLookIncomplete(lookProgress) && (
+            <FinishLookNudge
+              state={lookProgress}
+              onFinish={() => {
+                setFinishNudgeVisible(false);
+                sendChat("Help me finish my look — suggest what's still missing");
+              }}
+              onDismiss={() => setFinishNudgeVisible(false)}
+            />
+          )}
+
           {filterResults && (
             <div className="cf-results" id="cf-results-panel">
               <div className="cf-results-head">
@@ -1733,6 +1854,13 @@ export default function App() {
               textMode={textMode}
             />
           )}
+          {messages.length === 0 && showDiscovery && (
+            <BrandsStrip
+              brands={brandOptions}
+              onSelectBrand={(brand) => setBrandFocus(brand)}
+              onOpenAll={() => setBrandsSheetOpen(true)}
+            />
+          )}
           {messages.length === 0 && showDiscovery && trendingProducts.length > 0 && (
             <TrendingStrip products={trendingProducts} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} />
           )}
@@ -1749,6 +1877,9 @@ export default function App() {
           {youMightLike && (
             <YouMightLike data={youMightLike} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} onDismiss={() => setYouMightLike(null)} />
           )}
+            </>
+          )}
+          {/* Chat thread always visible — was previously hidden whenever filters were open */}
           {messages.map((msg) =>
             msg.role === "event"
               ? <EventDivider key={msg.id} text={msg.text} />
@@ -1760,8 +1891,6 @@ export default function App() {
                   onTryOn={openTryOn} />
           )}
           {state === "thinking" && <ThinkingBubble />}
-            </>
-          )}
           {/* Scroll anchor — always at the very bottom of thread content */}
           <div ref={msgsEndRef} style={{ height: 0 }} />
         </div>
@@ -1785,11 +1914,21 @@ export default function App() {
           </div>
         )}
 
+        {!lookStripHidden && (
+          <LookProgressStrip
+            state={lookProgress}
+            onComplete={() => sendChat("Complete the look — fill what's missing")}
+            onEmptySlot={(prompt) => sendChat(prompt)}
+            onSelectProduct={(p) => setQuickViewProduct(p)}
+            onHide={() => setLookStripHidden(true)}
+          />
+        )}
+
         {quickReplies.length > 0 && connected && (
           <div className="quick-reply-bar">
             {quickReplies.map((opt) => (
               <button key={opt} className="quick-reply-chip"
-                onClick={() => { sendText(opt); dismissQuickReplies(); }}>
+                onClick={() => { sendChat(opt); dismissQuickReplies(); }}>
                 {opt}
               </button>
             ))}
@@ -1799,20 +1938,35 @@ export default function App() {
 
         <div className="chat-input-bar">
           {!connected ? (
-            <div className="start-row">
+            <div className="start-row start-row--stack">
               <ModeToggle textMode={textMode} connected={connected} quality={quality}
                 onVoice={switchToVoice} onText={switchToSilent} />
-              <button className="chat-start-btn" onClick={() => start()}>
-                {textMode ? "Start chatting →" : "Start talking →"}
-              </button>
+              {textMode ? (
+                <TextInputRow
+                  onSend={sendChat}
+                  onStop={stop}
+                  onSwitchVoice={switchToVoice}
+                  onVisualSearch={sendVisualSearch}
+                  onOutfitSearch={sendOutfitImage}
+                  onOutfitUrl={sendOutfitUrl}
+                  vsLoading={vsLoading}
+                  outfitLoading={outfitLoading}
+                  placeholder="Ask Mira anything — e.g. purple dresses"
+                />
+              ) : (
+                <button className="chat-start-btn" onClick={() => start()}>
+                  Start talking →
+                </button>
+              )}
             </div>
           ) : textMode ? (
-            <TextInputRow onSend={sendText} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} onOutfitSearch={sendOutfitImage} onOutfitUrl={sendOutfitUrl} vsLoading={vsLoading} outfitLoading={outfitLoading} />
+            <TextInputRow onSend={sendChat} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} onOutfitSearch={sendOutfitImage} onOutfitUrl={sendOutfitUrl} vsLoading={vsLoading} outfitLoading={outfitLoading} />
           ) : (
             <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
           )}
           {error && <ConnectionError retryCount={retryCount} onRetry={retry} />}
         </div>
+        </div>{/* /.chat-canvas */}
       </div>
 
       {networkToast && (
@@ -1835,6 +1989,24 @@ export default function App() {
             onClose={() => setQuickViewProduct(null)}
             prefs={effectivePrefs}
             onSetSize={setUserSize}
+            onAskMira={(product, promptKey) => {
+              recordPulseAction("ask_product");
+              setQuickViewProduct(null);
+              const sent = askAboutProduct(product, promptKey);
+              if (!sent) {
+                pendingAskRef.current = { product, promptKey };
+                if (!textMode) {
+                  pendingTryOnStartRef.current = true; // reuse: flip to text then start()
+                  setTextMode(true);
+                } else {
+                  start();
+                }
+              }
+              // Scroll chat into view after closing the sheet
+              requestAnimationFrame(() => {
+                threadRef.current?.scrollTo?.({ top: threadRef.current.scrollHeight, behavior: "smooth" });
+              });
+            }}
           />
         </Suspense>
       )}
@@ -1859,6 +2031,15 @@ export default function App() {
             inCart={inCart}
           />
         </Suspense>
+      )}
+      {pulseVisible && !pulseBlocked && (
+        <PlatformPulse
+          step={pulseStep}
+          onDismiss={() => { track("platform_feedback", { dismissed: true }); dismissPulse(); }}
+          onHelpful={submitHelpful}
+          onWhy={submitWhy}
+          onMiss={submitMiss}
+        />
       )}
       {signInPrompt && (
         <div className="delete-overlay" onClick={(e) => { if (e.target.classList.contains("delete-overlay")) setSignInPrompt(false); }}>
@@ -1895,8 +2076,19 @@ export default function App() {
           <>state: <code>{state}</code> · mood: <code>{mood}</code> ·{" "}
           {connected ? (textMode ? "text" : "live") : "offline"} ·{" "}</>
         )}
+        <button className="privacy-link" onClick={() => setShowForBrands(true)}>For brands</button>
+        {" · "}
         <button className="privacy-link" onClick={() => setShowPrivacy(true)}>Privacy</button>
       </footer>
+
+      {showForBrands && (
+        <Suspense fallback={null}>
+          <ForBrands
+            onClose={() => setShowForBrands(false)}
+            onStartDemo={() => setShowForBrands(false)}
+          />
+        </Suspense>
+      )}
 
       {outfitLoading && (
         <div className="ob-overlay">
@@ -1913,6 +2105,13 @@ export default function App() {
           <button onClick={() => setOutfitError(null)}>✕</button>
         </div>
       )}
+      <BrandsSheet
+        open={brandsSheetOpen}
+        brands={brandOptions}
+        onClose={() => setBrandsSheetOpen(false)}
+        onSelectBrand={(brand) => setBrandFocus(brand)}
+      />
+
       {tryOnProduct && (
         <Suspense fallback={null}>
           <TryOnModal
@@ -1933,6 +2132,11 @@ export default function App() {
             savedStale={savedTryOnStale}
             userPrefs={effectivePrefs}
             onSetSize={setUserSize}
+            onCompleteLook={(p) => {
+              addToLookProgress(p);
+              const label = p?.name ? ` around the ${p.name}` : "";
+              sendText(`Complete the look${label} — tops, accessories, the works`);
+            }}
           />
         </Suspense>
       )}

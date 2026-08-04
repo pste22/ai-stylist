@@ -22,6 +22,8 @@ KNOWN_BRANDS = (
     "ANRABESS", "Reebok", "Nike", "Adidas", "Puma", "H&M", "Zara",
     "U.S. Polo Assn", "US Polo", "Jack & Jones", "SELECTED", "GAP",
     "Forever 21", "Max", "Lifestyle", "Fabindia", "W", "Aurelia",
+    # D2C / Mira partner brands
+    "Snitch", "Urbanic", "Nobero", "Berrylush", "Rare Rabbit",
 )
 
 COLOURS = (
@@ -341,6 +343,17 @@ def filter_catalog(
     return matched[offset: offset + limit], total
 
 
+def _facet_label(value: str) -> str:
+    """Pretty label; keep known brand casing when possible."""
+    raw = (value or "").strip()
+    if not raw:
+        return raw
+    for brand in KNOWN_BRANDS:
+        if brand.lower() == raw.lower():
+            return brand
+    return raw.replace("_", " ").title()
+
+
 def facet_options(catalog: list[dict], filters: dict[str, Any] | None = None) -> dict[str, list[dict]]:
     """Option lists with counts, respecting other active filters (faceted search)."""
     filters = dict(filters or {})
@@ -362,7 +375,7 @@ def facet_options(catalog: list[dict], filters: dict[str, Any] | None = None) ->
                         c[str(item)] += 1
             else:
                 c[str(val)] += 1
-        return [{"value": k, "label": k.replace("_", " ").title(), "count": n}
+        return [{"value": k, "label": _facet_label(k), "count": n}
                 for k, n in c.most_common(40)]
 
     price_opts = []

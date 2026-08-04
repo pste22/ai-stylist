@@ -66,15 +66,27 @@ def _load_catalog_from_db() -> list[dict]:
     page_size = 1000
     start = 0
     # Prefer brand/facets when migrate_product_facets.sql has been applied.
-    select_full = (
-        "id,source,asin,name,category,color,price,style,gender,image_url,"
-        "affiliate_url,partner_tag,created_at,brand,facets"
-    )
-    select_basic = (
-        "id,source,asin,name,category,color,price,style,gender,image_url,"
-        "affiliate_url,partner_tag,created_at"
-    )
-    select_cols = select_full
+    # Prefer richest select; fall back if migrations (facets / ratings) not applied yet.
+    select_candidates = [
+        (
+            "id,source,asin,name,category,color,price,style,gender,image_url,image_urls,"
+            "affiliate_url,partner_tag,created_at,brand,facets,rating,ratings_total"
+        ),
+        (
+            "id,source,asin,name,category,color,price,style,gender,image_url,"
+            "affiliate_url,partner_tag,created_at,brand,facets,rating,ratings_total"
+        ),
+        (
+            "id,source,asin,name,category,color,price,style,gender,image_url,"
+            "affiliate_url,partner_tag,created_at,brand,facets"
+        ),
+        (
+            "id,source,asin,name,category,color,price,style,gender,image_url,"
+            "affiliate_url,partner_tag,created_at"
+        ),
+    ]
+    select_idx = 0
+    select_cols = select_candidates[select_idx]
     while True:
         try:
             result = (
@@ -87,8 +99,9 @@ def _load_catalog_from_db() -> list[dict]:
                 .execute()
             )
         except Exception:
-            if select_cols == select_full:
-                select_cols = select_basic
+            if select_idx + 1 < len(select_candidates):
+                select_idx += 1
+                select_cols = select_candidates[select_idx]
                 start = 0
                 all_products = []
                 continue
@@ -98,6 +111,11 @@ def _load_catalog_from_db() -> list[dict]:
         if len(page) < page_size:
             break
         start += page_size
+    for p in all_products:
+        urls = p.get("image_urls")
+        if not isinstance(urls, list) or not urls:
+            primary = p.get("image_url")
+            p["image_urls"] = [primary] if primary else []
     all_products = enrich_catalog(all_products)
     print(f"[product_store] catalog loaded: {len(all_products)} active products (faceted)")
     return all_products

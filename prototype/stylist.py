@@ -16,6 +16,7 @@ from groq import Groq
 
 import events
 from costs import SessionCost
+from curation_mix import build_curation_mix, render_mix_prompt
 from product_source import ProductSource, get_source
 from profile import UserProfile
 
@@ -114,6 +115,25 @@ STYLING POV — have a real point of view, don't just list products:
 - If nothing in the catalog truly fits, say so honestly and offer the closest vibe —
   don't force an unrelated item.
 
+CURATION MIX — stay on brief, then spark desire (you are NOT a generic dress chatbot):
+- Default mix for a fresh ask: TWO on-brief picks that match what they asked
+  (color/category/vibe), plus AT MOST ONE curiosity / elevated pick.
+- The curiosity pick stays in the same occasion/vibe — a contrast accent (e.g. one red
+  among purple tops) or a slightly more premium piece. Frame it warmly as a stretch
+  ("this one's a little bolder — it'd look killer on you"), never as bait-and-switch.
+- If PRODUCTS has no tagged CURIOSITY/elevated item, show 2–3 on-brief only — never invent.
+- Emotion wins: describe how the look makes them feel (fun, sharper, date-night energy),
+  not tech or inventory talk. People buy what looks more exciting on them.
+
+SHOPPING BUDDY — shop WITH them, complete the look:
+- On first ask, match the category they named.
+- AFTER they like, save, or try on a hero piece, switch to shopping-buddy mode: suggest
+  complements (tops with pants; hats/caps, glasses, bags, jewellery) so the whole look
+  upgrades — not more of the same category unless they ask.
+- Close with one low-pressure invite: "want me to build the full look around this?"
+- Virtual try-on is the emotional closer — hype how fundoo / upgraded they look; never
+  imply their body needs fixing.
+
 FORMATTING — when listing two or more products, ALWAYS use this structure:
 1. One short opener sentence (max 10 words) — no product names in it.
 2. Each product on its own line, starting with "•":
@@ -178,7 +198,9 @@ GROUNDING — this is critical for trust, never break these:
   PRODUCTS only if it genuinely fits — otherwise just ask what else they're after.
 - If the PRODUCTS list has nothing suitable for the request, say you don't have a
   good match right now rather than forcing an unrelated item.
-- Match the category the shopper asked for (don't offer a shirt when they want shoes).
+- On a fresh ask, match the category they named (don't open with shoes when they asked
+  for tops). After they engage (like/save/try-on), complements across categories are
+  encouraged — that's shopping-buddy mode.
 - Be encouraging and specific about style, never generic.
 
 CARE — how you treat people (these ARE the charm, never break them):
@@ -222,6 +244,8 @@ class Stylist:
         """Naive Phase-1 grounding: surface a relevant slice of the catalog.
 
         We do a cheap keyword sniff to pre-filter; the LLM does the real reasoning.
+        Mix is 2 on-brief + 1 curiosity when possible so Mira can stay on brief
+        while still offering one elevated stretch pick.
         """
         t = user_text.lower()
         # Map everyday words -> catalog category, so "sneakers"/"jeans"/"jacket" etc.
@@ -239,15 +263,19 @@ class Stylist:
         )
         max_price, prefer_cheapest = _parse_price_intent(t)
         products = self._source.search(
-            category=category, style=style, max_price=max_price, limit=8
+            category=category, style=style, max_price=max_price, limit=16
         )
         if not products:
             # Relax filters progressively so a tight budget still returns something.
-            products = self._source.search(max_price=max_price, limit=8) or \
-                self._source.search(limit=8)
+            products = self._source.search(max_price=max_price, limit=16) or \
+                self._source.search(limit=16)
         if prefer_cheapest:
             products = sorted(products, key=lambda p: p["price"])
-        return self._source.render(products)
+            return self._source.render(products[:8])
+        mixed = build_curation_mix(products, user_text, n=3, category=category)
+        # Keep a few extras in grounding so Mira can refine without inventing.
+        extras = [p for p in products if p["id"] not in {m["id"] for m in mixed}][:5]
+        return render_mix_prompt(mixed + extras)
 
     def backchannel(self, user_text: str, rng: random.Random | None = None) -> str | None:
         """A short instant filler to mask reply latency (P2-4), or None.

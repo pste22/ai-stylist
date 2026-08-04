@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import AffiliateDisclosure from "./AffiliateDisclosure.jsx";
+import { resolveRetailer, shopLabel, trackedAffiliateUrl } from "./retailer.js";
+import { hdProductImageUrl, isProductPhotoUrl } from "./imageUrl.js";
 
 function formatPrice(price, currency) {
   const isINR = (currency || "INR") === "INR";
@@ -45,9 +48,17 @@ export default function CartPanel({ items, onRemove, onClear, onClose, onTryOn }
   const openNext = () => {
     if (!openables.length) return;
     const i = nextIdx % openables.length;
-    window.open(openables[i].affiliate_url, "_blank", "noopener,noreferrer");
+    window.open(trackedAffiliateUrl(openables[i]), "_blank", "noopener,noreferrer");
     setNextIdx(i + 1);
   };
+
+  const retailerMix = useMemo(() => {
+    const labels = [...new Set(openables.map((p) => resolveRetailer(p).label))];
+    if (!labels.length) return "stores";
+    if (labels.length === 1) return labels[0];
+    if (labels.length === 2) return `${labels[0]} & ${labels[1]}`;
+    return "partner stores";
+  }, [openables]);
 
   const copyList = async () => {
     const lines = items.map((p) => {
@@ -65,12 +76,12 @@ export default function CartPanel({ items, onRemove, onClear, onClose, onTryOn }
   };
 
   const openLabel = !openables.length
-    ? "No Amazon links"
+    ? "No shop links"
     : nextIdx === 0
-      ? `Open on Amazon${openables.length > 1 ? ` (1 of ${openables.length})` : ""}`
-      : nextIdx >= openables.length
-        ? "Open first again"
-        : `Open next (${nextIdx + 1} of ${openables.length})`;
+    ? `Open on ${retailerMix}${openables.length > 1 ? ` (1 of ${openables.length})` : ""}`
+    : nextIdx >= openables.length
+      ? "Open first again"
+      : `Open next (${nextIdx + 1} of ${openables.length})`;
 
   return (
     <div className="cart-backdrop" ref={overlayRef} onClick={handleBackdrop} role="dialog" aria-modal="true" aria-label="Your cart">
@@ -93,8 +104,8 @@ export default function CartPanel({ items, onRemove, onClear, onClose, onTryOn }
               {items.map((p) => (
                 <div key={p.id} className="cart-item">
                   <div className="cart-item-img-wrap">
-                    {p.image_url && (p.image_url.includes("m.media-amazon.com") || p.image_url.includes("images.pexels.com"))
-                      ? <img className="cart-item-img" src={p.image_url} alt={p.name} loading="lazy" decoding="async" />
+                    {isProductPhotoUrl(p.image_url)
+                      ? <img className="cart-item-img" src={hdProductImageUrl(p.image_url, { longest: 800 })} alt={p.name} loading="lazy" decoding="async" />
                       : <div className="cart-item-img-fallback">✦</div>
                     }
                   </div>
@@ -113,11 +124,11 @@ export default function CartPanel({ items, onRemove, onClear, onClose, onTryOn }
                     )}
                     <a
                       className="cart-item-buy"
-                      href={p.affiliate_url}
+                      href={trackedAffiliateUrl(p)}
                       target="_blank"
                       rel="noopener noreferrer nofollow sponsored"
-                      title="Buy on Amazon"
-                    >Buy →</a>
+                      title={shopLabel(p)}
+                    >{shopLabel(p, { short: true })}</a>
                     <button className="cart-item-remove" onClick={() => onRemove(p.id)} aria-label="Remove">✕</button>
                   </div>
                 </div>
@@ -129,7 +140,8 @@ export default function CartPanel({ items, onRemove, onClear, onClose, onTryOn }
                 <span className="cart-total-label">Estimated total</span>
                 <strong className="cart-total-price">{formatTotal(items)}</strong>
               </div>
-              <p className="cart-total-note">Final prices on Amazon may vary. Mira earns a small commission.</p>
+              <p className="cart-total-note">Final prices on retailer sites may vary.</p>
+              <AffiliateDisclosure compact />
               <button
                 className="cart-open-all-btn"
                 onClick={openNext}

@@ -79,6 +79,7 @@ create table if not exists products (
   style         text[]      default '{}',       -- e.g. {"casual","chic","everyday"}
   gender        text        not null default 'unisex',  -- women | men | unisex
   image_url     text,
+  image_urls    jsonb       not null default '[]'::jsonb,  -- full Amazon gallery when enriched
   affiliate_url text,
   partner_tag   text,                           -- Amazon associate tag used when url was built
   is_active     boolean     not null default true,
@@ -89,6 +90,8 @@ create table if not exists products (
 -- Faceted browse (Zara-style filters). Idempotent for existing projects.
 alter table products add column if not exists brand text;
 alter table products add column if not exists facets jsonb not null default '{}'::jsonb;
+alter table products add column if not exists rating numeric(3,2);
+alter table products add column if not exists ratings_total integer;
 create index if not exists idx_products_brand
   on products (brand)
   where is_active = true and brand is not null;

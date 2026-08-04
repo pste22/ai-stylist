@@ -113,7 +113,9 @@ def normalize_paapi_item(item: dict) -> dict:
     price = float(amount) if amount is not None else None
 
     images = item.get("Images", {}) or {}
-    image_url = ((images.get("Primary", {}) or {}).get("Medium", {}) or {}).get("URL")
+    primary = (images.get("Primary", {}) or {})
+    # Prefer Large — Medium (~160–500px) looks soft on retina / 3-up grids
+    image_url = (primary.get("Large") or {}).get("URL") or (primary.get("Medium") or {}).get("URL")
 
     return {
         "id": item.get("ASIN", ""),

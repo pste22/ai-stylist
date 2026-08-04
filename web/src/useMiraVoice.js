@@ -92,21 +92,36 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     );
   };
 
-  // Send a typed message
+  // If sendText is called before the WS is open, queue it and flush on connect.
+  const pendingTextRef = useRef(null);
+
+  // Send a typed message (silent / text chat). Always shows the bubble when possible.
   const sendText = useCallback((text) => {
-    const ws = wsRef.current;
     const trimmed = (text || "").trim();
-    if (!ws || ws.readyState !== WebSocket.OPEN || !trimmed) return;
+    if (!trimmed) return;
     // New conversation input — clear filter-chip browse context so show_more
     // uses server's own session_last_categories from this voice/text turn.
     lastBrowseCatRef.current = null;
-    // Optimistically add the user bubble immediately
-    _addMsg("you", trimmed);
-    ws.send(JSON.stringify({ type: "text_input", text: trimmed }));
-    setState(AvatarState.THINKING);
     // Clear quick-replies — user is typing a real answer
     setQuickReplies([]);
     if (quickReplyTimerRef.current) { clearTimeout(quickReplyTimerRef.current); quickReplyTimerRef.current = null; }
+
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      // Not connected yet — show the bubble and queue; caller/App should start().
+      _addMsg("you", trimmed);
+      pendingTextRef.current = trimmed;
+      setState(AvatarState.THINKING);
+      return false;
+    }
+    // Optimistically add the user bubble immediately.
+    // Seal any welcome/prior Mira bubble so the next catalog answer can't
+    // append behind the first 3 welcome cards (silent-mode cap bug).
+    miraBubbleId.current = null;
+    _addMsg("you", trimmed);
+    ws.send(JSON.stringify({ type: "text_input", text: trimmed }));
+    setState(AvatarState.THINKING);
+    return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -149,10 +164,33 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
   const getLevel = useCallback(() => playerRef.current?.getLevel?.() ?? 0, []);
 
   const buyClick = useCallback((product) => {
-    track("affiliate_click_out", { product_id: product?.id, name: product?.name, price: product?.price });
+    const source = product?.source || "";
+    let retailer = "partner";
+    try {
+      const host = product?.affiliate_url ? new URL(product.affiliate_url).hostname : "";
+      if (/myntra/i.test(host) || /myntra/i.test(source)) retailer = "myntra";
+      else if (/ajio/i.test(host) || /ajio/i.test(source)) retailer = "ajio";
+      else if (/snitch/i.test(host) || /snitch/i.test(source)) retailer = "snitch";
+      else if (/amazon|amzn/i.test(host) || /amazon|curated/i.test(source)) retailer = "amazon";
+      else if (/nykaa/i.test(host) || /nykaa/i.test(source)) retailer = "nykaa";
+      else if (product?.brand) retailer = String(product.brand).toLowerCase().slice(0, 32);
+    } catch { /* ignore */ }
+    track("affiliate_click_out", {
+      product_id: product?.id,
+      name: product?.name,
+      price: product?.price,
+      retailer,
+      source,
+      brand: product?.brand || null,
+    });
     const ws = wsRef.current;
     if (ws && ws.readyState === WebSocket.OPEN)
-      ws.send(JSON.stringify({ type: "buy_click", product_id: product.id }));
+      ws.send(JSON.stringify({
+        type: "buy_click",
+        product_id: product.id,
+        retailer,
+        source,
+      }));
   }, []);
 
   const showMoreTimeoutRef = useRef(null);
@@ -246,6 +284,11 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
       if (!textMode) playerRef.current = new PcmPlayer();
 
       ws.onopen = async () => {
+        // Queued sendText (bubble already on screen) or start(initialText)
+        const queued = pendingTextRef.current;
+        pendingTextRef.current = null;
+        const bootText = initialText || queued || null;
+
         ws.send(JSON.stringify({
           type:             "init",
           user_id:          userId,
@@ -258,10 +301,15 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
           pin_code:         userPrefs?.pin_code       ?? null,
           text_mode:        textMode,
           event_brief:      eventBrief,
-          initial_request:  initialText || null,
+          initial_request:  bootText,
         }));
         setConnected(true);
         setCanShowMore(true); // always show browse button once connected (1000+ products available)
+        // start("…") path — show user bubble (sendText queue already added one)
+        if (initialText && !queued) {
+          _addMsg("you", initialText);
+        }
+        if (bootText) setState(AvatarState.THINKING);
         if (!textMode) {
           const mic = new MicCapture((bytes) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
@@ -328,23 +376,25 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
             if (serverSaysNoMore) setCanShowMore(false);
 
             // Ensure there's a bubble to attach products to.
-            // Paged results (Show 3 more) ALWAYS get their own fresh bubble —
-            // otherwise every batch piles into one bubble and the per-bubble
-            // 3-card cap hides everything after the first 3 (silent-mode bug).
+            // Paged results (Show 3 more) and labeled catalog answers (shop_query)
+            // ALWAYS get their own fresh bubble — otherwise they pile into the
+            // welcome "few more picks" cards and the per-bubble 3-card cap hides
+            // the real matches (Tommy ask → only welcome 72styles/Aldo visible).
             let attachedBubId = null;
-            if (msg.paged) {
+            const ownBubble = msg.paged || !!msg.label;
+            if (ownBubble) {
               if (items.length) {
                 const bubbleText = msg.label || "Here are a few more picks for you ✦";
                 attachedBubId = _addMsg("mira", bubbleText);
                 _attachProducts(attachedBubId, items);
-                // Stamp the label on the bubble so ProductGrid knows to show all items
+                // Stamp the label so ProductGrid shows all matched items
                 if (msg.label) {
                   setMessages(prev => prev.map(m =>
                     m.id === attachedBubId ? { ...m, label: msg.label } : m
                   ));
                 }
-                // Deliberately NOT stored in miraBubbleId — the next Show 3 more
-                // must create another fresh bubble, not reuse this one.
+                // Deliberately NOT stored in miraBubbleId — next Show 3 more /
+                // catalog answer must create another fresh bubble.
               }
             } else {
               // In-turn products attach to Mira's current speaking bubble.
@@ -645,6 +695,48 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
       ts: new Date(),
     }]);
   }, []);
+
+  const ASK_PROMPTS = {
+    suit: "Does this suit me?",
+    wear: "When would I wear this?",
+    pair: "What goes with it?",
+  };
+
+  const askAboutProduct = useCallback((product, promptKey = "suit", { inject = true } = {}) => {
+    const ws = wsRef.current;
+    if (!product?.id) return false;
+    const key = ASK_PROMPTS[promptKey] ? promptKey : "suit";
+    const question = ASK_PROMPTS[key];
+    if (inject) {
+      // Show product + user question immediately; server drives Mira's reply.
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: mkId(),
+          role: "mira",
+          text: "Talking about this piece",
+          products: [product],
+          label: "Talking about this piece",
+          showAll: true,
+          ts: new Date(),
+        },
+        { id: mkId(), role: "you", text: question, ts: new Date() },
+      ]);
+      setQuickReplies([]);
+      if (quickReplyTimerRef.current) {
+        clearTimeout(quickReplyTimerRef.current);
+        quickReplyTimerRef.current = null;
+      }
+    }
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    ws.send(JSON.stringify({
+      type: "ask_about_product",
+      product_id: product.id,
+      prompt_key: key,
+    }));
+    setState(AvatarState.THINKING);
+    return true;
+  }, []);
   const quickReplyTimerRef = useRef(null);
 
   const sendLikeReason = useCallback((product, reasons) => {
@@ -683,6 +775,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies,
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
+    askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
     sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
     sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,

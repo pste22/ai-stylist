@@ -88,7 +88,7 @@ def view_instruction(product_name: str, view: str) -> str:
         # Front is produced by build_tryon_request; kept here for completeness.
         return (
             f"Photorealistic front view of the person wearing the {name}. "
-            f"Keep identity, hair, pose and garment realistic."
+            f"Editorial confidence, natural light, identity and garment unchanged."
         )
     if view == "side":
         return (
@@ -147,10 +147,12 @@ def build_tryon_request(product, user_image_b64, user_mime: str = "image/jpeg") 
         f"the FIRST photo wearing the {product_name} shown in the SECOND photo. "
         f"Show the person's COMPLETE face clearly and their ENTIRE body from the top of "
         f"the head down to the feet — do not crop the head, face or legs. "
-        f"Frame it like a full-body fashion showroom / fitting-room photo: the person "
-        f"standing straight, centered, against a clean studio background. "
-        f"Keep their face, hair, skin tone and body proportions EXACTLY as in the first "
-        f"photo; only change their outfit to the garment. Fit the garment naturally. "
+        f"Frame it like a premium editorial fashion lookbook shot: confident posture, "
+        f"natural soft studio light, clean backdrop, fabric drape and fit that feel "
+        f"elevated and exciting on them — a real 'wow, that's me upgraded' moment. "
+        f"Keep their face, hair, skin tone, identity and body proportions EXACTLY as in "
+        f"the first photo — no beauty filters, no slimming, no face morphing; only change "
+        f"the outfit to the garment. Fit the garment naturally with realistic cloth folds. "
         f"Return only the resulting image."
     )
 

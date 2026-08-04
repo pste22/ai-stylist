@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-/** Zara-style filter pills — all fields present; empty ones stay disabled. */
+/** Zara-style filter pills — Brand is early for discoverability. */
 const FILTER_DEFS = [
-  { key: "sort", label: "Sort by" },
   { key: "brand", label: "Brand" },
+  { key: "sort", label: "Sort by" },
   { key: "new_in", label: "New in" },
   { key: "size", label: "Size" },
   { key: "price", label: "Price" },
@@ -24,6 +24,11 @@ const FILTER_DEFS = [
   { key: "occasion", label: "Occasion" },
   { key: "delivery", label: "Delivery" },
 ];
+
+function BrandMark({ name }) {
+  const letter = (name || "?").trim().charAt(0).toUpperCase() || "?";
+  return <span className="brand-mark brand-mark--sm" aria-hidden="true">{letter}</span>;
+}
 
 const CATEGORY_CHIPS = [
   { key: "all", label: "All" },
@@ -68,11 +73,16 @@ export default function CatalogFilters({
   category,
   onCategory,
   onResults,
+  brandFocus,
+  onBrandFocusConsumed,
+  onBrowseBrands,
+  calm = false,
 }) {
   const [filters, setFilters] = useState({ sort: "featured" });
   const [options, setOptions] = useState({});
   const [total, setTotal] = useState(null);
   const [openKey, setOpenKey] = useState(null);
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const barRef = useRef(null);
@@ -82,6 +92,14 @@ export default function CatalogFilters({
   const filtersRef = useRef(filters);
   onResultsRef.current = onResults;
   filtersRef.current = filters;
+
+  // External brand pick from Brands we carry strip / sheet
+  useEffect(() => {
+    if (!brandFocus) return;
+    setFilters((prev) => ({ ...prev, brand: brandFocus }));
+    setOpenKey(null);
+    onBrandFocusConsumed?.();
+  }, [brandFocus, onBrandFocusConsumed]);
 
   const activeFilters = useMemo(() => {
     const next = { ...filters };
@@ -203,8 +221,10 @@ export default function CatalogFilters({
     ([k, v]) => v && !(k === "sort" && v === "featured")
   ).length + (category && category !== "all" ? 1 : 0);
 
+  const isCalm = calm && !filtersExpanded && activeCount === 0;
+
   return (
-    <div className="cf-wrap" ref={barRef}>
+    <div className={`cf-wrap${isCalm ? " cf-wrap--calm" : ""}`} ref={barRef}>
       <div className="filter-bar cf-categories">
         {CATEGORY_CHIPS.map(({ key, label }) => (
           <button
@@ -219,6 +239,24 @@ export default function CatalogFilters({
             {label}
           </button>
         ))}
+        {isCalm && (
+          <button
+            type="button"
+            className="filter-chip cf-filters-reveal"
+            onClick={() => setFiltersExpanded(true)}
+          >
+            Filters
+          </button>
+        )}
+        {calm && onBrowseBrands && (
+          <button
+            type="button"
+            className="filter-chip"
+            onClick={() => onBrowseBrands()}
+          >
+            Brands
+          </button>
+        )}
       </div>
 
       <div className="cf-pills" role="toolbar" aria-label="Product filters">
@@ -245,7 +283,20 @@ export default function CatalogFilters({
                 <span className="cf-chevron" aria-hidden="true">▾</span>
               </button>
               {isOpen && (
-                <div className="cf-menu" role="listbox">
+                <div
+                  className={`cf-menu${key === "brand" ? " cf-menu--brands" : ""}`}
+                  role="listbox"
+                >
+                  {key === "brand" && onBrowseBrands && (
+                    <button
+                      type="button"
+                      className="cf-option cf-option--link"
+                      onClick={() => { setOpenKey(null); onBrowseBrands(); }}
+                    >
+                      <span>See all brands we carry</span>
+                      <span className="cf-count">→</span>
+                    </button>
+                  )}
                   {key !== "sort" && selected && (
                     <button type="button" className="cf-option" onClick={() => setFilter(key, "")}>
                       Clear
@@ -271,7 +322,10 @@ export default function CatalogFilters({
                       disabled={o.value === "" && o.count === 0}
                       onClick={() => o.value !== "" && setFilter(key, o.value)}
                     >
-                      <span>{o.label}</span>
+                      <span className={key === "brand" ? "cf-option-brand" : undefined}>
+                        {key === "brand" && o.value ? <BrandMark name={o.label || o.value} /> : null}
+                        {o.label}
+                      </span>
                       {o.count != null && <span className="cf-count">{o.count}</span>}
                     </button>
                   ))}

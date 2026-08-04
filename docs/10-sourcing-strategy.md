@@ -1,6 +1,12 @@
 # 10 — Product Sourcing Strategy
 
-**Status:** Decided (2026-06-27) · **Owner:** Founder/CTO · **Phase:** 3 (prep in Phase 1)
+**Status:** Updated 2026-08-03 · **Owner:** Founder/CTO · **Phase:** 3
+
+> **Pivot (2026-08-03):** VCommission publisher application was **rejected**. Do not block demos on VCommission.
+> **Now:** (1) Direct brand CSV feeds via `brand_feed_importer.py` for Snitch/D2Cs,
+> (2) Apply **Cuelinks** + **Admitad** as aggregator backups,
+> (3) Keep Amazon curated / Associates path,
+> (4) Re-apply VCommission later with live traffic + cleaner site proof.
 
 The single most important infrastructure decision in the company: *how does Mira get
 real products with working, monetizable buy links?*

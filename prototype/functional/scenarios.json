@@ -1,0 +1,145 @@
+{
+  "version": 1,
+  "description": "Shopper-style functional scenarios for Mira. Re-run periodically after product changes.",
+  "scenarios": [
+    {
+      "id": "wedding_under_budget",
+      "title": "Wedding guest under budget",
+      "modes": ["silent", "audio"],
+      "judge_focus": "Wedding guest styling; second turn must respect ₹5000 budget",
+      "turns": [
+        {
+          "user": "Hi Mira, I need an outfit for a friend's wedding next month.",
+          "expect": {
+            "min_reply_chars": 40,
+            "should_ask_or_style": true,
+            "forbid_patterns": ["as an ai language model", "i cannot help with fashion"]
+          }
+        },
+        {
+          "user": "Keep everything under 5000 rupees please, something elegant but not too flashy.",
+          "judge_focus": "Must not recommend items clearly over ₹5000",
+          "expect": {
+            "min_reply_chars": 40,
+            "prefer_products": true,
+            "max_price_inr": 5000,
+            "forbid_patterns": ["nike", "gucci", "louis vuitton", "zara.com"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "grounding_in_catalog",
+      "title": "Ask for a common category that should exist",
+      "modes": ["silent", "audio"],
+      "judge_focus": "Should recommend dinner-date appropriate dresses from catalog, not invent luxury brands",
+      "turns": [
+        {
+          "user": "Show me some black dresses I could wear for a dinner date.",
+          "expect": {
+            "min_reply_chars": 30,
+            "prefer_products": true,
+            "category_hint": "dresses",
+            "forbid_patterns": ["i don't have any products", "empty catalog"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "grounding_refuse_fake_brand",
+      "title": "Must not invent / fetch out-of-catalog luxury brand",
+      "modes": ["silent", "audio"],
+      "judge_focus": "Must honestly say Nike Air Max is not in Mira catalog and offer alternatives — never claim Nike in stock",
+      "turns": [
+        {
+          "user": "Do you have Nike Air Max sneakers in stock right now?",
+          "expect": {
+            "min_reply_chars": 20,
+            "must_not_claim_in_stock": ["nike air max", "nike airmax"],
+            "should_refuse_or_redirect": true,
+            "forbid_patterns": ["here's a nike air max", "i found nike air max", "buy the nike air max"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "office_look",
+      "title": "Office / work look request",
+      "modes": ["silent"],
+      "judge_focus": "Interview-appropriate smart looks under ₹8000",
+      "turns": [
+        {
+          "user": "I need a smart office look for interviews — not too formal, under 8000 rupees.",
+          "expect": {
+            "min_reply_chars": 40,
+            "prefer_products": true,
+            "max_price_inr": 8000,
+            "forbid_patterns": ["as an ai language model"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "budget_parse",
+      "title": "Explicit budget discipline",
+      "modes": ["silent"],
+      "judge_focus": "Tops under ₹2000 only; fail if recommending expensive items",
+      "turns": [
+        {
+          "user": "Just show me tops under 2000 rupees.",
+          "expect": {
+            "min_reply_chars": 20,
+            "prefer_products": true,
+            "max_price_inr": 2000,
+            "category_hint": "tops"
+          }
+        }
+      ]
+    },
+    {
+      "id": "curation_mix_purple_tops",
+      "title": "Stay on purple tops with at most one curiosity stretch",
+      "modes": ["silent"],
+      "judge_focus": "Mostly purple tops on brief; at most one contrast/elevated pick; warm friend tone not catalog dump",
+      "turns": [
+        {
+          "user": "Today I want to see purple tops.",
+          "expect": {
+            "min_reply_chars": 30,
+            "prefer_products": true,
+            "category_hint": "tops",
+            "majority_color_hint": "purple",
+            "min_color_share": 0.5,
+            "forbid_patterns": ["as an ai language model"]
+          }
+        }
+      ]
+    },
+    {
+      "id": "shopping_buddy_complete_look",
+      "title": "After loving pants, buddy suggests complements",
+      "modes": ["silent"],
+      "judge_focus": "Second turn should complete the look (tops/accessories) not only more pants",
+      "turns": [
+        {
+          "user": "Show me some stylish pants I could wear out.",
+          "expect": {
+            "min_reply_chars": 25,
+            "prefer_products": true,
+            "category_hint": "bottoms"
+          }
+        },
+        {
+          "user": "I love those pants — help me complete the look with tops and accessories.",
+          "judge_focus": "Must act as shopping buddy: tops/hats/glasses/bags to upgrade the look",
+          "expect": {
+            "min_reply_chars": 30,
+            "prefer_products": true,
+            "expect_complement_cues": true,
+            "forbid_patterns": ["as an ai language model"]
+          }
+        }
+      ]
+    }
+  ]
+}

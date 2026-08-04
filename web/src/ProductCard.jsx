@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { shopLabel, trackedAffiliateUrl } from "./retailer.js";
+import { hdProductImageUrl, isProductPhotoUrl, productImageSrcSet } from "./imageUrl.js";
 
 const CATEGORY_EMOJI = {
   dresses:     "👗",
@@ -24,13 +26,6 @@ const SWATCH_COLORS = {
 
 function swatchHex(color) {
   return SWATCH_COLORS[color?.toLowerCase()] || "#cbb9a8";
-}
-
-function isRealProductPhoto(url) {
-  return url && (
-    url.includes("m.media-amazon.com") ||
-    url.includes("images.pexels.com")
-  );
 }
 
 /* Format price with proper INR grouping: ₹1,23,499 or $1,234 */
@@ -68,22 +63,40 @@ function isInUserSize(productName, userSize) {
 export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact, userSize, onTryOn }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError]   = useState(false);
+  const [useHd, setUseHd]         = useState(true);
 
-  const usePhoto     = isRealProductPhoto(product.image_url) && !imgError;
+  const usePhoto     = isProductPhotoUrl(product.image_url) && !imgError;
   const isUserSize   = isInUserSize(product.name, userSize);
   const priceStr   = formatPrice(product.price, product.currency);
+  const imgSrc     = usePhoto
+    ? (useHd ? hdProductImageUrl(product.image_url, { longest: 1500 }) : product.image_url)
+    : null;
+  const imgSrcSet  = usePhoto && useHd ? productImageSrcSet(product.image_url) : undefined;
 
   const thumbnail = usePhoto ? (
     <>
       {!imgLoaded && <div className="card-img-skeleton" aria-hidden="true" />}
       <img
         className={`card-img${imgLoaded ? "" : " card-img--loading"}`}
-        src={product.image_url}
+        src={imgSrc}
+        srcSet={imgSrcSet}
+        sizes={compact
+          ? "96px"
+          : "(max-width: 640px) 92vw, (max-width: 820px) 45vw, 320px"}
         alt={product.name}
         loading="lazy"
         decoding="async"
         onLoad={() => setImgLoaded(true)}
-        onError={() => { setImgError(true); setImgLoaded(true); }}
+        onError={() => {
+          // HD rewrite failed → try original catalog URL once before giving up
+          if (useHd) {
+            setUseHd(false);
+            setImgLoaded(false);
+            return;
+          }
+          setImgError(true);
+          setImgLoaded(true);
+        }}
       />
     </>
   ) : (
@@ -99,6 +112,9 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
         </div>
         <div className="card-body">
           <p className="card-name">{product.name}</p>
+          {product.mix_role === "curiosity" && (
+            <span className="card-elevated-label">elevated</span>
+          )}
           <p className="card-meta">
             <span className="card-color-swatch" style={{ background: swatchHex(product.color) }} />
             {product.color}
@@ -112,11 +128,11 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
             >{loved ? "♥ Saved" : "♡ Save"}</button>
             <a
               className="buy"
-              href={product.affiliate_url}
+              href={trackedAffiliateUrl(product)}
               target="_blank"
               rel="noopener noreferrer nofollow sponsored"
               onClick={() => onBuy?.(product)}
-            >Shop →</a>
+            >{shopLabel(product, { short: true })}</a>
           </div>
         </div>
       </div>
@@ -150,12 +166,15 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
         {/* ── Info panel ── */}
         <div className="card-body">
 
-          {/* Category chip + size badge */}
+          {/* Category chip + size badge + curiosity label */}
           <div className="card-chip-row">
             <span className="card-cat-chip">
               {CATEGORY_EMOJI[product.category] || "🛍️"}
               {" "}{categoryLabel(product.category)}
             </span>
+            {product.mix_role === "curiosity" && (
+              <span className="card-elevated-label">elevated</span>
+            )}
             {isUserSize && (
               <span className="card-size-badge">✓ Your size</span>
             )}
@@ -202,12 +221,13 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
             </button>
             <a
               className="card-buy-btn"
-              href={product.affiliate_url}
+              href={trackedAffiliateUrl(product)}
               target="_blank"
               rel="noopener noreferrer nofollow sponsored"
               onClick={(e) => { e.stopPropagation(); onBuy?.(product); }}
+              title={shopLabel(product)}
             >
-              Shop →
+              {shopLabel(product, { short: true })}
             </a>
           </div>
         </div>

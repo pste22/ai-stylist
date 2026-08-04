@@ -62,6 +62,12 @@ import chat_store  # noqa: E402
 from stylist import SYSTEM_PROMPT  # noqa: E402  (the SAME persona + grounding rules)
 from product_source import get_source  # noqa: E402
 from look_engine import build_looks  # noqa: E402
+from curation_mix import (  # noqa: E402
+    build_curation_mix,
+    complements_for,
+    card_fields as _mix_card,
+    resolve_shop_query,
+)
 from product_store import vector_search as _vector_search  # noqa: E402
 from festival_calendar import festival_greeting_line, upcoming_festival  # noqa: E402
 
@@ -259,7 +265,10 @@ def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: st
         f"rather than naming or listing it.\n"
         f"- Mention one distinctive detail per item (color, silhouette, why it fits the occasion) so the shopper can picture it.\n"
         f"- Only recommend up to 3 products per turn — quality over quantity. "
+        f"Default mix: 2 on-brief + at most 1 curiosity/elevated stretch pick in the same vibe. "
         f"If the user asks to see more than 3 at once, apologise briefly: 'I can only show 3 at a time — let me make sure these are exactly right for you.'\n"
+        f"- After they like/save/try on something, shop as a buddy: complete the look with tops, "
+        f"hats/caps, glasses, bags — describe the upgrade they'll feel, not more of the same.\n"
         f"- 3 curated picks are already on screen when the user opens the app — greet them warmly and invite them to ask anything.\n"
         f"- When the shopper wants to browse further, say 'tap Show more to see the next 3'."
     )
@@ -323,6 +332,35 @@ def _affiliate_url(p: dict) -> str:
         return p["affiliate_url"]
     query = quote_plus(f"{p['color']} {p['name']}")
     return f"https://www.google.com/search?tbm=shop&q={query}"
+
+
+def _gallery_urls(p: dict) -> list:
+    urls = p.get("image_urls")
+    if isinstance(urls, list) and urls:
+        return [u for u in urls if u]
+    primary = p.get("image_url")
+    return [primary] if primary else []
+
+
+def _client_product(p: dict) -> dict:
+    """Slim product payload for the web client (includes image gallery when present)."""
+    urls = _gallery_urls(p)
+    return {
+        "id": p.get("id"),
+        "name": p.get("name"),
+        "category": p.get("category"),
+        "color": p.get("color"),
+        "price": p.get("price"),
+        "currency": p.get("currency") or "INR",
+        "image_url": p.get("image_url") or (urls[0] if urls else None),
+        "image_urls": urls,
+        "affiliate_url": _affiliate_url(p),
+        "rating": p.get("rating"),
+        "ratings_total": p.get("ratings_total"),
+        "brand": p.get("brand"),
+        "asin": p.get("asin"),
+    }
+
 
 _MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 _VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-pro")
@@ -544,6 +582,18 @@ def _detect_category_intent(text: str) -> str | None:
     return None
 
 
+def _shop_label(shop: dict) -> str:
+    """Short UI label for a deterministic shop_query result."""
+    bits = []
+    if shop.get("brand"):
+        bits.append(shop["brand"])
+    if shop.get("color"):
+        bits.append(shop["color"])
+    if shop.get("category"):
+        bits.append(shop["category"])
+    return " · ".join(bits).title() if bits else "Picks for you"
+
+
 def _match_products(transcript: str) -> list[dict]:
     """Find catalog items Mira named in this turn, so the UI can show cards.
 
@@ -575,17 +625,7 @@ def _match_products(transcript: str) -> list[dict]:
         if len(hits) >= 3:  # cap: show 3 products per turn — focused, not overwhelming
             break
         seen.add(p["id"])
-        hits.append(
-            {
-                "id": p["id"],
-                "name": p["name"],
-                "category": p["category"],
-                "color": p["color"],
-                "price": p["price"],
-                "image_url": p.get("image_url"),
-                "affiliate_url": _affiliate_url(p),
-            }
-        )
+        hits.append(_client_product(p))
     return hits
 
 
@@ -693,6 +733,10 @@ async def handle(ws) -> None:
     session_last_categories: list[str] = []
     # Last text the user typed or said — used for category-intent fallback.
     session_last_user_text: str = ""
+    # Product IDs already pushed by deterministic catalog resolution this turn
+    # (shop_query). When set, pump_mira must not append speech-match or mix
+    # fallback cards — those were overwriting Tommy/brand asks with welcome junk.
+    catalog_fulfilled_ids: set[str] = set()
     # When True, pump_mira will only surface saved products (not all matched products).
     show_saved_mode: bool = False
     # Cost tracking — accumulated across all turns this session.
@@ -734,11 +778,7 @@ async def handle(ws) -> None:
     raw_picks = _personalized_top_picks(prefs, exclude_ids=set(session_saved.keys()), n=3)
     top_picks = []
     for p in raw_picks:
-        top_picks.append({
-            "id": p["id"], "name": p["name"], "category": p["category"],
-            "color": p["color"], "price": p["price"],
-            "image_url": p.get("image_url"), "affiliate_url": _affiliate_url(p),
-        })
+        top_picks.append(_client_product(p))
         session_shown_ids.add(p["id"])
     if top_picks:
         await _send_json(ws, type="products", items=top_picks, show_more=True)
@@ -1359,6 +1399,35 @@ async def handle(ws) -> None:
             await _send_json(ws, type="try_on_result", product_id=product_id, view="front",
                              total=total, image=base64.b64encode(front_bytes).decode(), mime=front_mime)
 
+            # Shopping buddy nudge after first angle — complete the look.
+            try:
+                _tname = payload.get("product_name") or "that piece"
+                _tcat = (product or {}).get("category", "piece")
+                await _send_json(ws, type="quick_replies", options=[
+                    "Complete the look",
+                    "Show me accessories for this",
+                    "Love it — what else?",
+                ])
+                sess = current["session"]
+                if sess is not None:
+                    await sess.send_client_content(
+                        turns=[types.Content(
+                            role="user",
+                            parts=[types.Part(
+                                text=(
+                                    f"[CONTEXT: User just tried on \"{_tname}\" ({_tcat}) "
+                                    f"and can see themselves in it. Shopping-buddy mode: "
+                                    f"hype how fundoo/upgraded they look (1 short line), "
+                                    f"then invite completing the look with complements. "
+                                    f"Do NOT only push more {_tcat}.]"
+                                )
+                            )],
+                        )],
+                        turn_complete=False,
+                    )
+            except Exception as _buddy_exc:
+                print(f"  [try_on] buddy nudge skipped: {_buddy_exc}")
+
             # ── OTHER ANGLES: cache hit, else re-render the FRONT result (parallel) ──
             async def _angle(view):
                 key_v = _cache_key(image_b64, product_id, view)
@@ -1542,7 +1611,7 @@ async def handle(ws) -> None:
     async def pump_mic() -> None:
         """Browser mic PCM → whatever Live session is currently open."""
         nonlocal chat_title, session_shown_ids, show_saved_mode, session_last_user_text
-        nonlocal last_activity_time, location_info, prefs
+        nonlocal last_activity_time, location_info, prefs, catalog_fulfilled_ids
         try:
             async for msg in ws:
                 if isinstance(msg, bytes):
@@ -1594,35 +1663,49 @@ async def handle(ws) -> None:
                             except Exception:
                                 pass
                         print(f"  ♥ would-buy: {prod.get('name', pid)}")
-                        # Push "You might also like" — 4 similar products (same category,
-                        # price within 60%, exclude saved + shown).
+                        # Shopping buddy: complete the look with complements (not more
+                        # of the same category) — tops/accessories/shoes around the hero.
                         if prod:
-                            _liked_cat   = prod.get("category")
-                            _liked_price = float(prod.get("price") or 0)
-                            _ymal = []
-                            for _p in _CATALOG:
-                                if _p["id"] in session_shown_ids:
-                                    continue
-                                if _p["id"] == pid:
-                                    continue
-                                if _p.get("category") != _liked_cat:
-                                    continue
-                                if _liked_price > 0:
-                                    _ratio = float(_p.get("price") or 0) / _liked_price
-                                    if _ratio < 0.4 or _ratio > 2.5:
-                                        continue
-                                _ymal.append({
-                                    "id": _p["id"], "name": _p["name"],
-                                    "category": _p["category"], "color": _p["color"],
-                                    "price": _p["price"],
-                                    "image_url": _p.get("image_url"),
-                                    "affiliate_url": _affiliate_url(_p),
-                                })
-                                if len(_ymal) >= 4:
-                                    break
+                            _comps = complements_for(
+                                prod, _CATALOG, n=4,
+                                exclude_ids=set(session_shown_ids) | set(session_saved),
+                            )
+                            _ymal = [
+                                _mix_card(p, affiliate_url=_affiliate_url(p))
+                                for p in _comps
+                            ]
                             if _ymal:
                                 await _send_json(ws, type="you_might_like",
                                                  items=_ymal, anchor_id=pid)
+                            await _send_json(ws, type="quick_replies", options=[
+                                "Complete the look",
+                                "Show me more like this",
+                                "Try a different vibe",
+                            ])
+                            # Silent context so next Mira turn biases to complements
+                            sess = current["session"]
+                            if sess is not None:
+                                try:
+                                    _hero = prod.get("name", pid)
+                                    _cat = prod.get("category", "piece")
+                                    await sess.send_client_content(
+                                        turns=[types.Content(
+                                            role="user",
+                                            parts=[types.Part(
+                                                text=(
+                                                    f"[CONTEXT: User loved \"{_hero}\" ({_cat}). "
+                                                    f"Next turn: shopping-buddy mode — suggest "
+                                                    f"complements (tops/hats/glasses/bags) to "
+                                                    f"upgrade the full look. Invite once: "
+                                                    f"'want me to build the full look around this?' "
+                                                    f"Do NOT only show more {_cat}.]"
+                                                )
+                                            )],
+                                        )],
+                                        turn_complete=False,
+                                    )
+                                except Exception:
+                                    pass
                     elif data.get("type") == "unlike":
                         pid = data.get("product_id", "")
                         prod = _BY_ID.get(pid, {})
@@ -1677,33 +1760,41 @@ async def handle(ws) -> None:
                                 scored.append((score, p))
 
                         scored.sort(key=lambda x: -x[0])
-                        similar = [p for _, p in scored[:3]]
+                        similar = [p for _, p in scored[:2]]
+                        # Shopping buddy: always try to add complements around the hero
+                        _comps = complements_for(
+                            prod, _CATALOG, n=2,
+                            exclude_ids=session_shown_ids | {pid},
+                        )
+                        # Prefer 1–2 similar + complements so the rail completes the look
+                        push_list = similar + [
+                            p for p in _comps
+                            if p["id"] not in {s["id"] for s in similar}
+                        ]
+                        push_list = push_list[:3]
 
                         cat   = prod.get("category", "item")
                         color = prod.get("color", "")
 
-                        if similar:
-                            for p in similar:
+                        if push_list:
+                            for p in push_list:
                                 session_shown_ids.add(p["id"])
-                            batch = [{
-                                "id": p["id"], "name": p["name"],
-                                "category": p["category"], "color": p["color"],
-                                "price": p["price"], "image_url": p.get("image_url"),
-                                "affiliate_url": _affiliate_url(p),
-                            } for p in similar]
+                            batch = [
+                                _mix_card(p, affiliate_url=_affiliate_url(p))
+                                for p in push_list
+                            ]
                             has_more = any(p["id"] not in session_shown_ids for p in _CATALOG)
                             await _send_json(ws, type="products", items=batch,
                                              show_more=has_more, paged=True)
-                            print(f"  ♥ pushed {len(batch)} reason-matched products")
+                            print(f"  ♥ pushed {len(batch)} buddy products (similar+complements)")
                             mira_prompt = (
                                 f"The user saved a {color} {cat} because of: {reason_text}. "
-                                f"I've already shown them {len(batch)} similar items on screen. "
-                                f"Say one warm short sentence acknowledging their taste "
-                                f"(e.g. 'Since you love {reason_text}, I pulled some similar picks!'). "
+                                f"I've shown {len(batch)} picks — mix of similar + pieces to "
+                                f"complete the look. Say one warm short sentence as their "
+                                f"shopping buddy (taste ack + invite to complete the look). "
                                 f"Do NOT name any specific products."
                             )
                         else:
-                            # No strong matches — ask what to show next
                             mira_prompt = (
                                 f"The user saved a {color} {cat} because of: {reason_text}. "
                                 f"No exact matches were found in the catalog right now. "
@@ -1711,17 +1802,15 @@ async def handle(ws) -> None:
                                 f"Do NOT name any specific products."
                             )
 
-                        # Send quick-reply options
                         await _send_json(ws, type="quick_replies", options=[
+                            "Complete the look",
                             "Show me more like this",
                             "Try a different style",
-                            "Show me something new",
                         ])
 
-                        # Trigger Mira to speak (inject silently, don't use product name)
                         context_prefix = (
                             f"[PREFERENCE: User loves {reason_text} in {cat}s. "
-                            f"Prioritise similar items going forward. "
+                            f"Shopping-buddy mode — prioritise complements to upgrade the look. "
                             f"Do NOT repeat already-shown items.]\n\n"
                         )
                         sess = current["session"]
@@ -1740,6 +1829,7 @@ async def handle(ws) -> None:
                         text = (data.get("text") or "").strip()
                         if text:
                             session_last_user_text = text
+                            catalog_fulfilled_ids.clear()
                             # Detect budget look intent first — build and send looks if matched.
                             if await _maybe_budget_look(text):
                                 pass  # handled — let Mira still respond verbally
@@ -1755,6 +1845,9 @@ async def handle(ws) -> None:
                                 any(w in _tl for w in ("saved", "liked", "wishlist", "heart", "favourites", "favorites")) and
                                 any(w in _tl for w in ("show", "see", "view", "list", "what", "display", "bring", "tell"))
                             )
+                            shop_ctx = ""
+                            # Echo user text first so the thread order stays natural
+                            await _send_json(ws, type="transcript", who="you", text=text)
                             if _show_saved_intent:
                                 show_saved_mode = True
                                 saved_items = [_BY_ID[pid] for pid in session_saved if pid in _BY_ID]
@@ -1770,6 +1863,71 @@ async def handle(ws) -> None:
                                                      show_more=False)
                             else:
                                 show_saved_mode = False
+                                # Deterministic catalog push — don't wait on Gemini Live.
+                                # Fixes empty replies for brand/color asks (e.g. Tommy + red).
+                                _shop = resolve_shop_query(
+                                    _CATALOG, text, n=6, exclude_ids=session_shown_ids,
+                                )
+                                if _shop["products"]:
+                                    batch = [
+                                        _mix_card(p, affiliate_url=_affiliate_url(p))
+                                        for p in _shop["products"]
+                                    ]
+                                    catalog_fulfilled_ids.clear()
+                                    for p in batch:
+                                        session_shown_ids.add(p["id"])
+                                        catalog_fulfilled_ids.add(p["id"])
+                                    if _shop.get("category"):
+                                        session_last_categories[:] = [_shop["category"]]
+                                    # paged=True → fresh labeled bubble (never append to
+                                    # welcome "few more picks" cards; show all matches).
+                                    await _send_json(
+                                        ws, type="products", items=batch, show_more=True,
+                                        label=_shop_label(_shop), paged=True,
+                                    )
+                                    print(
+                                        f"  shop_query → mode={_shop['mode']} "
+                                        f"brand={_shop.get('brand')!r} "
+                                        f"cat={_shop.get('category')!r} "
+                                        f"color={_shop.get('color')!r} "
+                                        f"n={len(batch)} notes={_shop.get('notes')}"
+                                    )
+                                    note = (_shop.get("notes") or [None])[0]
+                                    names = ", ".join(
+                                        f'"{p.get("name")}"' for p in _shop["products"][:3]
+                                    )
+                                    shop_ctx = (
+                                        f"[CATALOG RESULT] Shown {len(batch)} products on screen "
+                                        f"for this ask ({_shop['mode']}). "
+                                        f"Lead picks: {names}. "
+                                    )
+                                    if note:
+                                        shop_ctx += (
+                                            f"IMPORTANT: {note} Be honest briefly, then style what IS shown. "
+                                        )
+                                        await _send_json(
+                                            ws, type="transcript", who="mira",
+                                            text=note + " Here are the closest picks.",
+                                        )
+                                    else:
+                                        shop_ctx += (
+                                            "Speak about these picks naturally — do not invent other brands. "
+                                        )
+                                        # Guaranteed acknowledgment even if Live is quiet
+                                        await _send_json(
+                                            ws, type="transcript", who="mira",
+                                            text="Here are some picks that match what you asked.",
+                                        )
+                                elif _shop.get("brand") or _shop.get("category") or _shop.get("color"):
+                                    miss = (
+                                        f"I don't have "
+                                        f"{(_shop.get('color') + ' ') if _shop.get('color') else ''}"
+                                        f"{_shop.get('category') or 'pieces'}"
+                                        f"{(' from ' + _shop['brand']) if _shop.get('brand') else ''} "
+                                        f"in the catalog right now."
+                                    )
+                                    await _send_json(ws, type="transcript", who="mira", text=miss.strip())
+                                    shop_ctx = f"[CATALOG RESULT] {miss} Ask what else they'd like.\n"
                             sess = current["session"]
                             if sess is not None:
                                 # Always prepend saved items context so Mira knows
@@ -1783,6 +1941,8 @@ async def handle(ws) -> None:
                                     )
                                 else:
                                     ctx_prefix = ""
+                                if shop_ctx:
+                                    ctx_prefix = f"{ctx_prefix}{shop_ctx}\n"
                                 await sess.send_client_content(
                                     turns=[types.Content(
                                         role="user",
@@ -1790,8 +1950,6 @@ async def handle(ws) -> None:
                                     )],
                                     turn_complete=True,
                                 )
-                            # Echo back as a transcript so the caption shows what was typed
-                            await _send_json(ws, type="transcript", who="you", text=text)
                             # Persist to chat history
                             if user_id and chat_session_id:
                                 if not chat_title:
@@ -1899,7 +2057,23 @@ async def handle(ws) -> None:
                                             used.add(pick["id"])
                                 return batch
 
-                            batch = _pick_batch(session_shown_ids)
+                            # Prefer curation mix (2 on-brief + 1 curiosity) when we
+                            # still have the shopper's last ask for color/category context.
+                            batch = []
+                            if session_last_user_text:
+                                mixed = build_curation_mix(
+                                    _CATALOG,
+                                    session_last_user_text,
+                                    n=3,
+                                    exclude_ids=session_shown_ids,
+                                    category=context_cats[0] if len(context_cats) == 1 else None,
+                                )
+                                batch = [
+                                    _mix_card(p, affiliate_url=_affiliate_url(p))
+                                    for p in mixed
+                                ]
+                            if not batch:
+                                batch = _pick_batch(session_shown_ids)
                             print(f"  show_more → batch={len(batch)} products")
 
                             if not batch:
@@ -1930,42 +2104,37 @@ async def handle(ws) -> None:
                             _tb.print_exc()
                             await _send_json(ws, type="products", items=[], show_more=True)
                     elif data.get("type") == "category_browse":
-                        # Direct category browse — bypass Gemini entirely, push products instantly.
+                        # Direct category browse — bypass Gemini; 2 on-brief + curiosity
+                        # in the first page, then fill remaining slots from the category.
                         cat = (data.get("category") or "").strip().lower()
                         if cat:
-                            batch = []
+                            exclude = set(session_shown_ids)
+                            mixed = build_curation_mix(
+                                _CATALOG, cat, n=3, exclude_ids=exclude, category=cat,
+                            )
+                            batch = [
+                                _mix_card(p, affiliate_url=_affiliate_url(p))
+                                for p in mixed
+                            ]
+                            seen = {p["id"] for p in batch}
                             for p in _CATALOG:
-                                if p["id"] in session_shown_ids:
+                                if p["id"] in exclude or p["id"] in seen:
                                     continue
                                 if p.get("category") != cat:
                                     continue
-                                batch.append({
-                                    "id": p["id"], "name": p["name"],
-                                    "category": p["category"], "color": p["color"],
-                                    "price": p["price"],
-                                    "image_url": p.get("image_url"),
-                                    "affiliate_url": _affiliate_url(p),
-                                })
+                                batch.append(_mix_card(p, affiliate_url=_affiliate_url(p)))
+                                seen.add(p["id"])
                                 if len(batch) >= 6:
                                     break
-                            # If catalog fully shown, cycle back (exclude only last 3)
                             if not batch:
                                 last_three = set(list(session_shown_ids)[-3:])
-                                temp_exclude = last_three
-                                for p in _CATALOG:
-                                    if p["id"] in temp_exclude:
-                                        continue
-                                    if p.get("category") != cat:
-                                        continue
-                                    batch.append({
-                                        "id": p["id"], "name": p["name"],
-                                        "category": p["category"], "color": p["color"],
-                                        "price": p["price"],
-                                        "image_url": p.get("image_url"),
-                                        "affiliate_url": _affiliate_url(p),
-                                    })
-                                    if len(batch) >= 6:
-                                        break
+                                mixed = build_curation_mix(
+                                    _CATALOG, cat, n=3, exclude_ids=last_three, category=cat,
+                                )
+                                batch = [
+                                    _mix_card(p, affiliate_url=_affiliate_url(p))
+                                    for p in mixed
+                                ]
                             if batch:
                                 for p in batch:
                                     session_shown_ids.add(p["id"])
@@ -2046,6 +2215,63 @@ async def handle(ws) -> None:
                                 except Exception as exc:
                                     print(f"  ! outfit_assembled inject failed: {exc}")
                             print(f"  outfit_assembled → {len(picked)} items, cats={cats}")
+                    elif data.get("type") == "ask_about_product":
+                        # Quick View → Ask Mira about a single catalog product.
+                        # Client already shows the product card + user question bubble.
+                        pid = (data.get("product_id") or "").strip()
+                        prompt_key = (data.get("prompt_key") or "suit").strip().lower()
+                        product = _BY_ID.get(pid) if pid else None
+                        if product:
+                            session_shown_ids.add(product["id"])
+                            cat = product.get("category")
+                            if cat:
+                                session_last_categories[:] = [cat]
+                            name = product.get("name") or "this piece"
+                            color = product.get("color") or ""
+                            price = product.get("price")
+                            price_bit = f" ₹{int(price)}" if price else ""
+                            color_bit = f" in {color}" if color else ""
+                            ask_map = {
+                                "suit": (
+                                    f"Answer whether this suits them — use their profile/prefs "
+                                    f"if available (body, vibe, occasion). Be specific and kind. "
+                                    f"Offer one styling tip, then ask if they want similar pieces "
+                                    f"or something to pair with it."
+                                ),
+                                "wear": (
+                                    f"Suggest 2–3 real occasions or settings where this would shine. "
+                                    f"Keep it practical for their life. Then offer to find "
+                                    f"complementary pieces or alternates."
+                                ),
+                                "pair": (
+                                    f"Suggest what to wear with it from our catalog categories "
+                                    f"(tops/bottoms/shoes/etc.). Keep suggestions concrete. "
+                                    f"Offer to pull matching pieces next."
+                                ),
+                            }
+                            ask_bit = ask_map.get(prompt_key, ask_map["suit"])
+                            instruction = (
+                                f"[CONTEXT: The user tapped Ask Mira on a catalog product "
+                                f"already on screen: {name}{color_bit}{price_bit} "
+                                f"(id={product['id']}, category={cat or 'unknown'}). "
+                                f"This IS in our catalog — do NOT say you can't find it.] "
+                                f"{ask_bit} "
+                                f"Reply in 2–4 short sentences. Do NOT greet, do NOT re-introduce "
+                                f"yourself, do NOT repeat the full product name (card is visible)."
+                            )
+                            sess = current["session"]
+                            if sess is not None:
+                                try:
+                                    await sess.send_client_content(
+                                        turns=[types.Content(
+                                            role="user",
+                                            parts=[types.Part(text=instruction)],
+                                        )],
+                                        turn_complete=True,
+                                    )
+                                except Exception as exc:
+                                    print(f"  ! ask_about_product inject failed: {exc}")
+                            print(f"  ask_about_product → {product['id']} key={prompt_key}")
         finally:
             stop.set()  # browser closed → tear the whole conversation down
             if user_id and chat_session_id:
@@ -2065,6 +2291,7 @@ async def handle(ws) -> None:
         nonlocal show_saved_mode
         nonlocal session_prompt_tokens, session_response_tokens
         nonlocal session_last_user_text
+        nonlocal catalog_fulfilled_ids
         mood = "neutral"
         while not stop.is_set():
             talking = False
@@ -2125,7 +2352,8 @@ async def handle(ws) -> None:
                     # Push each product card the MOMENT she names it, so the screen keeps
                     # pace with her voice instead of all options appearing at the end.
                     # In show_saved_mode we already pushed exact saved cards — skip matching.
-                    if not show_saved_mode:
+                    # If shop_query already answered this ask, do not append speech matches.
+                    if not show_saved_mode and not catalog_fulfilled_ids:
                         fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
                         if fresh:
                             for p in fresh:
@@ -2144,7 +2372,8 @@ async def handle(ws) -> None:
                 if sc and sc.turn_complete:
                     _was_saved_mode = show_saved_mode
                     show_saved_mode = False  # reset after each turn
-                    if not _was_saved_mode:
+                    _catalog_done = bool(catalog_fulfilled_ids)
+                    if not _was_saved_mode and not _catalog_done:
                         fresh = [p for p in _match_products("".join(said)) if p["id"] not in sent_ids]
                         if fresh:
                             for p in fresh:
@@ -2202,23 +2431,20 @@ async def handle(ws) -> None:
                                 except Exception as _ve:
                                     print(f"  ↩ vector search failed: {_ve}")
 
-                            # Category-filter fallback if vector found nothing
-                            if not fallback and intent_cat:
-                                for p in _CATALOG:
-                                    if p["id"] in session_shown_ids:
-                                        continue
-                                    if p.get("category") != intent_cat:
-                                        continue
-                                    fallback.append({
-                                        "id": p["id"], "name": p["name"],
-                                        "category": p["category"], "color": p["color"],
-                                        "price": p["price"],
-                                        "image_url": p.get("image_url"),
-                                        "affiliate_url": _affiliate_url(p),
-                                    })
-                                    if len(fallback) >= 3:
-                                        break
-                                print(f"  ↩ category fallback: {intent_cat!r} → {len(fallback)} products")
+                            # Category + curation-mix fallback if vector found nothing
+                            if not fallback and (intent_cat or session_last_user_text):
+                                mixed = build_curation_mix(
+                                    _CATALOG,
+                                    session_last_user_text or "",
+                                    n=3,
+                                    exclude_ids=session_shown_ids,
+                                    category=intent_cat,
+                                )
+                                fallback = [
+                                    _mix_card(p, affiliate_url=_affiliate_url(p))
+                                    for p in mixed
+                                ]
+                                print(f"  ↩ mix fallback: cat={intent_cat!r} → {len(fallback)} products")
 
                             if fallback:
                                 for p in fallback:
@@ -2241,6 +2467,7 @@ async def handle(ws) -> None:
                     await asyncio.sleep(0.9)
                     await _send_json(ws, type="state", state="idle", mood="neutral")
                     mood = "neutral"
+                    catalog_fulfilled_ids.clear()
                     turn_ended = True
                     break
             if not turn_ended:
@@ -2497,6 +2724,153 @@ async def _rl_release(ip: str) -> None:
         _rl_active[ip] = max(0, _rl_active.get(ip, 1) - 1)
 
 
+def _review_assist_local(
+    product: dict | None,
+    stars: int,
+    fit: str,
+    vibes: list[str],
+    draft: str,
+) -> dict:
+    """Deterministic Mira-style coaching when Gemini is unavailable."""
+    cat = (product or {}).get("category") or "piece"
+    color = (product or {}).get("color") or ""
+    fit_phrase = {
+        "tight": "runs a little snug",
+        "true": "is true to size",
+        "loose": "has a relaxed, easy fit",
+    }.get(fit, "is true to size")
+    band = "high" if stars >= 4 else "low" if stars <= 2 else "mid"
+    vibe_lines = {
+        "fabric": {
+            "high": "Fabric feels soft against the skin",
+            "mid": "Fabric is decent for the price",
+            "low": "Fabric felt thinner than I hoped",
+        },
+        "colour": {
+            "high": "Colour looks richer in person",
+            "mid": "Colour is close to the listing",
+            "low": "Colour felt a bit different in real light",
+        },
+        "comfort": {
+            "high": "Wore it for hours — stayed comfortable",
+            "mid": "Comfortable for a few hours",
+            "low": "Got uncomfortable after a while",
+        },
+        "occasion": {
+            "high": "Perfect for brunch or a casual evening out",
+            "mid": "Works for everyday plans",
+            "low": "Struggled to find occasions for it",
+        },
+        "value": {
+            "high": "Feels worth the price",
+            "mid": "Fair for what you get",
+            "low": "Expected a bit more for the price",
+        },
+        "style": {
+            "high": "Silhouette is flattering",
+            "mid": "Looks neat and put-together",
+            "low": "Cut didn't sit how I imagined",
+        },
+    }
+    selected = vibes or ["fabric", "style", "value"]
+    suggestions = [f"Fit {fit_phrase} on me"]
+    for v in selected:
+        line = (vibe_lines.get(v) or {}).get(band)
+        if line:
+            suggestions.append(line)
+    if color and band == "high":
+        suggestions.append(f"The {color} looks lovely in natural light")
+
+    prompts = []
+    tl = (draft or "").lower()
+    if "fabric" not in tl:
+        prompts.append("How did the fabric feel?")
+    if "colour" not in tl and "color" not in tl:
+        prompts.append("Did the colour match the photos?")
+    if "again" not in tl and "recommend" not in tl:
+        prompts.append("Would you buy it again?" if stars >= 4 else "Would you recommend it to a friend?")
+
+    if not draft.strip():
+        coach = "Tap a suggestion to build your review, or ask me to write a full draft."
+    elif len(draft.strip()) < 40:
+        coach = "Looking good — add one more detail (fabric, colour, or when you'd wear it)."
+    else:
+        coach = "This reads like a real shopper — ready to post whenever you are."
+
+    draft_bits = [
+        f"{'Really into' if stars >= 4 else 'Mixed on' if stars <= 2 else 'Solid'} this {cat}.",
+        f"Fit {fit_phrase}.",
+        *suggestions[1:3],
+        "Would recommend." if stars >= 4 else "Try before you commit." if stars <= 2 else "Depends on what you need it for.",
+    ]
+    return {
+        "coach": coach,
+        "prompts": prompts[:3],
+        "suggestions": suggestions[:6],
+        "draft": " ".join(draft_bits)[:280],
+        "source": "local",
+    }
+
+
+def _review_assist(
+    product: dict | None,
+    stars: int,
+    fit: str,
+    vibes: list[str],
+    draft: str,
+) -> dict:
+    """AI review coaching — Gemini when available, local templates otherwise."""
+    local = _review_assist_local(product, stars, fit, vibes, draft)
+    api_key = os.environ.get("GEMINI_API_KEY") or ""
+    if not api_key or api_key.startswith("AQ."):
+        # Gateway tokens often can't run generate_content; stay local.
+        return local
+    try:
+        from google import genai as _genai
+        from google.genai import types as _types
+
+        name = (product or {}).get("name") or "this piece"
+        cat = (product or {}).get("category") or "fashion"
+        color = (product or {}).get("color") or "unknown"
+        client = _genai.Client(api_key=api_key)
+        model = os.environ.get("GEMINI_REVIEW_MODEL", "gemini-2.0-flash")
+        prompt = (
+            "You help shoppers write short, honest fashion product reviews for Mira, "
+            "an AI stylist app in India. Return ONLY compact JSON with keys: "
+            "coach (one warm coaching sentence), prompts (array of 2-3 short follow-up "
+            "questions to improve the review), suggestions (array of 4-6 tappable review "
+            "phrases, each under 12 words, first-person), draft (one 1-3 sentence review "
+            "under 280 chars). No markdown, no extra keys.\n"
+            f"Product: {name} | category={cat} | color={color}\n"
+            f"Stars: {stars}/5 | Fit: {fit} | Topics: {', '.join(vibes) or 'general'}\n"
+            f"Current draft: {draft or '(empty)'}\n"
+            "Tone: friendly, specific, not salesy. Never invent brand claims."
+        )
+        resp = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=_types.GenerateContentConfig(
+                temperature=0.7,
+                max_output_tokens=400,
+                response_mime_type="application/json",
+            ),
+        )
+        text = (getattr(resp, "text", None) or "").strip()
+        if not text:
+            return local
+        data = json.loads(text)
+        return {
+            "coach": (data.get("coach") or local["coach"])[:180],
+            "prompts": list(data.get("prompts") or local["prompts"])[:3],
+            "suggestions": list(data.get("suggestions") or local["suggestions"])[:6],
+            "draft": (data.get("draft") or local["draft"])[:280],
+            "source": "gemini",
+        }
+    except Exception as exc:
+        print(f"  ! review-assist fallback: {exc}")
+        return local
+
+
 async def process_request(connection, request):
     """Serve the LiveAvatar session token over plain HTTP; everything else upgrades to WS."""
     # Health check — for Fly.io checks / load balancers. Reports gen circuit state.
@@ -2516,6 +2890,34 @@ async def process_request(connection, request):
         resp = connection.respond(200 if healthy else 503, body)
         resp.headers["Content-Type"] = "application/json"
         return resp
+    if request.path.startswith("/api/review-assist"):
+        from urllib.parse import urlparse, parse_qs
+
+        parsed = urlparse(request.path)
+        params = parse_qs(parsed.query)
+
+        def _one(key: str, default: str = "") -> str:
+            return (params.get(key, [default])[0] or default).strip()
+
+        pid = _one("product_id")
+        product = _BY_ID.get(pid) if pid else None
+        try:
+            stars = max(1, min(5, int(_one("stars", "5") or 5)))
+        except ValueError:
+            stars = 5
+        fit = _one("fit", "true") or "true"
+        vibes = [v for v in _one("vibes").split(",") if v]
+        draft = _one("draft")[:280]
+
+        payload = await asyncio.to_thread(
+            _review_assist, product, stars, fit, vibes, draft
+        )
+        resp = connection.respond(200, json.dumps(payload))
+        resp.headers["Content-Type"] = "application/json"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Cache-Control"] = "no-store"
+        return resp
+
     if request.path.startswith("/api/browse") or request.path.startswith("/api/filters"):
         from urllib.parse import urlparse, parse_qs
         from product_facets import facet_options, filter_catalog
@@ -2575,12 +2977,18 @@ async def process_request(connection, request):
         for p in matched:
             if p["id"] in exclude_ids:
                 continue
+            facets = p.get("facets") or {}
             batch.append({
                 "id": p["id"], "name": p["name"],
                 "category": p["category"], "color": p.get("color"),
                 "price": p.get("price"),
                 "brand": p.get("brand"),
-                "facets": p.get("facets") or {},
+                "source": p.get("source"),
+                "facets": facets,
+                "retailer": facets.get("retailer") or p.get("retailer"),
+                "retailer_label": facets.get("retailer_label") or p.get("retailer_label"),
+                "rating": p.get("rating"),
+                "ratings_total": p.get("ratings_total"),
                 "image_url": p.get("image_url"),
                 "affiliate_url": _affiliate_url(p),
             })

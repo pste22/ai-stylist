@@ -80,10 +80,34 @@ Simple Kanban. Move cards between sections. Keep **Doing** to 1–2 items (solo 
 ---
 
 ## 🧊 Icebox (NOT in v1)
-- In-app payments / checkout
 - **Being a retailer** — holding inventory, packing, shipping (we use affiliate handoff; the retailer ships)
 - 3D avatar
 - Multi-language
 - AR / virtual try-on — see **P5-1** (parked as a future premium feature, not icebox-dead)
 - Accounts/login (until Phase 4)
 - Infra scaling/optimization
+
+---
+
+## 🅿️ Parked (design done — pick up later)
+
+### Payments / Mira Coins wallet
+- [ ] **P6-1: Mira Coins wallet + pay-for-studio** — Design agreed (2026-08-03). Free taste **20 coins** (2 try-ons); SKUs try-on=10 / Veo Lite=35 / Veo HD=100; packs ₹99·40 / ₹199·100 / ₹449·250. Server ledger + reserve→generate→commit/refund. **PG:** Razorpay or Cashfree (UPI checkout), not personal Paytm QR for public. Prereqs: PAN/Aadhaar/bank + live Terms/Privacy/Refund pages. Build when integrating payments — not blocking current UI work.
+
+### Product chat (UI gap)
+- [x] **P6-2: Ask Mira about this product** — Quick View chips → chat inject + `ask_about_product` WS (suit / wear / pair). Starts text session if offline. Shipped 2026-08-03.
+
+### Reviews
+- [~] **P6-3: Product reviews** — Quick View UI shipped (localStorage sketch): stars + fit chip + optional photo + short text; Amazon `rating`/`ratings_total` cold-start when present (`migrate_product_ratings.sql`). **Still to do:** Supabase persistence, signed-in authorship, Mira summary in chat, backfill Amazon ratings into catalog.
+
+### Platform feedback
+- [x] **P6-4: Occasional “Was Mira helpful?” pulse** — Soft bottom card after ~3 meaningful actions (chat / save / try-on / Ask Mira). Optional why chips + every 3rd Yes asks “Would you miss Mira?”. 7-day cooldown in localStorage; PostHog `platform_feedback`. Force with `?pulse=1`. Shipped 2026-08-03. **Later:** Supabase persistence / dashboard.
+
+### Quality / regression
+- [x] **P6-9: Shopper functional eval (silent + audio)** — `prototype/functional/` converses like a shopper over WS, flags inaccurate answers (budget, hallucination, grounding, no-audio). Run: `python -m functional.run_shopper_eval`. Offline rules: `pytest test_shopper_eval_rules.py`. Shipped 2026-08-03.
+
+### Affiliate / brand showcase (VCommission rejected → pivot)
+- [x] **P6-5: Retailer-aware Shop CTAs + disclosure + tracked links** — Dynamic “Shop on {Myntra/Snitch/Amazon/…}”, ASCI disclosure near buy, `mira_pid`/`utm_*` on click-out, richer `affiliate_click_out` analytics. **For brands** page on home + in-app footer.
+- [x] **P6-6: Direct brand CSV importer** — `prototype/brand_feed_importer.py` + `data/brand_feed_template.csv` for Snitch/D2C demos without a network.
+- [~] **P6-7: Cuelinks importer** — Scaffold `prototype/cuelinks_importer.py`. **Founder action:** apply Cuelinks + Admitad; set `CUELINKS_API_KEY` / product URL; re-apply VCommission later with live traffic proof.
+- [ ] **P6-8: Seed 1–2 partner CSVs** — Get Snitch (or similar) sample feed live in Supabase for brand demos.

@@ -1,0 +1,3 @@
+id,name,brand,category,color,price,currency,gender,image_url,affiliate_url,size_range,style
+snitch-linen-shirt-01,Relaxed Linen Shirt,Snitch,tops,sand,2499,INR,men,https://example.com/img1.jpg,https://www.snitch.co.in/products/example,S|M|L|XL,casual|summer
+snitch-wide-trouser-01,Wide Leg Trouser,Snitch,bottoms,black,2799,INR,men,https://example.com/img2.jpg,https://www.snitch.co.in/products/example2,28|30|32|34,smart-casual
