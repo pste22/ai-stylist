@@ -66,8 +66,9 @@ from curation_mix import (  # noqa: E402
     build_curation_mix,
     complements_for,
     card_fields as _mix_card,
-    resolve_shop_query,
 )
+import shop_agent  # noqa: E402  (deterministic typed-search agent)
+import recommender  # noqa: E402  (history-based personal picks)
 from product_store import vector_search as _vector_search  # noqa: E402
 from festival_calendar import festival_greeting_line, upcoming_festival  # noqa: E402
 
@@ -582,18 +583,6 @@ def _detect_category_intent(text: str) -> str | None:
     return None
 
 
-def _shop_label(shop: dict) -> str:
-    """Short UI label for a deterministic shop_query result."""
-    bits = []
-    if shop.get("brand"):
-        bits.append(shop["brand"])
-    if shop.get("color"):
-        bits.append(shop["color"])
-    if shop.get("category"):
-        bits.append(shop["category"])
-    return " · ".join(bits).title() if bits else "Picks for you"
-
-
 def _match_products(transcript: str) -> list[dict]:
     """Find catalog items Mira named in this turn, so the UI can show cards.
 
@@ -733,6 +722,8 @@ async def handle(ws) -> None:
     session_last_categories: list[str] = []
     # Last text the user typed or said — used for category-intent fallback.
     session_last_user_text: str = ""
+    # Lazy-loaded user_history rows for the recommender (fetched once per session).
+    session_history_events: list | None = None
     # Product IDs already pushed by deterministic catalog resolution this turn
     # (shop_query). When set, pump_mira must not append speech-match or mix
     # fallback cards — those were overwriting Tommy/brand asks with welcome junk.
@@ -1612,6 +1603,7 @@ async def handle(ws) -> None:
         """Browser mic PCM → whatever Live session is currently open."""
         nonlocal chat_title, session_shown_ids, show_saved_mode, session_last_user_text
         nonlocal last_activity_time, location_info, prefs, catalog_fulfilled_ids
+        nonlocal session_history_events
         try:
             async for msg in ws:
                 if isinstance(msg, bytes):
@@ -1863,11 +1855,36 @@ async def handle(ws) -> None:
                                                      show_more=False)
                             else:
                                 show_saved_mode = False
-                                # Deterministic catalog push — don't wait on Gemini Live.
-                                # Fixes empty replies for brand/color asks (e.g. Tommy + red).
-                                _shop = resolve_shop_query(
-                                    _CATALOG, text, n=6, exclude_ids=session_shown_ids,
+                                # Deterministic search agent — answers from the in-memory
+                                # catalog in <10 ms so cards are on screen well inside 3 s,
+                                # never waiting on Gemini Live.
+                                _shop = shop_agent.answer(
+                                    _CATALOG, text, exclude_ids=session_shown_ids,
                                 )
+                                # "Recommend something for me" → rank by the user's own
+                                # purchase / love / view history instead of facet search.
+                                if _shop.get("recommend"):
+                                    if user_id and session_history_events is None:
+                                        try:
+                                            session_history_events = await asyncio.wait_for(
+                                                asyncio.to_thread(
+                                                    user_store.get_history_events, user_id
+                                                ),
+                                                timeout=2.0,
+                                            )
+                                        except Exception:
+                                            session_history_events = []
+                                    _recs = recommender.recommend(
+                                        _CATALOG, session_history_events or [],
+                                        by_id=_BY_ID, n=_shop.get("count") or 6,
+                                        exclude_ids=session_shown_ids | set(session_saved),
+                                    )
+                                    if _recs:
+                                        _shop = {
+                                            **_shop, "products": _recs, "mode": "recommend",
+                                            "label": "Picked for you ✦", "notes": [],
+                                            "message": None,
+                                        }
                                 if _shop["products"]:
                                     batch = [
                                         _mix_card(p, affiliate_url=_affiliate_url(p))
@@ -1883,14 +1900,16 @@ async def handle(ws) -> None:
                                     # welcome "few more picks" cards; show all matches).
                                     await _send_json(
                                         ws, type="products", items=batch, show_more=True,
-                                        label=_shop_label(_shop), paged=True,
+                                        label=_shop.get("label"), paged=True,
                                     )
                                     print(
-                                        f"  shop_query → mode={_shop['mode']} "
+                                        f"  shop_agent → mode={_shop['mode']} "
                                         f"brand={_shop.get('brand')!r} "
                                         f"cat={_shop.get('category')!r} "
                                         f"color={_shop.get('color')!r} "
-                                        f"n={len(batch)} notes={_shop.get('notes')}"
+                                        f"sort={_shop.get('sort')} n={len(batch)} "
+                                        f"{_shop.get('elapsed_ms', 0):.1f}ms "
+                                        f"notes={_shop.get('notes')}"
                                     )
                                     note = (_shop.get("notes") or [None])[0]
                                     names = ", ".join(
@@ -1909,6 +1928,15 @@ async def handle(ws) -> None:
                                             ws, type="transcript", who="mira",
                                             text=note + " Here are the closest picks.",
                                         )
+                                    elif _shop["mode"] == "recommend":
+                                        shop_ctx += (
+                                            "These are personal picks from their history — "
+                                            "reference what they loved before. "
+                                        )
+                                        await _send_json(
+                                            ws, type="transcript", who="mira",
+                                            text="Based on what you've loved so far — these feel very you.",
+                                        )
                                     else:
                                         shop_ctx += (
                                             "Speak about these picks naturally — do not invent other brands. "
@@ -1918,16 +1946,15 @@ async def handle(ws) -> None:
                                             ws, type="transcript", who="mira",
                                             text="Here are some picks that match what you asked.",
                                         )
-                                elif _shop.get("brand") or _shop.get("category") or _shop.get("color"):
-                                    miss = (
-                                        f"I don't have "
-                                        f"{(_shop.get('color') + ' ') if _shop.get('color') else ''}"
-                                        f"{_shop.get('category') or 'pieces'}"
-                                        f"{(' from ' + _shop['brand']) if _shop.get('brand') else ''} "
-                                        f"in the catalog right now."
+                                elif _shop.get("message"):
+                                    await _send_json(
+                                        ws, type="transcript", who="mira",
+                                        text=_shop["message"],
                                     )
-                                    await _send_json(ws, type="transcript", who="mira", text=miss.strip())
-                                    shop_ctx = f"[CATALOG RESULT] {miss} Ask what else they'd like.\n"
+                                    shop_ctx = (
+                                        f"[CATALOG RESULT] {_shop['message']} "
+                                        f"Ask what else they'd like.\n"
+                                    )
                             sess = current["session"]
                             if sess is not None:
                                 # Always prepend saved items context so Mira knows

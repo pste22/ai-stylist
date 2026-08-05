@@ -311,15 +311,18 @@ def _brand_index(catalog: Iterable[dict]) -> list[str]:
 
 
 def detect_brand(text: str, catalog: Iterable[dict] | None = None) -> str | None:
-    """Match a brand mentioned in free text (e.g. 'tommy' → Tommy Hilfiger)."""
+    """Match a brand mentioned in free text (e.g. 'tommy' → Tommy Hilfiger).
+
+    Whole-word matching only — substring matching made one-letter brands like
+    "W" (W for Woman) hijack every sentence containing that letter.
+    """
     t = (text or "").lower()
     if not t:
         return None
     brands = _brand_index(catalog or [])
-    # Prefer catalog brands; also try common shorthand
     for b in brands:
         bl = b.lower()
-        if bl in t:
+        if re.search(rf"\b{re.escape(bl)}\b", t):
             return b
         # first token shorthand: "tommy" → Tommy Hilfiger
         first = bl.split()[0]

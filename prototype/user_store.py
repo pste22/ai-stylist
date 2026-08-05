@@ -190,6 +190,23 @@ def log_product_event(user_id: str, product_id: str, product_name: str, action: 
         print(f"  ! user_store.log_product_event: {exc}")
 
 
+def get_history_events(user_id: str, limit: int = 300) -> list[dict]:
+    """Raw interaction rows (product_id, action, ts) for the recommender."""
+    try:
+        result = (
+            _db().table("user_history")
+            .select("product_id,action,ts")
+            .eq("user_id", user_id)
+            .order("ts", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+    except Exception as exc:
+        print(f"  ! user_store.get_history_events: {exc}")
+        return []
+
+
 def get_loved_ids(user_id: str) -> list[str]:
     """Return product IDs the user has wishlisted/loved, most recent first."""
     try:
