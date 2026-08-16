@@ -94,6 +94,20 @@ for _p in _CATALOG:
 # Index by id so we can match Mira's spoken recommendations.
 _BY_ID = {p["id"]: p for p in _CATALOG}
 
+# Build the search facet buckets at boot rather than on the first shopper's query,
+# which would otherwise wear the whole build on the event loop.
+try:
+    import time as _t
+
+    from shop_agent import warm_index as _warm_search_index
+
+    _t0 = _t.perf_counter()
+    _warm_search_index(_CATALOG)
+    print(f"  ⚡ search index warmed for {len(_CATALOG)} products "
+          f"in {(_t.perf_counter() - _t0) * 1000:.0f} ms")
+except Exception as _idx_exc:  # never block startup on an optimisation
+    print(f"  ! search index warm skipped: {_idx_exc}")
+
 
 _BUDGET_RANGES = {
     "budget":  (0,   50),
@@ -3041,6 +3055,9 @@ async def process_request(connection, request):
         resp = connection.respond(200, resp_data)
         resp.headers["Content-Type"] = "application/json"
         resp.headers["Access-Control-Allow-Origin"] = "*"
+        # Catalog pages are identical for every shopper, so let the browser and any
+        # edge cache absorb re-taps of the same category instead of re-asking.
+        resp.headers["Cache-Control"] = "public, max-age=60"
         return resp
 
     if request.path.rstrip("/") == "/avatar-token":
