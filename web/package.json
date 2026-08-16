@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "crawl": "node crawl_bugs.mjs"
+    "crawl": "node crawl_bugs.mjs",
+    "test:signin": "node tests/signin.spec.mjs"
   },
   "dependencies": {
     "@heygen/liveavatar-web-sdk": "^0.0.18",
