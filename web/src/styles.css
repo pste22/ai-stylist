@@ -350,6 +350,16 @@ h1, h2, h3,
   padding: .4rem;
 }
 .login-guest-btn:hover { color: var(--accent); }
+.login-error {
+  margin: 0;
+  padding: 0.7rem 0.9rem;
+  border-radius: var(--r-sm);
+  border: 1px solid #e7c3c3;
+  background: #fdf3f3;
+  color: #8a2b2b;
+  font-size: 0.85rem;
+  line-height: 1.45;
+}
 .login-legal {
   margin: 0; text-align: center;
   font-size: 0.75rem; color: var(--ink-3); line-height: 1.5;

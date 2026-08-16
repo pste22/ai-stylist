@@ -1,20 +1,40 @@
 import { useEffect, useState } from "react";
 import ForBrands from "./ForBrands.jsx";
+import { fetchEnabledProviders } from "./supabaseClient.js";
 
 /**
  * Zara-inspired first screen: full-bleed editorial photo + oversized brand.
  * Auth is a secondary sheet so the hero stays one clean composition.
  */
-export default function LoginScreen({ onGoogle, onFacebook, onGithub, onGuest }) {
-  const [showAuth, setShowAuth] = useState(false);
+export default function LoginScreen({
+  onGoogle, onFacebook, onGithub, onGuest,
+  autoOpen = false, authError = null, onDismissError,
+}) {
+  const [showAuth, setShowAuth] = useState(autoOpen);
   const [showBrands, setShowBrands] = useState(false);
+  // null until we know; falling back to "show everything" beats hiding sign-in
+  // entirely if the settings lookup fails.
+  const [providers, setProviders] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchEnabledProviders().then((p) => { if (active) setProviders(p); });
+    return () => { active = false; };
+  }, []);
+
+  // An error only makes sense next to the buttons that produced it.
+  useEffect(() => { if (authError) setShowAuth(true); }, [authError]);
+
+  const closeAuth = () => { setShowAuth(false); onDismissError?.(); };
 
   useEffect(() => {
     if (!showAuth) return;
-    const onKey = (e) => { if (e.key === "Escape") setShowAuth(false); };
+    const onKey = (e) => { if (e.key === "Escape") closeAuth(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [showAuth]);
+
+  const enabled = (name) => providers === null || providers[name] !== false;
 
   return (
     <div className="mira-home">
@@ -70,14 +90,14 @@ export default function LoginScreen({ onGoogle, onFacebook, onGithub, onGuest })
           role="dialog"
           aria-modal="true"
           aria-label="Sign in"
-          onClick={(e) => { if (e.target === e.currentTarget) setShowAuth(false); }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeAuth(); }}
         >
           <div className="mira-home-auth-panel">
             <button
               type="button"
               className="mira-home-auth-close"
               aria-label="Close"
-              onClick={() => setShowAuth(false)}
+              onClick={closeAuth}
             >
               ✕
             </button>
@@ -86,19 +106,28 @@ export default function LoginScreen({ onGoogle, onFacebook, onGithub, onGuest })
             <p className="mira-home-auth-sub">
               Save picks, try-ons, and a stylist that remembers you.
             </p>
+            {authError && (
+              <p className="login-error" role="alert">{authError}</p>
+            )}
             <div className="login-actions">
-              <button className="oauth-btn oauth-github" onClick={onGithub}>
-                <GithubIcon />
-                Continue with GitHub
-              </button>
-              <button className="oauth-btn oauth-google" onClick={onGoogle}>
-                <GoogleIcon />
-                Continue with Google
-              </button>
-              <button className="oauth-btn oauth-facebook" onClick={onFacebook}>
-                <FacebookIcon />
-                Continue with Facebook
-              </button>
+              {enabled("google") && (
+                <button className="oauth-btn oauth-google" onClick={onGoogle}>
+                  <GoogleIcon />
+                  Continue with Google
+                </button>
+              )}
+              {enabled("github") && (
+                <button className="oauth-btn oauth-github" onClick={onGithub}>
+                  <GithubIcon />
+                  Continue with GitHub
+                </button>
+              )}
+              {enabled("facebook") && (
+                <button className="oauth-btn oauth-facebook" onClick={onFacebook}>
+                  <FacebookIcon />
+                  Continue with Facebook
+                </button>
+              )}
             </div>
             <button className="login-guest-btn" onClick={onGuest}>
               Browse without signing in →

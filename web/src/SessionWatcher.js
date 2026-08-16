@@ -451,8 +451,10 @@ let _notifyUI     = null;
 let _log          = [];
 
 export function setUICallback(fn) {
-  _notifyUI = fn;
-  _log.forEach(fn);
+  // The panel passes null on unmount to detach; replaying the log into it would
+  // throw and, with no error boundary above, take the whole app down with it.
+  _notifyUI = typeof fn === "function" ? fn : null;
+  if (_notifyUI) _log.forEach(_notifyUI);
 }
 
 function emit(entry) {

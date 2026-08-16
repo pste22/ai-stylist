@@ -1225,6 +1225,7 @@ export default function App() {
   const {
     user, loading,
     userId, userName, userAvatar,
+    authError, clearAuthError,
     signInWithGoogle, signInWithFacebook, signInWithGithub, signOut, deleteAccount,
   } = useAuth();
 
@@ -1237,6 +1238,9 @@ export default function App() {
   const threadRef                         = useRef(null);
   const msgsEndRef                        = useRef(null); // sentinel above show-more button
   const [isGuest, setIsGuest]             = useState(false);
+  // Leaving guest mode via a "Sign in" button should land on the auth sheet,
+  // not the marketing hero with the sheet closed.
+  const [wantsSignIn, setWantsSignIn]     = useState(false);
   const [textMode, setTextMode]           = useState(true); // default silent chat — voice is opt-in
   const [networkToast, setNetworkToast]   = useState(null);
   const [showSaved, setShowSaved]         = useState(false);
@@ -1594,7 +1598,10 @@ export default function App() {
         onGoogle={signInWithGoogle}
         onFacebook={signInWithFacebook}
         onGithub={signInWithGithub}
-        onGuest={() => setIsGuest(true)}
+        onGuest={() => { setWantsSignIn(false); setIsGuest(true); }}
+        autoOpen={wantsSignIn}
+        authError={authError}
+        onDismissError={clearAuthError}
       />
     );
   }
@@ -1677,7 +1684,8 @@ export default function App() {
                 userAvatar={userAvatar} onSignOut={signOut}
                 onDeleteAccount={() => setShowDelete(true)} />
             ) : (
-              <button className="guest-signin-btn" onClick={() => setIsGuest(false)}>Sign in</button>
+              <button className="guest-signin-btn"
+                onClick={() => { setWantsSignIn(true); setIsGuest(false); }}>Sign in</button>
             )}
           </div>
         </header>
@@ -2051,7 +2059,7 @@ export default function App() {
             </p>
             <div className="delete-modal-actions">
               <button className="delete-btn-confirm" style={{ background: "var(--accent)" }}
-                onClick={() => { setSignInPrompt(false); setIsGuest(false); track("signin_prompt_accepted", { from: "try_on" }); }}>
+                onClick={() => { setSignInPrompt(false); setWantsSignIn(true); setIsGuest(false); track("signin_prompt_accepted", { from: "try_on" }); }}>
                 Sign in / Sign up
               </button>
               <button className="delete-btn-cancel" onClick={() => setSignInPrompt(false)}>Maybe later</button>
