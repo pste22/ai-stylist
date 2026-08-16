@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import SizeAdvice from "./SizeAdvice.jsx";
 import ReviewComposer from "./ReviewComposer.jsx";
 import AffiliateDisclosure from "./AffiliateDisclosure.jsx";
@@ -141,7 +142,7 @@ export default function ProductQuickView({
 
   const moreLike = (related || []).filter((p) => p && p.id !== product.id).slice(0, 8);
 
-  return (
+  const sheet = (
     <div className="qv-backdrop" onClick={handleBackdrop} role="dialog" aria-modal="true" aria-label={product.name}>
       <div className="qv-panel" ref={panelRef}>
         <header className="qv-topbar">
@@ -355,4 +356,6 @@ export default function ProductQuickView({
       </div>
     </div>
   );
+
+  return createPortal(sheet, document.body);
 }

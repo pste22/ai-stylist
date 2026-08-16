@@ -28,6 +28,7 @@ await card.click();
 
 const panel = page.locator(".qv-panel");
 await panel.waitFor({ state: "visible", timeout: 8000 });
+await page.waitForTimeout(450);
 
 const gallery = page.locator(".qv-gallery");
 const sticky = page.locator(".qv-sticky");
@@ -39,19 +40,26 @@ const galleryOpen = await gallery.isVisible();
 const stickyOpen = await sticky.isVisible();
 const shopOpen = await shop.isVisible();
 const fit = await img.evaluate((el) => getComputedStyle(el).objectFit).catch(() => "");
-const galleryBox = await gallery.boundingBox();
-const stickyBox = await sticky.boundingBox();
-const vh = 844;
-const stickyOnScreen = !!stickyBox && stickyBox.y + stickyBox.height <= vh + 8;
-const galleryAboveFold = (galleryBox?.y ?? 9999) < vh * 0.55;
+const layout = await page.evaluate(() => {
+  const g = document.querySelector(".qv-gallery");
+  const s = document.querySelector(".qv-sticky");
+  const p = document.querySelector(".qv-panel");
+  return {
+    innerH: window.innerHeight,
+    panelTop: p?.getBoundingClientRect().top,
+    galleryTop: g?.getBoundingClientRect().top,
+    stickyBottom: s?.getBoundingClientRect().bottom,
+  };
+});
+const stickyOnScreen = (layout.stickyBottom ?? 9999) <= layout.innerH + 12;
+const galleryAboveFold = (layout.galleryTop ?? 9999) < layout.innerH * 0.55;
 
 console.log("PDP open:", pdpOpen);
 console.log("swipe gallery:", galleryOpen);
-console.log("sticky buy bar:", stickyOpen,
-  stickyBox ? `(bottom=${Math.round(stickyBox.y + stickyBox.height)})` : "");
+console.log("sticky buy bar:", stickyOpen, `(bottom=${Math.round(layout.stickyBottom ?? -1)} / ${layout.innerH})`);
 console.log("sticky shop CTA:", shopOpen);
 console.log("photo object-fit:", fit, "— contain:", fit === "contain");
-console.log("gallery above fold:", galleryAboveFold);
+console.log("gallery above fold:", galleryAboveFold, `(top=${Math.round(layout.galleryTop ?? -1)})`);
 console.log("sticky bar on screen:", stickyOnScreen);
 
 await page.screenshot({ path: "/tmp/pdp_verified.png" });
