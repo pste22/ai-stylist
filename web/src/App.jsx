@@ -254,15 +254,15 @@ function MiraBubbleContent({ text }) {
   return <>{blocks}</>;
 }
 
-// Unified 3-column product grid — single source of truth for product display.
+// Unified product display — grid for browse, snap-rail for chat.
 const PRODUCTS_PER_TURN = 3;
-function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll, userSize, onTryOn }) {
+function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll, userSize, onTryOn, rail }) {
   if (!products?.length) return null;
   const shown = showAll ? products : products.slice(0, PRODUCTS_PER_TURN);
   return (
-    <div className="product-grid-wrap">
+    <div className={`product-grid-wrap${rail ? " product-grid-wrap--rail" : ""}`}>
       {label && <div className="product-grid-label"><span>{label}</span></div>}
-      <div className="product-grid">
+      <div className={rail ? "product-rail" : "product-grid"}>
         {shown.map((p) => (
           <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
             onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect}
@@ -312,7 +312,7 @@ function MiniAvatar({ state, mood }) {
 }
 
 // ─── Product strip below a Mira bubble (outside the text bubble itself) ──────
-function BubbleProducts({ products, loved, onLove, onBuy }) {
+function BubbleProducts({ products, loved, onLove, onBuy, onSelect }) {
   if (!products?.length) return null;
   return (
     <div className="bubble-products">
@@ -323,11 +323,29 @@ function BubbleProducts({ products, loved, onLove, onBuy }) {
           loved={loved.has(p.id)}
           onLove={onLove}
           onBuy={onBuy}
+          onSelect={onSelect}
           compact
         />
       ))}
     </div>
   );
+}
+
+function pickRelatedProducts(product, pools) {
+  if (!product?.id) return [];
+  const seen = new Set([product.id]);
+  const out = [];
+  for (const pool of pools) {
+    if (!Array.isArray(pool)) continue;
+    for (const p of pool) {
+      if (!p?.id || seen.has(p.id)) continue;
+      if (product.category && p.category && p.category !== product.category) continue;
+      seen.add(p.id);
+      out.push(p);
+      if (out.length >= 8) return out;
+    }
+  }
+  return out;
 }
 
 // ─── Slot label config ────────────────────────────────────────────────────────
@@ -869,7 +887,7 @@ function ModeToggle({ textMode, connected, quality, onVoice, onText }) {
 }
 
 
-function YouMightLike({ data, onBuy, onLove, loved, onAddToCart, inCart, onDismiss }) {
+function YouMightLike({ data, onBuy, onLove, loved, onAddToCart, inCart, onDismiss, onSelect }) {
   if (!data?.items?.length) return null;
   return (
     <div className="yml-strip">
@@ -879,7 +897,7 @@ function YouMightLike({ data, onBuy, onLove, loved, onAddToCart, inCart, onDismi
       </div>
       <div className="yml-scroll">
         {data.items.map(p => (
-          <div key={p.id} className="yml-card">
+          <div key={p.id} className="yml-card" onClick={() => onSelect?.(p)}>
             <div className="yml-img-wrap">
               {p.image_url
                 ? <img className="yml-img" src={p.image_url} alt={p.name} loading="lazy" />
@@ -887,13 +905,13 @@ function YouMightLike({ data, onBuy, onLove, loved, onAddToCart, inCart, onDismi
               }
               <button
                 className={`yml-heart${loved?.has(p.id) ? " is-loved" : ""}`}
-                onClick={() => onLove?.(p)}
+                onClick={(e) => { e.stopPropagation(); onLove?.(p); }}
               >{loved?.has(p.id) ? "♥" : "♡"}</button>
             </div>
             <p className="yml-name">{p.name}</p>
             <div className="yml-footer">
               <span className="yml-price">₹{Number(p.price).toLocaleString("en-IN")}</span>
-              <a className="yml-shop" href={trackedAffiliateUrl(p)} target="_blank" rel="noopener noreferrer nofollow sponsored" onClick={() => onBuy?.(p)}>{shopLabel(p, { short: true })}</a>
+              <a className="yml-shop" href={trackedAffiliateUrl(p)} target="_blank" rel="noopener noreferrer nofollow sponsored" onClick={(e) => { e.stopPropagation(); onBuy?.(p); }}>{shopLabel(p, { short: true })}</a>
             </div>
           </div>
         ))}
@@ -945,7 +963,7 @@ function ShopTheLookStrip({ looks, onShopLook, onLove, loved, onAddToCart, inCar
   );
 }
 
-function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart }) {
+function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart, onSelect }) {
   if (!products?.length) return null;
   return (
     <div className="trending-strip">
@@ -954,7 +972,7 @@ function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart }) 
       </div>
       <div className="trending-strip-scroll">
         {products.map(p => (
-          <div key={p.id} className="trending-card">
+          <div key={p.id} className="trending-card" onClick={() => onSelect?.(p)}>
             <div className="trending-card-img-wrap">
               {p.image_url
                 ? <img className="trending-card-img" src={p.image_url} alt={p.name} loading="lazy" />
@@ -962,7 +980,7 @@ function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart }) 
               }
               <button
                 className={`trending-card-heart${loved?.has(p.id) ? " is-loved" : ""}`}
-                onClick={() => onLove?.(p)}
+                onClick={(e) => { e.stopPropagation(); onLove?.(p); }}
               >{loved?.has(p.id) ? "♥" : "♡"}</button>
             </div>
             <p className="trending-card-name">{p.name}</p>
@@ -975,7 +993,7 @@ function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart }) 
                 href={trackedAffiliateUrl(p)}
                 target="_blank"
                 rel="noopener noreferrer nofollow sponsored"
-                onClick={() => onBuy?.(p)}
+                onClick={(e) => { e.stopPropagation(); onBuy?.(p); }}
               >{shopLabel(p, { short: true })}</a>
             </div>
           </div>
@@ -1085,6 +1103,7 @@ function MessageBubble({ msg, loved, onLove, onBuy, highlightedId, onSelect, inC
             onShopAll={msg.label && onAddAllToCart ? (items) => { onAddAllToCart(items); } : null}
             userSize={userSize}
             onTryOn={onTryOn}
+            rail
           />
         )}
         {pickerProduct && (
@@ -1337,6 +1356,19 @@ export default function App() {
     userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
     onVisualSearchResults: (items, query, note) => { setVsResults(items); setVsQuery(query); setVsCatalogNote(note || null); setVsLoading(false); },
   });
+
+  const relatedProducts = useMemo(() => {
+    if (!quickViewProduct) return [];
+    const fromMessages = messages.flatMap((m) => m.products || []);
+    return pickRelatedProducts(quickViewProduct, [
+      filterResults?.products,
+      products,
+      vsResults,
+      trendingProducts,
+      savedProducts,
+      fromMessages,
+    ]);
+  }, [quickViewProduct, filterResults, products, vsResults, trendingProducts, savedProducts, messages]);
 
   // Auto-scroll thread to bottom on new messages/products
   useEffect(() => {
@@ -1875,7 +1907,7 @@ export default function App() {
             />
           )}
           {messages.length === 0 && showDiscovery && trendingProducts.length > 0 && (
-            <TrendingStrip products={trendingProducts} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} />
+            <TrendingStrip products={trendingProducts} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} onSelect={setQuickViewProduct} />
           )}
           {messages.length === 0 && showDiscovery && editorialLooks.length > 0 && (
             <ShopTheLookStrip
@@ -1888,7 +1920,7 @@ export default function App() {
             />
           )}
           {youMightLike && (
-            <YouMightLike data={youMightLike} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} onDismiss={() => setYouMightLike(null)} />
+            <YouMightLike data={youMightLike} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} onDismiss={() => setYouMightLike(null)} onSelect={setQuickViewProduct} />
           )}
             </>
           )}
@@ -2020,6 +2052,8 @@ export default function App() {
                 threadRef.current?.scrollTo?.({ top: threadRef.current.scrollHeight, behavior: "smooth" });
               });
             }}
+            related={relatedProducts}
+            onSelectRelated={setQuickViewProduct}
           />
         </Suspense>
       )}

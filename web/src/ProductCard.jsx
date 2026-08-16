@@ -60,6 +60,13 @@ function isInUserSize(productName, userSize) {
   return re.test(name);
 }
 
+/* Still-life catalog shots (bags, shoes, jewellery) get cropped to straps/toes
+   when we cover-fill a portrait frame. Apparel keeps cover so faces stay in. */
+const CONTAIN_CATEGORIES = new Set(["bags", "shoes", "accessories"]);
+export function shouldContainProductPhoto(category) {
+  return CONTAIN_CATEGORIES.has(String(category || "").toLowerCase());
+}
+
 export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact, userSize, onTryOn }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError]   = useState(false);
@@ -73,11 +80,12 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
     : null;
   const imgSrcSet  = usePhoto && useHd ? productImageSrcSet(product.image_url) : undefined;
 
+  const containPhoto = usePhoto && (compact || shouldContainProductPhoto(product.category));
   const thumbnail = usePhoto ? (
     <>
       {!imgLoaded && <div className="card-img-skeleton" aria-hidden="true" />}
       <img
-        className={`card-img${imgLoaded ? "" : " card-img--loading"}`}
+        className={`card-img${imgLoaded ? "" : " card-img--loading"}${containPhoto ? " card-img--contain" : ""}`}
         src={imgSrc}
         srcSet={imgSrcSet}
         sizes={compact
@@ -106,7 +114,10 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
   /* ── Compact card: horizontal layout for in-chat display ── */
   if (compact) {
     return (
-      <div className={`card compact${loved ? " loved" : ""}`}>
+      <div
+        className={`card compact${loved ? " loved" : ""}`}
+        onClick={() => onSelect?.(product)}
+      >
         <div className="card-thumb">
           {thumbnail}
         </div>
@@ -123,7 +134,7 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
           <div className="card-actions">
             <button
               className={`love${loved ? " is-loved" : ""}`}
-              onClick={() => onLove(product)}
+              onClick={(e) => { e.stopPropagation(); onLove(product); }}
               title={loved ? "Click to unlike" : "Save for later"}
             >{loved ? "♥ Saved" : "♡ Save"}</button>
             <a
@@ -131,7 +142,7 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
               href={trackedAffiliateUrl(product)}
               target="_blank"
               rel="noopener noreferrer nofollow sponsored"
-              onClick={() => onBuy?.(product)}
+              onClick={(e) => { e.stopPropagation(); onBuy?.(product); }}
             >{shopLabel(product, { short: true })}</a>
           </div>
         </div>
