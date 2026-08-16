@@ -39,6 +39,11 @@ COPY deploy/nginx.conf /etc/nginx/nginx.conf
 COPY deploy/start.sh   ./start.sh
 RUN chmod +x start.sh
 
+# Deployed commit, surfaced at /health. Declared last so it never busts the
+# cache for the dependency and build layers above.
+ARG GIT_SHA=unknown
+ENV MIRA_GIT_SHA=$GIT_SHA
+
 EXPOSE 8080
 
 CMD ["./start.sh"]
