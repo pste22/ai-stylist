@@ -537,7 +537,7 @@ _WS_MAX_SIZE = int(os.environ.get("MIRA_WS_MAX_SIZE", str(16 * 1024 * 1024)))  #
 
 # Cost guardrails — both configurable via env so you can tighten as usage grows.
 # Idle timeout: close Live session (and stop billing) after N seconds of silence.
-_IDLE_TIMEOUT_SEC  = int(os.environ.get("MIRA_IDLE_TIMEOUT",  "180"))   # 3 min default
+_IDLE_TIMEOUT_SEC  = int(os.environ.get("MIRA_IDLE_TIMEOUT",  "600"))   # 10 min default
 # Hard cap: close session after N seconds regardless of activity, with a goodbye.
 _MAX_SESSION_SEC   = int(os.environ.get("MIRA_MAX_SESSION",   "1200"))  # 20 min default
 
@@ -710,6 +710,8 @@ async def handle(ws) -> None:
     pin_code: str | None = None
     location_info: dict | None = None
     event_brief: dict = {}
+    # Set from the init payload when the socket opens to answer a specific ask.
+    initial_request: str = ""
     memory = ""
     taste: str | None = None   # derived from saved products
     chat_session_id: str | None = None
@@ -768,13 +770,17 @@ async def handle(ws) -> None:
         "budget":         budget,
         "pin_code":       pin_code,
     }
-    raw_picks = _personalized_top_picks(prefs, exclude_ids=set(session_saved.keys()), n=3)
-    top_picks = []
-    for p in raw_picks:
-        top_picks.append(_client_product(p))
-        session_shown_ids.add(p["id"])
-    if top_picks:
-        await _send_json(ws, type="products", items=top_picks, show_more=True)
+    # Only when they arrived with nothing in mind. The socket also opens lazily on
+    # the first typed question, and unlabelled picks pushed then land underneath
+    # that question as "a few more picks for you" — bags in answer to a dress ask.
+    if not initial_request:
+        raw_picks = _personalized_top_picks(prefs, exclude_ids=set(session_saved.keys()), n=3)
+        top_picks = []
+        for p in raw_picks:
+            top_picks.append(_client_product(p))
+            session_shown_ids.add(p["id"])
+        if top_picks:
+            await _send_json(ws, type="products", items=top_picks, show_more=True)
 
     # Send 3 editorial "Shop the look" cards for the homepage
     _editorial_occasions = [

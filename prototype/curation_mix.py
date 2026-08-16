@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Iterable
+from functools import lru_cache
 from typing import Any
 
 
@@ -29,6 +30,13 @@ _CATEGORY_SYNONYMS: dict[str, tuple[str, ...]] = {
 }
 
 _COLOR_ALIASES: dict[str, tuple[str, ...]] = {
+    # Listed first so a mixed-print ask never falls through to a single hue.
+    # Catalog rows use "multi" for these.
+    "multicolor": ("multicolor", "multicolour", "multicolored", "multicoloured",
+                   "multi-color", "multi-colour", "multi color", "multi colour",
+                   "multi", "multitone", "colorblock", "colourblock",
+                   "color block", "colour block", "rainbow", "printed", "print",
+                   "floral", "patterned", "tie dye", "tie-dye", "striped"),
     "purple": ("purple", "violet", "lavender", "lilac", "plum", "magenta", "mauve"),
     "red": ("red", "burgundy", "crimson", "maroon", "scarlet", "wine"),
     "blue": ("blue", "navy", "indigo", "cobalt", "teal", "azure"),
@@ -79,10 +87,24 @@ def detect_category(text: str) -> str | None:
     return None
 
 
+@lru_cache(maxsize=1024)
+def _alias_re(alias: str) -> re.Pattern:
+    """Whole-word matcher, tolerating a plural s.
+
+    Substring matching silently mis-reads asks: "multicoloured" contains "red",
+    so a request for multicoloured dresses came back as red ones.
+    """
+    return re.compile(rf"\b{re.escape(alias)}s?\b")
+
+
+def _mentions(text: str, aliases: Iterable[str]) -> bool:
+    return any(_alias_re(a).search(text) for a in aliases)
+
+
 def detect_color_key(text: str) -> str | None:
     t = (text or "").lower()
     for key, aliases in _COLOR_ALIASES.items():
-        if any(a in t for a in aliases):
+        if _mentions(t, aliases):
             return key
     return None
 
@@ -91,7 +113,7 @@ def _color_matches(product: dict, color_key: str | None) -> bool:
     if not color_key:
         return False
     blob = f"{product.get('color') or ''} {product.get('name') or ''}".lower()
-    return any(a in blob for a in _COLOR_ALIASES.get(color_key, ()))
+    return _mentions(blob, _COLOR_ALIASES.get(color_key, ()))
 
 
 def _as_price(p: dict) -> float:

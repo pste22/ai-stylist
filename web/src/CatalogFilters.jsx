@@ -221,7 +221,10 @@ export default function CatalogFilters({
     ([k, v]) => v && !(k === "sort" && v === "featured")
   ).length + (category && category !== "all" ? 1 : 0);
 
-  const isCalm = calm && !filtersExpanded && activeCount === 0;
+  // Stay collapsed until the shopper actually asks for filters. Expanding on any
+  // active facet meant tapping a category unfurled ~16 dropdowns, which on a phone
+  // fills the screen and pushes the results the tap was meant to show off-screen.
+  const isCalm = calm && !filtersExpanded;
 
   return (
     <div className={`cf-wrap${isCalm ? " cf-wrap--calm" : ""}`} ref={barRef}>
@@ -245,7 +248,7 @@ export default function CatalogFilters({
             className="filter-chip cf-filters-reveal"
             onClick={() => setFiltersExpanded(true)}
           >
-            Filters
+            {activeCount ? `Filters · ${activeCount}` : "Filters"}
           </button>
         )}
         {calm && onBrowseBrands && (

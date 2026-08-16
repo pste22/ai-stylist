@@ -5107,8 +5107,10 @@ html[data-mira="atelier"] .cf-wrap--calm .cf-pills {
   pointer-events: none;
   transition: max-height .35s ease, opacity .25s ease, padding .25s ease;
 }
+/* Scoped to the pills, not the whole bar: focus-within on .cf-wrap also fired
+   when a category chip took focus, unfurling every facet on a plain tap. */
 html[data-mira="atelier"] .cf-wrap:not(.cf-wrap--calm) .cf-pills,
-html[data-mira="atelier"] .cf-wrap--calm:focus-within .cf-pills {
+html[data-mira="atelier"] .cf-wrap--calm .cf-pills:focus-within {
   max-height: 220px;
   opacity: 1;
   pointer-events: auto;
@@ -5118,6 +5120,12 @@ html[data-mira="atelier"] .cf-wrap--calm .cf-meta { display: none; }
 html[data-mira="atelier"] .cf-filters-reveal {
   margin-left: auto;
   opacity: .75;
+  /* The category row scrolls sideways on narrow screens; pinning keeps the only
+     way back into the facets on screen instead of parked past OUTERWEAR. */
+  position: sticky;
+  right: 0;
+  padding-left: .6rem;
+  background: linear-gradient(90deg, transparent 0, var(--bg) .55rem, var(--bg) 100%);
 }
 html[data-mira="atelier"] .cf-categories {
   justify-content: flex-start;
