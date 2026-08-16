@@ -30,7 +30,14 @@ export function useAuth() {
     return () => subscription.unsubscribe();
   }, []);
 
-  const redirectTo = typeof window !== "undefined" ? window.location.origin : undefined;
+  // Must end in a path, not a bare origin: Supabase's "https://host/**" allowlist
+  // entries don't match "https://host". A rejected redirect_to is not an error —
+  // GoTrue silently sends the user to the project's Site URL instead, so sign-in
+  // appears to do nothing on whatever host you're actually developing on.
+  const redirectTo =
+    typeof window !== "undefined"
+      ? window.location.origin + (window.location.pathname || "/")
+      : undefined;
 
   const signInWithGoogle = () =>
     supabase.auth.signInWithOAuth({

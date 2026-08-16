@@ -44,33 +44,49 @@ BACKEND_PID=$!
 # ── Frontend ──────────────────────────────────────────────────────────────────
 echo "▶ Starting Vite HTTPS dev server with HMR on :5173"
 cd "$REPO/web"
+if [ "${MIRA_PUBLIC_TUNNEL:-0}" = "1" ]; then
+  export VITE_HMR_CLIENT_PORT="${VITE_HMR_CLIENT_PORT:-443}"
+  export VITE_HMR_PROTOCOL="${VITE_HMR_PROTOCOL:-wss}"
+fi
 npm run dev &
 FRONTEND_PID=$!
 
-TUNNEL_PID=""
+TUNNEL_ON=""
 if [ "${MIRA_PUBLIC_TUNNEL:-0}" = "1" ]; then
   CLOUDFLARED="${CLOUDFLARED:-$HOME/bin/cloudflared}"
   if [ ! -x "$CLOUDFLARED" ]; then
     CLOUDFLARED="$(command -v cloudflared || true)"
   fi
   if [ -n "$CLOUDFLARED" ]; then
-    echo "▶ Waiting for Vite, then opening a public HTTPS tunnel"
-    for _ in $(seq 1 40); do
-      if curl -k -s -o /dev/null https://127.0.0.1:5173/; then
-        break
-      fi
-      sleep 0.25
-    done
-    "$CLOUDFLARED" tunnel --no-autoupdate --no-tls-verify \
-      --url https://127.0.0.1:5173 > /tmp/mira-tunnel.log 2>&1 &
-    TUNNEL_PID=$!
+    # A quick tunnel gets a new random hostname every time it starts, and every new
+    # hostname has to be re-added to the Supabase redirect allowlist. So the tunnel
+    # is deliberately detached from this script's lifecycle: restarting ./dev.sh
+    # reuses the running tunnel and keeps the same public URL.
+    if pgrep -f "cloudflared tunnel .*--url https://127.0.0.1:5173" >/dev/null 2>&1; then
+      echo "▶ Reusing the public HTTPS tunnel that's already running"
+      TUNNEL_ON=1
+    else
+      echo "▶ Waiting for Vite, then opening a public HTTPS tunnel"
+      for _ in $(seq 1 40); do
+        if curl -k -s -o /dev/null https://127.0.0.1:5173/; then
+          break
+        fi
+        sleep 0.25
+      done
+      setsid nohup "$CLOUDFLARED" tunnel --no-autoupdate --no-tls-verify \
+        --url https://127.0.0.1:5173 > /tmp/mira-tunnel.log 2>&1 < /dev/null &
+      disown 2>/dev/null || true
+      TUNNEL_ON=1
+    fi
   else
     echo "⚠ MIRA_PUBLIC_TUNNEL=1 but cloudflared is not installed"
   fi
 fi
 
 # ── Cleanup on Ctrl-C ─────────────────────────────────────────────────────────
-trap "echo; echo 'Stopping...'; kill $BACKEND_PID $FRONTEND_PID $TUNNEL_PID 2>/dev/null; exit 0" INT TERM
+# The tunnel is intentionally left running so its public URL survives a restart.
+# Stop it with:  pkill -f 'cloudflared tunnel'
+trap "echo; echo 'Stopping...'; kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit 0" INT TERM
 
 echo ""
 echo "✦ Dev servers running"
@@ -80,14 +96,18 @@ echo ""
 echo "  This URL only works on the machine running ./dev.sh."
 echo "  Cursor Desktop: click the plug icon → forward 5173 → open that URL."
 echo "  First visit: accept the self-signed cert warning (Advanced → Proceed)."
-echo "  Supabase Auth: add https://127.0.0.1:5173/** to Redirect URLs."
-if [ -n "$TUNNEL_PID" ]; then
+echo "  Supabase Auth → Redirect URLs: https://127.0.0.1:5173/**"
+if [ -n "$TUNNEL_ON" ]; then
   echo "  Waiting for public HTTPS URL..."
   for _ in $(seq 1 40); do
     PUBLIC_URL=$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' /tmp/mira-tunnel.log 2>/dev/null | head -1 || true)
     if [ -n "$PUBLIC_URL" ]; then
       echo "  Public HTTPS:     $PUBLIC_URL"
-      echo "  (Add $PUBLIC_URL/** to Supabase Redirect URLs for OAuth.)"
+      echo ""
+      echo "  Quick-tunnel hostnames are random, so add this ONCE to Supabase"
+      echo "  Auth → Redirect URLs and every future tunnel works unchanged:"
+      echo "      https://*.trycloudflare.com/**"
+      echo "  Remove it before launch — it trusts any Cloudflare quick tunnel."
       break
     fi
     sleep 0.5
