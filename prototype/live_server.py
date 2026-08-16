@@ -526,6 +526,8 @@ def _spend_record(user_id: str, cost: float) -> None:
     if user_id:
         _spend["users"][user_id] = _spend["users"].get(user_id, 0.0) + cost
 _VOICE = os.environ.get("GEMINI_LIVE_VOICE", "Aoede")
+# Set from the GIT_SHA build arg in the Dockerfile; "dev" when running locally.
+_GIT_SHA = os.environ.get("MIRA_GIT_SHA", "dev")
 _HOST = os.environ.get("MIRA_WS_HOST", "localhost")
 _PORT = int(os.environ.get("MIRA_WS_PORT", "8765"))
 # Cap inbound WS message size (person photos / outfit uploads) so a huge or
@@ -2906,6 +2908,9 @@ async def process_request(connection, request):
         _spend_roll()
         body = json.dumps({
             "status": "ok" if healthy else "degraded",
+            # Baked in at image build time, so ship.sh can confirm the running
+            # container is the commit it just pushed rather than a cached image.
+            "commit": _GIT_SHA,
             "gen_circuit_open": not healthy,
             "gen_workers": _GEN_WORKERS,
             "gen_disabled": _GEN_DISABLED,
