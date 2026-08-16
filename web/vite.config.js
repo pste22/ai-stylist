@@ -31,8 +31,10 @@ export default defineConfig({
     // host:true binds 0.0.0.0 so GitHub Codespaces can forward the port; allow the
     // forwarded *.app.github.dev origin (Vite blocks unknown hosts by default).
     host: true,
-    open: !process.env.CODESPACES,
-    allowedHosts: [".app.github.dev", "127.0.0.1", "localhost"],
+    strictPort: true,
+    open: false,
+    // true: allow Cursor port-forward, Codespaces, and public HTTPS tunnels.
+    allowedHosts: true,
     // Proxy the voice bridge so the browser connects SAME-ORIGIN (wss://<5173 host>/mira-ws).
     // In Codespaces a separate forwarded port lives on a different *.app.github.dev
     // subdomain whose tunnel relay rejects cross-origin WS upgrades (HTTP 426 + auth
