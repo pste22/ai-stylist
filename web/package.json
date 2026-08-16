@@ -3,13 +3,14 @@
   "private": true,
   "version": "0.0.1",
   "type": "module",
-  "description": "Mira web shell — state-driven avatar placeholder (P2-3). See docs/14-ui-strategy.md",
+  "description": "Mira web shell \u2014 state-driven avatar placeholder (P2-3). See docs/14-ui-strategy.md",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "crawl": "node crawl_bugs.mjs",
-    "test:signin": "node tests/signin.spec.mjs"
+    "test:signin": "node tests/signin.spec.mjs",
+    "test:chips": "node tests/category-chips.spec.mjs"
   },
   "dependencies": {
     "@heygen/liveavatar-web-sdk": "^0.0.18",

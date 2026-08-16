@@ -88,25 +88,33 @@ def _returning_user_prompt(db, user: dict) -> str:
     days = _days_ago(user.get("last_seen") or user.get("first_seen", ""))
 
     lines = [f"RETURNING SHOPPER: {name}"]
+    # Greeting guidance has to be scoped to the opening line. As a standing system
+    # instruction it fires every turn, so the answer to "show me multicolored
+    # dresses" opened with "Welcome back, Prashant!".
+    lines.append(
+        "GREETING RULE — applies to your FIRST reply of the session only. Never open "
+        "a later reply with a greeting or with their name, and do not greet at all "
+        "when their opening message is already a specific request — answer it directly."
+    )
     if days == 0:
         lines.append(
-            f"They were here earlier today. Greet them by first name ({name}) warmly "
-            "but briefly — e.g. 'Hey Prashant, you're back!' then get straight to it."
+            f"Last visit: earlier today. If you do greet, keep it brief — "
+            f"e.g. 'Hey {name}, you're back!' — then get straight to it."
         )
     elif days == 1:
         lines.append(
-            f"Last visit: yesterday. Open with a warm greeting by first name ({name})."
+            f"Last visit: yesterday. If you do greet, keep it warm and short, by first name ({name})."
         )
     elif days < 14:
         lines.append(
-            f"Last visit: {days} days ago. Open with a warm greeting by first name ({name})."
+            f"Last visit: {days} days ago. If you do greet, keep it warm and short, by first name ({name})."
         )
     else:
         weeks = days // 7
         lines.append(
             f"Last visit: {weeks} week{'s' if weeks > 1 else ''} ago. "
-            f"Open with a warm 'welcome back' greeting using their first name ({name}) — "
-            "e.g. 'Welcome back Prashant! It's been a while…'"
+            f"If you do greet, a warm 'welcome back {name}' fits — but only as the "
+            f"opening line of the session."
         )
 
     prefs = db.table("user_preferences").select("*").eq("user_id", user["user_id"]).execute()

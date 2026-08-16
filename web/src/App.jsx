@@ -1719,7 +1719,7 @@ export default function App() {
             brandFocus={brandFocus}
             onBrandFocusConsumed={() => setBrandFocus(null)}
             onBrowseBrands={() => setBrandsSheetOpen(true)}
-            calm={uiMode === "atelier" && !filterResults}
+            calm={uiMode === "atelier"}
             onResults={(data) => {
               if (!data) { setFilterResults(null); return; }
               setFilterResults({
@@ -1730,10 +1730,15 @@ export default function App() {
                 reachedEnd: !!data.reachedEnd,
                 onLoadMore: data.onLoadMore || null,
               });
-              // Jump only on a fresh filter (not when appending pages).
+              // Jump only on a fresh filter (not when appending pages). Scroll the
+              // panel itself into view: the thread sits below the filter bar, so
+              // scrolling the thread to its top can still leave the results off-screen.
               if (!data.append) {
                 requestAnimationFrame(() => {
                   threadRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
+                  document
+                    .getElementById("cf-results-panel")
+                    ?.scrollIntoView({ behavior: "smooth", block: "nearest" });
                 });
               }
             }}

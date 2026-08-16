@@ -52,7 +52,7 @@ _Last updated: July 2026. India-first MVP strategy, affiliate + subscription rev
 | E1-3 | Fly.io deployment with nginx WebSocket proxy | ✅ |
 | E1-4 | Hot reload in dev — watchmedo auto-restarts on .py save | ✅ |
 | E1-5 | Health check handler — nginx pings don't crash WS server | ✅ |
-| E1-6 | Idle timeout 3 min — auto-closes Gemini session to cap cost | ✅ |
+| E1-6 | Idle timeout 10 min — auto-closes Gemini session to cap cost | ✅ |
 | E1-7 | Hard session cap 20 min — absolute cost guardrail | ✅ |
 | E1-8 | Gemini session auto-reconnect — transparent to user | ✅ |
 
@@ -108,7 +108,7 @@ _Last updated: July 2026. India-first MVP strategy, affiliate + subscription rev
 
 | Story | Description | Status |
 |-------|-------------|--------|
-| E5-1 | Watchdog coroutine — closes idle sessions (3 min default) | ✅ |
+| E5-1 | Watchdog coroutine — closes idle sessions (10 min default) | ✅ |
 | E5-2 | Cost logging per session (tokens in/out, duration, estimated $) | ✅ |
 | E5-3 | `dev.sh` — one command starts both servers with hot reload | ✅ |
 | E5-4 | `deploy.sh` — one command deploys to Fly.io with secrets | ✅ |
