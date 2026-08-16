@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 
 // Dev server for the Mira web shell. The Python brain will run as a separate API
 // (see docs/14-ui-strategy.md) — UI and backend stay independent in the monorepo.
+// basicSsl enables https://127.0.0.1:5173 for local OAuth / secure-context APIs.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), basicSsl()],
   build: {
     rollupOptions: {
       output: {
@@ -22,14 +24,26 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    https: true,
     headers: {
       "Cache-Control": "no-store, max-age=0",
     },
     // host:true binds 0.0.0.0 so GitHub Codespaces can forward the port; allow the
     // forwarded *.app.github.dev origin (Vite blocks unknown hosts by default).
     host: true,
-    open: !process.env.CODESPACES,
-    allowedHosts: [".app.github.dev"],
+    strictPort: true,
+    open: false,
+    // true: allow Cursor port-forward, Codespaces, and public HTTPS tunnels.
+    allowedHosts: true,
+    // Behind a tunnel the page is served on 443, but Vite's HMR client derives the
+    // socket port from the dev-server port and ends up dialling a port the tunnel
+    // never exposes. VITE_HMR_CLIENT_PORT lets dev.sh point it at the public port.
+    hmr: process.env.VITE_HMR_CLIENT_PORT
+      ? {
+          clientPort: Number(process.env.VITE_HMR_CLIENT_PORT),
+          protocol: process.env.VITE_HMR_PROTOCOL || "wss",
+        }
+      : true,
     // Proxy the voice bridge so the browser connects SAME-ORIGIN (wss://<5173 host>/mira-ws).
     // In Codespaces a separate forwarded port lives on a different *.app.github.dev
     // subdomain whose tunnel relay rejects cross-origin WS upgrades (HTTP 426 + auth
