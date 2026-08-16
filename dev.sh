@@ -73,7 +73,9 @@ if [ "${MIRA_PUBLIC_TUNNEL:-0}" = "1" ]; then
         fi
         sleep 0.25
       done
-      setsid nohup "$CLOUDFLARED" tunnel --no-autoupdate --no-tls-verify \
+      # http2 rather than the default quic: quic control streams drop repeatedly
+      # from this network and the tunnel spends minutes in reconnect backoff.
+      setsid nohup "$CLOUDFLARED" tunnel --no-autoupdate --no-tls-verify --protocol http2 \
         --url https://127.0.0.1:5173 > /tmp/mira-tunnel.log 2>&1 < /dev/null &
       disown 2>/dev/null || true
       TUNNEL_ON=1
