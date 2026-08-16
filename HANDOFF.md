@@ -68,12 +68,22 @@ PY
 
 ## Run locally
 ```bash
-# backend
-cd prototype && pip install -r requirements.txt && python live_server.py   # ws :8765, /health
-# frontend
-cd web && npm install && npm run dev                                        # :5173 (proxies /mira-ws,/api → :8765)
+./dev.sh                        # backend :8765 + Vite HTTPS :5173, both hot-reloading
+MIRA_PUBLIC_TUNNEL=1 ./dev.sh   # also prints a public https://*.trycloudflare.com URL
 ```
-Health check: `curl localhost:8765/health` → `spend_today_usd`, `gen_disabled`, cache stats.
+`https://127.0.0.1:5173` only works on the machine running `dev.sh` — from a Cloud
+Agent, forward port 5173 (plug icon) or use the tunnel URL.
+Health check: `curl localhost:8765/health` → `commit`, `spend_today_usd`, `gen_disabled`.
+
+## Ship to production
+```bash
+./ship.sh              # merge current branch → main → deploy → verify
+./ship.sh --dry-run    # preflight only, ships nothing
+```
+Pushing `main` is what triggers the Fly deploy; `ship.sh` adds the parts that are
+easy to skip by hand. It refuses a dirty tree, an unpushed branch, a conflicting
+merge, or a failing build, and afterwards polls `/health` until the `commit` field
+matches the SHA it pushed — a green workflow only means `flyctl` exited 0.
 
 ## Two wallets — don't confuse them
 - **Cursor credits (~$460):** pay Cursor's coding assistant (writes code for you).
