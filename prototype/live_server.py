@@ -1508,6 +1508,7 @@ async def handle(ws) -> None:
 
         product = _BY_ID.get(product_id) or {}
         name = product.get("name", "the outfit")
+        kind = _tryon.normalize_video_kind(kind)
         if not image_b64:
             await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
                              message="Generate a try-on first, then bring it to life.")
@@ -1540,14 +1541,18 @@ async def handle(ws) -> None:
             return None, None
 
         def _gen_video(seed_bytes, seed_mime, prompt):
+            # Gemini Developer API rejects generate_audio=False (Enterprise-only).
+            # Omitting it lets Veo attach a silent-ish native track; we still play muted.
             client = _new_client()
+            config = _types.GenerateVideosConfig(
+                number_of_videos=1,
+                aspect_ratio="9:16",
+                person_generation="allow_adult",
+            )
             op = client.models.generate_videos(
                 model=video_model, prompt=prompt,
                 image=_types.Image(image_bytes=seed_bytes, mime_type=seed_mime),
-                config=_types.GenerateVideosConfig(
-                    number_of_videos=1, aspect_ratio="9:16", person_generation="allow_adult",
-                    generate_audio=False,   # silent spin — audio is pointless here and raises the per-second rate
-                ),
+                config=config,
             )
             t0 = time.time()
             while not op.done:
@@ -1555,12 +1560,21 @@ async def handle(ws) -> None:
                     raise TimeoutError("video generation timed out")
                 time.sleep(8)
                 op = client.operations.get(op)
-            gv = (op.response.generated_videos or [None])[0]
+            err = getattr(op, "error", None)
+            if err:
+                msg = getattr(err, "message", None) or str(err)
+                raise RuntimeError(msg)
+            resp = getattr(op, "response", None)
+            if resp is None:
+                raise RuntimeError("video generation returned no clip")
+            gv = (getattr(resp, "generated_videos", None) or [None])[0]
             vid = getattr(gv, "video", None)
             vb = getattr(vid, "video_bytes", None)
             if not vb and getattr(vid, "uri", None):
                 client.files.download(file=vid)
                 vb = vid.video_bytes
+            if not vb:
+                raise RuntimeError("video generation returned an empty clip")
             return vb
 
         try:
@@ -1617,7 +1631,7 @@ async def handle(ws) -> None:
             print(f"  ! try_on_video ({kind}) failed: {e}")
             _tb.print_exc()
             await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
-                             message="Something went wrong generating the video. Please try again.")
+                             message=_tryon.video_error_message(e))
         finally:
             await _send_json(ws, type="state", state="idle", mood="neutral")
 
