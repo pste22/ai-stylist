@@ -62,7 +62,7 @@ console.log("photo object-fit:", fit, "— contain:", fit === "contain");
 console.log("gallery above fold:", galleryAboveFold, `(top=${Math.round(layout.galleryTop ?? -1)})`);
 console.log("sticky bar on screen:", stickyOnScreen);
 
-const tryOnBtn = page.getByRole("button", { name: "Try on" });
+const tryOnBtn = page.locator(".qv-sticky-try");
 const tryOnVisible = await tryOnBtn.isVisible();
 console.log("PDP Try on button:", tryOnVisible);
 await tryOnBtn.click();
