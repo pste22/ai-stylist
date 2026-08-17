@@ -74,3 +74,21 @@ def test_unsupported_mime_raises():
 def test_supported_mimes_accepted(mime):
     req = build_tryon_request(_PRODUCT, _IMG_B64, mime)
     assert req["user_mime"] == mime
+
+
+def test_party_alias_is_office_scene():
+    from tryon import SCENES, normalize_video_kind
+    assert normalize_video_kind("party") == "office"
+    assert normalize_video_kind("office") in SCENES
+    assert normalize_video_kind("spin") == "spin"
+    assert normalize_video_kind(None) == "spin"
+
+
+def test_video_error_message_maps_known_failures():
+    from tryon import video_error_message
+    assert "too long" in video_error_message(TimeoutError("video generation timed out")).lower()
+    assert "preview check" in video_error_message(RuntimeError("audio for your prompt")).lower()
+    assert "busy" in video_error_message(RuntimeError("429 RESOURCE_EXHAUSTED")).lower()
+    generic = video_error_message(RuntimeError("generate_audio is only supported in Gemini Enterprise"))
+    assert "try again" in generic.lower()
+    assert "traceback" not in generic.lower()

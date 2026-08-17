@@ -29,6 +29,38 @@ def view_label(view: str) -> str:
 # India-aspirational and tasteful; each is art-directed (locked lighting/vibe).
 SCENES = ("sangeet", "beach", "date", "office", "vacation", "redcarpet")
 
+# UI labels like "Party" still send the backend key "office"; accept the label too.
+_SCENE_ALIASES = {
+    "party": "office",
+    "date night": "date",
+    "datenight": "date",
+    "red carpet": "redcarpet",
+    "red-carpet": "redcarpet",
+}
+
+
+def normalize_video_kind(kind: str | None) -> str:
+    """Map a client video-kind string onto spin or a SCENES key."""
+    k = (kind or "spin").strip().lower()
+    return _SCENE_ALIASES.get(k, k) or "spin"
+
+
+def video_error_message(exc: BaseException) -> str:
+    """User-facing copy for a Veo / polling failure. Never leak stack traces."""
+    s = f"{type(exc).__name__} {exc}".lower()
+    if "timeout" in s:
+        return "That video took too long — tap the scene to try again."
+    if any(tok in s for tok in (
+        "safety", "rai", "person_generation", "audio for your prompt",
+        "could not create your video", "filtered",
+    )):
+        return "This clip didn't pass the preview check — try another scene or photo."
+    if any(tok in s for tok in ("429", "resource_exhausted", "resource exhausted", "quota")):
+        return "Mira's studio is busy right now — please try again in a moment."
+    if "generate_audio" in s:
+        return "Couldn't generate the video. Please try again."
+    return "Something went wrong generating the video. Please try again."
+
 _SCENE_SETTINGS = {
     "sangeet":   "at a joyful Indian sangeet celebration — warm fairy lights and softly blurred "
                  "marigold and floral decor behind, festive golden-hour ambiance",

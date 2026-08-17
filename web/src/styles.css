@@ -1576,6 +1576,12 @@ button.primary.stop { background: var(--accent); }
   padding: .3rem .6rem; border-radius: var(--r-pill, 999px);
   pointer-events: none;
 }
+.tryon-zoom-hint--error {
+  left: .6rem; right: .6rem;
+  text-align: center;
+  background: rgba(176, 32, 48, .88);
+  white-space: normal;
+}
 .tryon-result-placeholder {
   display: flex; flex-direction: column; align-items: center; gap: .8rem;
   min-height: 320px; justify-content: center;

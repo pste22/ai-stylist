@@ -313,14 +313,18 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 autoPlay loop muted playsInline controls
               />
             ) : stills[selectedView] ? (
-              /* Scene composite ready — showing it while the clip finishes rendering */
+              /* Scene still — overlay the spinner only while THIS kind is rendering */
               <div className="tryon-scene-still-wrap">
                 <img
                   className="tryon-result-full"
                   src={`data:${stills[selectedView].mime};base64,${stills[selectedView].image}`}
                   alt="Scene preview"
                 />
-                <span className="tryon-zoom-hint">✨ Bringing it to life…</span>
+                {videoLoadingKind === selectedView ? (
+                  <span className="tryon-zoom-hint">✨ Bringing it to life…</span>
+                ) : videoError ? (
+                  <span className="tryon-zoom-hint tryon-zoom-hint--error">{videoError}</span>
+                ) : null}
               </div>
             ) : videoError && videoLoadingKind !== selectedView ? (
               <div className="tryon-result-placeholder">
@@ -511,7 +515,14 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           {loading ? (
             <p className="tryon-magic-text">Styling it on you… this takes a few seconds 🪄</p>
           ) : anyDone ? (
-            angleKeys.every((v) => views[v] || failed[v]) ? (
+            videoError && isVideoView && videoLoadingKind !== selectedView ? (
+              <p className="tryon-desc" style={{ color: "#c0103a" }}>
+                {videoError}{" "}
+                <button type="button" className="tryon-stale-link" onClick={() => handleVideo(selectedView)}>
+                  Try again
+                </button>
+              </p>
+            ) : angleKeys.every((v) => views[v] || failed[v]) ? (
               <p className="tryon-magic-text">That's the upgrade — you look amazing in this ✨</p>
             ) : (
               <p className="tryon-magic-text">Front's ready — spinning up the other angles… ✨</p>
