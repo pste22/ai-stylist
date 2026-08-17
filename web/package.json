@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "crawl": "node crawl_bugs.mjs",
     "test:signin": "node tests/signin.spec.mjs",
-    "test:chips": "node tests/category-chips.spec.mjs"
+    "test:chips": "node tests/category-chips.spec.mjs",
+    "test:pdp": "node tests/pdp.spec.mjs"
   },
   "dependencies": {
     "@heygen/liveavatar-web-sdk": "^0.0.18",

@@ -95,6 +95,15 @@ def test_curated_source_template_only_raises(tmp_path):
         pass
 
 
-def test_get_source_curated_falls_back_when_unseeded():
-    # The bundled data/affiliate_products.json has only the template row → fallback.
+def test_get_source_curated_falls_back_when_unseeded(monkeypatch):
+    # Don't assert against the bundled data file — it is seeded now, which made this
+    # test fail for a reason that had nothing to do with the fallback it covers.
+    def _raise():
+        raise RuntimeError("template-only seed file")
+
+    monkeypatch.setattr(ps, "CuratedAmazonSource", lambda *a, **k: _raise())
     assert isinstance(ps.get_source("curated"), ps.LocalJsonSource)
+
+
+def test_get_source_curated_used_when_seeded():
+    assert isinstance(ps.get_source("curated"), ps.CuratedAmazonSource)

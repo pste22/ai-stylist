@@ -31,7 +31,6 @@ _CATEGORY_SYNONYMS: dict[str, tuple[str, ...]] = {
 
 _COLOR_ALIASES: dict[str, tuple[str, ...]] = {
     # Listed first so a mixed-print ask never falls through to a single hue.
-    # Catalog rows use "multi" for these.
     "multicolor": ("multicolor", "multicolour", "multicolored", "multicoloured",
                    "multi-color", "multi-colour", "multi color", "multi colour",
                    "multi", "multitone", "colorblock", "colourblock",
@@ -109,11 +108,46 @@ def detect_color_key(text: str) -> str | None:
     return None
 
 
+# Feed importers write "multi" when they could not read a colour at all, so it
+# means "unknown", not "multicoloured" — 74% of the catalog carries it. Treating it
+# as a colour claims 778 items are multicoloured when only ~40 are, and lets a
+# plain sage-green dress answer a multicoloured ask.
+_UNKNOWN_COLOR_VALUES = frozenset({"", "multi", "multicolor", "multicolour", "assorted", "various"})
+
+# A real pattern has to be visible in the product name to count as multicoloured.
+_MULTICOLOR_CUES: tuple[str, ...] = (
+    "multicolor", "multicolour", "multicolored", "multicoloured", "multi-color",
+    "multi-colour", "colorblock", "colourblock", "color block", "colour block",
+    "rainbow", "printed", "print", "floral", "patterned", "pattern", "tie dye",
+    "tie-dye", "striped", "stripe", "paisley", "plaid", "checked", "polka",
+    "graphic", "abstract", "animal print", "leopard", "geometric",
+)
+
+
+def is_color_known(product: dict) -> bool:
+    """False when the feed gave us no usable colour for this product."""
+    raw = (product.get("color") or "").strip().lower()
+    if raw not in _UNKNOWN_COLOR_VALUES:
+        return True
+    name = (product.get("name") or "").lower()
+    if _mentions(name, _MULTICOLOR_CUES):
+        return True
+    return any(
+        _mentions(name, aliases)
+        for key, aliases in _COLOR_ALIASES.items()
+        if key != "multicolor"
+    )
+
+
 def _color_matches(product: dict, color_key: str | None) -> bool:
     if not color_key:
         return False
-    blob = f"{product.get('color') or ''} {product.get('name') or ''}".lower()
-    return _mentions(blob, _COLOR_ALIASES.get(color_key, ()))
+    raw = (product.get("color") or "").strip().lower()
+    name = (product.get("name") or "").lower()
+    if color_key == "multicolor":
+        return _mentions(name, _MULTICOLOR_CUES)
+    known = "" if raw in _UNKNOWN_COLOR_VALUES else raw
+    return _mentions(f"{known} {name}", _COLOR_ALIASES.get(color_key, ()))
 
 
 def _as_price(p: dict) -> float:

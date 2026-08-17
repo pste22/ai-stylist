@@ -76,10 +76,21 @@ else
 fi
 
 PY=$(command -v python3 || command -v python || true)
+for VENV in prototype/.venv/bin/python .venv/bin/python; do
+  [ -x "$VENV" ] && PY="$REPO/$VENV" && break
+done
 if [ -n "$PY" ]; then
   "$PY" -m compileall -q prototype >/tmp/ship-py.log 2>&1 \
     || { tail -20 /tmp/ship-py.log; die "Python syntax error — not shipping."; }
   ok "backend compiles"
+
+  if "$PY" -c "import pytest" 2>/dev/null; then
+    (cd prototype && "$PY" -m pytest -q >/tmp/ship-tests.log 2>&1) \
+      || { tail -25 /tmp/ship-tests.log; die "Backend tests failed — not shipping."; }
+    ok "backend tests pass ($(grep -oE '[0-9]+ passed' /tmp/ship-tests.log | tail -1))"
+  else
+    echo "  ⚠ pytest not installed; skipping backend tests (pip install pytest)"
+  fi
 fi
 
 if [ "$DRY_RUN" = "1" ]; then

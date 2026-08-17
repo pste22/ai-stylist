@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import SizeAdvice from "./SizeAdvice.jsx";
 import ReviewComposer from "./ReviewComposer.jsx";
 import AffiliateDisclosure from "./AffiliateDisclosure.jsx";
@@ -77,23 +78,25 @@ function Stars({ value, size = "md", interactive = false, onPick }) {
   );
 }
 
+function productGallery(product) {
+  const raw = Array.isArray(product.image_urls) ? product.image_urls : [];
+  const urls = raw.filter(Boolean);
+  if (urls.length) return urls;
+  return product.image_url ? [product.image_url] : [];
+}
+
 export default function ProductQuickView({
   product, loved, inCart, onLove, onBuy, onAddToCart, onClose, prefs, onSetSize, onAskMira,
+  related = [], onSelectRelated,
 }) {
-  const [zoomed, setZoomed]   = useState(false);
-  const [imgIdx, setImgIdx]   = useState(0);
+  const [imgIdx, setImgIdx] = useState(0);
   const [writingReview, setWritingReview] = useState(false);
   const panelRef = useRef(null);
-  const gallery = (() => {
-    const raw = Array.isArray(product.image_urls) ? product.image_urls : [];
-    const urls = raw.filter(Boolean);
-    if (urls.length) return urls;
-    return product.image_url ? [product.image_url] : [];
-  })();
+  const galleryRef = useRef(null);
+  const gallery = productGallery(product);
   const activeUrl = gallery[Math.min(imgIdx, Math.max(gallery.length - 1, 0))] || product.image_url;
   const hasPhoto = isRealPhoto(activeUrl);
-  const imgSrc   = hasPhoto ? hiResUrl(activeUrl) : null;
-  const emoji    = CATEGORY_EMOJI[product.category] || "🛍️";
+  const emoji = CATEGORY_EMOJI[product.category] || "🛍️";
 
   const amazonRating = Number(product.rating) || 0;
   const amazonCount  = Number(product.ratings_total) || 0;
@@ -101,204 +104,258 @@ export default function ProductQuickView({
 
   useEffect(() => {
     setImgIdx(0);
-    setZoomed(false);
+    setWritingReview(false);
+    galleryRef.current?.scrollTo({ left: 0 });
   }, [product.id]);
 
   useEffect(() => {
-    function onKey(e) { if (e.key === "Escape") onClose(); }
+    function onKey(e) {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.key === "ArrowRight") goTo(imgIdx + 1);
+      if (e.key === "ArrowLeft") goTo(imgIdx - 1);
+    }
     document.addEventListener("keydown", onKey);
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = "";
     };
-  }, [onClose]);
+  }, [onClose, imgIdx, gallery.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function goTo(i) {
+    const next = Math.max(0, Math.min(gallery.length - 1, i));
+    setImgIdx(next);
+    const el = galleryRef.current;
+    if (el) el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
+  }
+
+  function onGalleryScroll() {
+    const el = galleryRef.current;
+    if (!el || !el.clientWidth) return;
+    const i = Math.round(el.scrollLeft / el.clientWidth);
+    if (i !== imgIdx && i >= 0 && i < gallery.length) setImgIdx(i);
+  }
 
   function handleBackdrop(e) {
     if (e.target === e.currentTarget) onClose();
   }
 
-  return (
+  const moreLike = (related || []).filter((p) => p && p.id !== product.id).slice(0, 8);
+
+  const sheet = (
     <div className="qv-backdrop" onClick={handleBackdrop} role="dialog" aria-modal="true" aria-label={product.name}>
       <div className="qv-panel" ref={panelRef}>
-        <button className="qv-close" onClick={onClose} aria-label="Close">✕</button>
-
-        <div className={`qv-img-wrap${zoomed ? " qv-img-wrap--zoomed" : ""}`}>
-          {hasPhoto ? (
-            <img
-              className={`qv-img${zoomed ? " qv-img--zoomed" : ""}`}
-              src={imgSrc}
-              alt={product.name}
-              onClick={() => setZoomed(v => !v)}
-              title={zoomed ? "Click to zoom out" : "Click to zoom in"}
-            />
-          ) : (
-            <div className="qv-img-fallback">
-              <span>{emoji}</span>
-            </div>
-          )}
-
-          {hasPhoto && !zoomed && (
-            <span className="qv-zoom-hint" aria-hidden="true">🔍 Tap to zoom</span>
-          )}
-
+        <header className="qv-topbar">
+          <button className="qv-topbar-btn" type="button" onClick={onClose} aria-label="Back">←</button>
+          <span className="qv-topbar-shop">{shopLabel(product, { short: true })}</span>
           <button
-            className={`qv-heart${loved ? " is-loved" : ""}`}
+            className={`qv-topbar-btn qv-topbar-heart${loved ? " is-loved" : ""}`}
+            type="button"
             onClick={() => onLove(product)}
             aria-label={loved ? "Remove from saved" : "Save item"}
           >
             {loved ? "♥" : "♡"}
           </button>
-        </div>
+          <button className="qv-topbar-btn" type="button" onClick={onClose} aria-label="Close">✕</button>
+        </header>
 
-        {gallery.length > 1 && (
-          <div className="qv-thumbs" role="tablist" aria-label="Product photos">
-            {gallery.slice(0, 8).map((url, i) => (
-              <button
-                key={`${url}-${i}`}
-                type="button"
-                className={`qv-thumb${i === imgIdx ? " qv-thumb--active" : ""}`}
-                onClick={() => { setImgIdx(i); setZoomed(false); }}
-                role="tab"
-                aria-selected={i === imgIdx}
-                title={`Photo ${i + 1}`}
-              >
-                <img src={hiResUrl(url)} alt="" loading="lazy" />
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="qv-info">
-          <span className="qv-cat-chip">{emoji} {product.category || "Fashion"}</span>
-          <h2 className="qv-name">{product.name}</h2>
-
-          {/* Ratings row: Mira first-party, Amazon cold-start */}
-          <div className="qv-rating-row">
-            {aggregate ? (
-              <div className="qv-rating-block">
-                <Stars value={aggregate.avg} />
-                <span className="qv-rating-meta">
-                  <strong>{aggregate.avg.toFixed(1)}</strong>
-                  {" · "}
-                  {aggregate.count} Mira {aggregate.count === 1 ? "review" : "reviews"}
-                  {aggregate.topFit ? ` · ${formatFitLabel(aggregate.topFit)}` : ""}
-                </span>
+        <div className="qv-scroll">
+          <div
+            className="qv-gallery"
+            ref={galleryRef}
+            onScroll={onGalleryScroll}
+            role="region"
+            aria-label="Product photos"
+          >
+            {gallery.length && hasPhoto ? gallery.map((url, i) => (
+              <div className="qv-slide" key={`${url}-${i}`}>
+                {isRealPhoto(url) ? (
+                  <img
+                    className="qv-img"
+                    src={hiResUrl(url)}
+                    alt={`${product.name}${gallery.length > 1 ? ` — photo ${i + 1}` : ""}`}
+                    draggable={false}
+                  />
+                ) : (
+                  <div className="qv-img-fallback"><span>{emoji}</span></div>
+                )}
               </div>
-            ) : amazonRating > 0 ? (
-              <div className="qv-rating-block">
-                <Stars value={amazonRating} />
-                <span className="qv-rating-meta">
-                  <strong>{amazonRating.toFixed(1)}</strong>
-                  {amazonCount > 0 ? ` · ${formatCount(amazonCount)}` : ""}
-                  {" · "}
-                  <span className="qv-rating-src">Amazon</span>
-                </span>
+            )) : (
+              <div className="qv-slide">
+                <div className="qv-img-fallback"><span>{emoji}</span></div>
               </div>
-            ) : (
-              <p className="qv-rating-empty">No reviews yet — be the first</p>
             )}
           </div>
 
-          <div className="qv-meta-row">
-            <span className="qv-swatch-pill">
-              <span className="qv-color-dot" style={{ background: swatchHex(product.color) }} />
-              <span className="qv-color-label">{product.color || "—"}</span>
-            </span>
-            <strong className="qv-price">{formatPrice(product.price, product.currency)}</strong>
-          </div>
-
-          {/* Ask Mira — product-scoped chat */}
-          {onAskMira && (
-            <div className="qv-ask">
-              <p className="qv-ask-label">Ask Mira</p>
-              <div className="qv-ask-chips">
-                {ASK_CHIPS.map((c) => (
-                  <button
-                    key={c.key}
-                    type="button"
-                    className="qv-ask-chip"
-                    onClick={() => onAskMira(product, c.key)}
-                  >
-                    {c.label}
-                  </button>
-                ))}
-              </div>
+          {gallery.length > 1 && (
+            <div className="qv-dots" role="tablist" aria-label="Photo">
+              {gallery.map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  className={`qv-dot${i === imgIdx ? " qv-dot--active" : ""}`}
+                  onClick={() => goTo(i)}
+                  aria-label={`Photo ${i + 1}`}
+                  aria-current={i === imgIdx ? "true" : undefined}
+                />
+              ))}
+              <span className="qv-dots-count">{imgIdx + 1} / {gallery.length}</span>
             </div>
           )}
 
-          <SizeAdvice product={product} prefs={prefs} onSetSize={onSetSize} />
+          <div className="qv-info">
+            <span className="qv-cat-chip">{emoji} {product.category || "Fashion"}</span>
+            <h2 className="qv-name">{product.name}</h2>
 
-          <div className="qv-actions">
-            <button
-              className={`qv-save-btn${loved ? " is-loved" : ""}`}
-              onClick={() => onLove(product)}
-            >
-              {loved ? "♥ Saved" : "♡ Save"}
-            </button>
-            <button
-              className={`qv-cart-btn${inCart ? " in-cart" : ""}`}
-              onClick={() => !inCart && onAddToCart?.(product)}
-            >
-              {inCart ? "🛒 In cart" : "🛒 Add to cart"}
-            </button>
+            <div className="qv-rating-row">
+              {aggregate ? (
+                <div className="qv-rating-block">
+                  <Stars value={aggregate.avg} />
+                  <span className="qv-rating-meta">
+                    <strong>{aggregate.avg.toFixed(1)}</strong>
+                    {" · "}
+                    {aggregate.count} Mira {aggregate.count === 1 ? "review" : "reviews"}
+                    {aggregate.topFit ? ` · ${formatFitLabel(aggregate.topFit)}` : ""}
+                  </span>
+                </div>
+              ) : amazonRating > 0 ? (
+                <div className="qv-rating-block">
+                  <Stars value={amazonRating} />
+                  <span className="qv-rating-meta">
+                    <strong>{amazonRating.toFixed(1)}</strong>
+                    {amazonCount > 0 ? ` · ${formatCount(amazonCount)}` : ""}
+                    {" · "}
+                    <span className="qv-rating-src">Amazon</span>
+                  </span>
+                </div>
+              ) : (
+                <p className="qv-rating-empty">No reviews yet — be the first</p>
+              )}
+            </div>
+
+            <div className="qv-meta-row">
+              <span className="qv-swatch-pill">
+                <span className="qv-color-dot" style={{ background: swatchHex(product.color) }} />
+                <span className="qv-color-label">{product.color || "—"}</span>
+              </span>
+              <strong className="qv-price qv-price--inline">{formatPrice(product.price, product.currency)}</strong>
+            </div>
+
+            {onAskMira && (
+              <div className="qv-ask">
+                <p className="qv-ask-label">Ask Mira</p>
+                <div className="qv-ask-chips">
+                  {ASK_CHIPS.map((c) => (
+                    <button
+                      key={c.key}
+                      type="button"
+                      className="qv-ask-chip"
+                      onClick={() => onAskMira(product, c.key)}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <SizeAdvice product={product} prefs={prefs} onSetSize={onSetSize} />
+            <AffiliateDisclosure compact />
+
+            {moreLike.length > 0 && (
+              <section className="qv-related" aria-label="More like this">
+                <h3 className="qv-related-title">More like this</h3>
+                <div className="qv-related-rail">
+                  {moreLike.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      className="qv-related-card"
+                      onClick={() => onSelectRelated?.(p)}
+                    >
+                      {isRealPhoto(p.image_url) ? (
+                        <img src={hiResUrl(p.image_url)} alt="" loading="lazy" />
+                      ) : (
+                        <span className="qv-related-fallback">{CATEGORY_EMOJI[p.category] || "🛍️"}</span>
+                      )}
+                      <span className="qv-related-name">{p.name}</span>
+                      <strong className="qv-related-price">{formatPrice(p.price, p.currency)}</strong>
+                    </button>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            <section className="qv-reviews" aria-label="Reviews">
+              <div className="qv-reviews-head">
+                <h3 className="qv-reviews-title">Reviews</h3>
+                {!writingReview && (
+                  <button type="button" className="qv-reviews-write" onClick={() => setWritingReview(true)}>
+                    Write a review
+                  </button>
+                )}
+              </div>
+
+              {writingReview ? (
+                <ReviewComposer
+                  product={product}
+                  onCancel={() => setWritingReview(false)}
+                  onSubmit={(data) => {
+                    addReview(product.id, data);
+                    setWritingReview(false);
+                  }}
+                />
+              ) : (
+                <>
+                  {reviews.length === 0 ? (
+                    <p className="qv-reviews-empty">
+                      Share fit &amp; real photos — helps the next person decide.
+                    </p>
+                  ) : (
+                    <ul className="qv-review-list">
+                      {reviews.slice(0, 5).map((r) => (
+                        <li key={r.id} className="qv-review-item">
+                          <div className="qv-review-item-top">
+                            <Stars value={r.stars} size="sm" />
+                            {r.fit && <span className="qv-review-fit">{formatFitLabel(r.fit)}</span>}
+                          </div>
+                          {r.text && <p className="qv-review-body">{r.text}</p>}
+                          {r.photo && <img className="qv-review-img" src={r.photo} alt="" />}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </>
+              )}
+            </section>
           </div>
+        </div>
+
+        <div className="qv-sticky">
+          <div className="qv-sticky-meta">
+            <strong className="qv-sticky-price">{formatPrice(product.price, product.currency)}</strong>
+            <span className="qv-sticky-color">{product.color || product.category || ""}</span>
+          </div>
+          <button
+            className={`qv-sticky-cart${inCart ? " in-cart" : ""}`}
+            type="button"
+            onClick={() => !inCart && onAddToCart?.(product)}
+          >
+            {inCart ? "In cart" : "Add"}
+          </button>
           <a
-            className="qv-shop-btn qv-shop-btn--full"
+            className="qv-sticky-shop"
             href={trackedAffiliateUrl(product)}
             target="_blank"
             rel="noopener noreferrer nofollow sponsored"
             onClick={() => onBuy?.(product)}
           >
-            {shopLabel(product)}
+            {shopLabel(product, { short: true })}
           </a>
-          <AffiliateDisclosure compact />
-
-          {/* Reviews section */}
-          <section className="qv-reviews" aria-label="Reviews">
-            <div className="qv-reviews-head">
-              <h3 className="qv-reviews-title">Reviews</h3>
-              {!writingReview && (
-                <button type="button" className="qv-reviews-write" onClick={() => setWritingReview(true)}>
-                  Write a review
-                </button>
-              )}
-            </div>
-
-            {writingReview ? (
-              <ReviewComposer
-                product={product}
-                onCancel={() => setWritingReview(false)}
-                onSubmit={(data) => {
-                  addReview(product.id, data);
-                  setWritingReview(false);
-                }}
-              />
-            ) : (
-              <>
-                {reviews.length === 0 ? (
-                  <p className="qv-reviews-empty">
-                    Share fit &amp; real photos — helps the next person decide.
-                  </p>
-                ) : (
-                  <ul className="qv-review-list">
-                    {reviews.slice(0, 5).map((r) => (
-                      <li key={r.id} className="qv-review-item">
-                        <div className="qv-review-item-top">
-                          <Stars value={r.stars} size="sm" />
-                          {r.fit && <span className="qv-review-fit">{formatFitLabel(r.fit)}</span>}
-                        </div>
-                        {r.text && <p className="qv-review-body">{r.text}</p>}
-                        {r.photo && <img className="qv-review-img" src={r.photo} alt="" />}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </>
-            )}
-          </section>
         </div>
       </div>
     </div>
   );
+
+  return createPortal(sheet, document.body);
 }

@@ -9,6 +9,9 @@ def _product(product_id, category, price, *, style=None):
         "price": price,
         "style": style or ["festival"],
         "affiliate_url": f"https://merchant.example/{product_id}",
+        # build_looks skips anything unrenderable; without an image every product
+        # was filtered out and the fixture silently asserted against zero looks.
+        "image_url": f"https://img.example/{product_id}.jpg",
     }
 
 
@@ -24,6 +27,9 @@ def test_builds_three_complete_grounded_looks():
         _product("bottom-two", "bottoms", 65),
         _product("outerwear-one", "outerwear", 100),
         _product("accessory-two", "accessories", 35),
+        # The third template ("Ethnic Glam") is anchored on the ethnic category, so
+        # without one of these the engine can only ever return two looks.
+        _product("ethnic-one", "ethnic", 85),
     ]
 
     looks = build_looks(catalog, occasion="Festival", vibe="festival", budget_max=120)
