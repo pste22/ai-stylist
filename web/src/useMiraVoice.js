@@ -21,7 +21,7 @@ const WS_URL = resolveWsUrl();
 let _msgId = 0;
 const mkId = () => ++_msgId;
 
-export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = null, textMode = false, onAddToCart = null, onVisualSearchResults = null } = {}) {
+export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = null, eventBrief = null, textMode = false, onAddToCart = null, onVisualSearchResults = null } = {}) {
   const [connected, setConnected] = useState(false);
   const [state, setState] = useState(AvatarState.IDLE);
   const [mood, setMood] = useState(Mood.NEUTRAL);
@@ -292,6 +292,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
         ws.send(JSON.stringify({
           type:             "init",
           user_id:          userId,
+          email:            userEmail || null,
           name:             userName || "there",
           style_vibe:       userPrefs?.style_vibe     ?? null,
           shopping_focus:   userPrefs?.shopping_focus ?? null,
@@ -561,7 +562,7 @@ export function useMiraVoice({ userId, userName, userPrefs = null, eventBrief = 
     } catch (e) {
       setError(String(e));
     }
-  }, [stop, textMode, userId, userName, userPrefs, eventBrief]);
+  }, [stop, textMode, userId, userName, userEmail, userPrefs, eventBrief]);
 
   const retry = useCallback(() => {
     setError(null);

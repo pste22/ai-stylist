@@ -40,6 +40,12 @@ function bufferPercent(ms) {
   return Math.min(92, 6 + raw * 86);
 }
 
+function isDailyCapMessage(msg) {
+  if (!msg) return false;
+  const text = String(msg).toLowerCase();
+  return text.includes("try-on limit") || text.includes("today's limit") || text.includes("paused right now");
+}
+
 function VideoBuffer({ kindLabel, still, stillMime, elapsedMs }) {
   const seconds = Math.floor(elapsedMs / 1000);
   const pct = bufferPercent(elapsedMs);
@@ -309,6 +315,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
 
   const handleVideo = (kind) => {
     setSelectedView(kind);
+    if (isDailyCapMessage(videoError)) return;
     // Generate the first time, or re-render when the requested quality (HD/Lite)
     // differs from what we already have cached for this scene.
     const existing = clips[kind];
@@ -549,7 +556,8 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                   const next = !hd;
                   setHd(next);
                   const cur = clips[selectedView];
-                  if (VIDEO_KEYS.includes(selectedView) && front && onVideo &&
+                  if (!isDailyCapMessage(videoError) &&
+                      VIDEO_KEYS.includes(selectedView) && front && onVideo &&
                       videoLoadingKind !== selectedView && (!cur || !!cur.hd !== next)) {
                     onVideo(product.id, front.image, front.mime || "image/png", selectedView, next);
                   }
@@ -592,10 +600,15 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
               <p className="tryon-magic-text">Stay with Mira — this clip keeps filming until it’s ready</p>
             ) : videoError && isVideoView && videoLoadingKind !== selectedView ? (
               <p className="tryon-desc" style={{ color: "#c0103a" }}>
-                {videoError}{" "}
-                <button type="button" className="tryon-stale-link" onClick={() => handleVideo(selectedView)}>
-                  Try again
-                </button>
+                {videoError}
+                {isDailyCapMessage(videoError) ? null : (
+                  <>
+                    {" "}
+                    <button type="button" className="tryon-stale-link" onClick={() => handleVideo(selectedView)}>
+                      Try again
+                    </button>
+                  </>
+                )}
               </p>
             ) : angleKeys.every((v) => views[v] || failed[v]) ? (
               <p className="tryon-magic-text">That's the upgrade — you look amazing in this ✨</p>
