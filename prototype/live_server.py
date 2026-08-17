@@ -71,6 +71,7 @@ import shop_agent  # noqa: E402  (deterministic typed-search agent)
 import recommender  # noqa: E402  (history-based personal picks)
 from product_store import vector_search as _vector_search  # noqa: E402
 from festival_calendar import festival_greeting_line, upcoming_festival  # noqa: E402
+import gen_spend  # noqa: E402
 
 # Ground the voice on the ACTIVE source (env PRODUCT_SOURCE: local / curated / amazon),
 # not just the bundled demo catalog — so curated SiteStripe / PA-API items Mira can
@@ -506,12 +507,13 @@ _EST_VIDEO_HD = float(os.environ.get("MIRA_EST_VIDEO_HD_USD", "1.20")) # ~8s Veo
 _GEN_DAILY_USER_USD   = float(os.environ.get("MIRA_GEN_DAILY_USER_USD", "1.5"))   # ~1 video or ~30 images/user/day
 _GEN_DAILY_GLOBAL_USD = float(os.environ.get("MIRA_GEN_DAILY_GLOBAL_USD", "15.0")) # hard daily ceiling
 _GEN_DISABLED = os.environ.get("MIRA_GEN_DISABLED", "").strip().lower() in ("1", "true", "yes", "on")
+# Demo / founder accounts skip the per-user cap so a live walkthrough isn't
+# killed after ~3 videos. They still count toward the studio-wide ceiling.
+_SPEND_MSG = gen_spend.SPEND_MSG
+_DEMO_EMAILS = gen_spend.parse_demo_emails(
+    os.environ.get("MIRA_DEMO_EMAILS", "pste22@gmail.com")
+)
 _spend = {"day": None, "total": 0.0, "users": {}}
-_SPEND_MSG = {
-    "disabled":   "Try-on is paused right now — please check back soon.",
-    "global_cap": "Mira's try-on studio has hit today's limit — back tomorrow! ✨",
-    "user_cap":   "You've reached today's try-on limit — see you tomorrow ✨",
-}
 
 
 def _spend_roll():
@@ -520,16 +522,18 @@ def _spend_roll():
         _spend["day"], _spend["total"], _spend["users"] = d, 0.0, {}
 
 
-def _spend_check(user_id: str, est: float) -> str | None:
+def _spend_check(user_id: str, est: float, user_email: str | None = None) -> str | None:
     """Return None if the generation is allowed, else a reason key (see _SPEND_MSG)."""
-    if _GEN_DISABLED:
-        return "disabled"
     _spend_roll()
-    if _spend["total"] + est > _GEN_DAILY_GLOBAL_USD:
-        return "global_cap"
-    if user_id and _spend["users"].get(user_id, 0.0) + est > _GEN_DAILY_USER_USD:
-        return "user_cap"
-    return None
+    return gen_spend.check(
+        disabled=_GEN_DISABLED,
+        total=_spend["total"],
+        user_spent=_spend["users"].get(user_id, 0.0) if user_id else 0.0,
+        est=est,
+        global_cap=_GEN_DAILY_GLOBAL_USD,
+        user_cap=_GEN_DAILY_USER_USD,
+        enforce_user_cap=bool(user_id) and not gen_spend.is_demo_email(user_email, _DEMO_EMAILS),
+    )
 
 
 def _spend_record(user_id: str, cost: float) -> None:
@@ -714,6 +718,7 @@ async def handle(ws) -> None:
     # Wait for the browser's {type:"init", user_id, name} before opening Gemini so the
     # system prompt can be personalised for this shopper.
     user_id: str | None = None
+    user_email: str | None = None
     user_name = "there"
     text_mode: bool = False   # True → use TEXT modality (silent/typing mode)
     style_vibe: str | None = None
@@ -762,6 +767,8 @@ async def handle(ws) -> None:
             data = json.loads(raw)
             if data.get("type") == "init":
                 user_id = data.get("user_id")
+                raw_email = (data.get("email") or data.get("user_email") or "").strip()
+                user_email = raw_email.lower() or None
                 user_name = data.get("name") or "there"
                 style_vibe     = data.get("style_vibe")
                 shopping_focus = data.get("shopping_focus")
@@ -1370,7 +1377,7 @@ async def handle(ws) -> None:
 
             # Spend guardrail — only gate ACTUAL generation (cache hits are free).
             if not front_hit:
-                reason = _spend_check(user_id, 3 * _EST_IMAGE)
+                reason = _spend_check(user_id, 3 * _EST_IMAGE, user_email)
                 if reason:
                     print(f"  [try_on] blocked by guardrail: {reason}")
                     await _send_json(ws, type="try_on_error", product_id=product_id,
@@ -1590,7 +1597,7 @@ async def handle(ws) -> None:
                 return
 
             # Spend guardrail — only gate actual generation.
-            reason = _spend_check(user_id, clip_cost + (_EST_IMAGE if is_scene else 0))
+            reason = _spend_check(user_id, clip_cost + (_EST_IMAGE if is_scene else 0), user_email)
             if reason:
                 print(f"  [try_on_video] blocked by guardrail: {reason}")
                 await _send_json(ws, type="try_on_video_error", product_id=product_id, kind=kind,
@@ -2951,6 +2958,7 @@ async def process_request(connection, request):
             "cache_items": len(_gen_cache),
             "cache_mb": round(_gen_cache_bytes / 1024 / 1024, 1),
             "spend_today_usd": round(_spend["total"], 2),
+            "spend_user_cap_usd": _GEN_DAILY_USER_USD,
             "spend_global_cap_usd": _GEN_DAILY_GLOBAL_USD,
         })
         resp = connection.respond(200 if healthy else 503, body)

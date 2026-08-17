@@ -1353,7 +1353,7 @@ export default function App() {
     sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
     sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
   } = useMiraVoice({
-    userId, userName, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
+    userId, userName, userEmail: user?.email, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
     onVisualSearchResults: (items, query, note) => { setVsResults(items); setVsQuery(query); setVsCatalogNote(note || null); setVsLoading(false); },
   });
 

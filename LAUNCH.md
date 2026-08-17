@@ -29,7 +29,9 @@ Prepaid credits deplete fast because **video is the expensive part** (see costs 
 - `GEMINI_VEO_MODEL` — default `veo-3.1-lite-generate-preview` (cheapest). Bump to
   `veo-3.1-fast-generate-preview` / `veo-3.1-generate-preview` for a premium tier.
 - `MIRA_GEN_DAILY_USER_USD` (default 1.5) / `MIRA_GEN_DAILY_GLOBAL_USD` (default 15) —
-  enforced daily spend caps.
+  enforced daily spend caps. Demo / founder emails in `MIRA_DEMO_EMAILS`
+  (default `pste22@gmail.com`) skip the per-user cap so a live walkthrough
+  isn't killed after ~3 videos; they still count toward the studio-wide ceiling.
 - `MIRA_GEN_DISABLED=1` — kill switch: pause ALL generation instantly.
 - Content-hash cache: identical photo+item+view/scene never re-bills.
 - Video is opt-in only (user taps ✨ Spin), gated behind sign-in.
