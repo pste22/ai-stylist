@@ -1585,7 +1585,7 @@ button.primary.stop { background: var(--accent); }
 
 /* Fullscreen magnified overlay */
 .tryon-zoom {
-  position: fixed; inset: 0; z-index: 1200;
+  position: fixed; inset: 0; z-index: 1500;
   background: rgba(12,10,8,.92);
   display: flex; align-items: center; justify-content: center;
   padding: 1.5rem; cursor: zoom-out;
@@ -1796,7 +1796,8 @@ button.primary.stop { background: var(--accent); }
 
 .qv-sticky {
   flex-shrink: 0;
-  display: flex; align-items: center; gap: .5rem;
+  display: flex; align-items: center; gap: .45rem;
+  flex-wrap: wrap;
   padding: .7rem 1rem calc(.7rem + env(safe-area-inset-bottom, 0px));
   border-top: 1px solid var(--border);
   background: rgba(255,255,255,.96);
@@ -1805,7 +1806,7 @@ button.primary.stop { background: var(--accent); }
   z-index: 3;
 }
 .qv-sticky-meta {
-  flex: 1; min-width: 0;
+  flex: 1 1 auto; min-width: 4.5rem;
   display: flex; flex-direction: column; gap: .05rem;
 }
 .qv-sticky-price {
@@ -1822,6 +1823,14 @@ button.primary.stop { background: var(--accent); }
   border: 1.5px solid var(--ink); background: transparent; color: var(--ink);
 }
 .qv-sticky-cart.in-cart { opacity: .7; cursor: default; }
+.qv-sticky-try {
+  flex-shrink: 0;
+  padding: .72rem .8rem; border-radius: var(--r-pill);
+  font-size: .82rem; font-weight: 700; font-family: inherit; cursor: pointer;
+  border: 1.5px solid var(--accent); background: var(--accent-soft); color: var(--accent);
+  white-space: nowrap;
+}
+.qv-sticky-try:hover { background: var(--accent); color: #fff; }
 .qv-sticky-shop {
   flex-shrink: 0;
   padding: .72rem 1.05rem; border-radius: var(--r-pill);
@@ -2348,7 +2357,7 @@ button.primary.stop { background: var(--accent); }
   background: rgba(26,20,16,.58);
   backdrop-filter: blur(6px) saturate(160%);
   -webkit-backdrop-filter: blur(6px) saturate(160%);
-  z-index: 1100;
+  z-index: 1400;
   display: flex; align-items: center; justify-content: center;
   padding: 1rem;
   overflow-y: auto;
@@ -3613,7 +3622,7 @@ button.primary.stop { background: var(--accent); }
 .delete-overlay {
   position: fixed; inset: 0; background: rgba(26,20,16,.55);
   display: flex; align-items: center; justify-content: center;
-  z-index: 200; padding: 1rem;
+  z-index: 1450; padding: 1rem;
 }
 .delete-modal {
   background: var(--surface); border-radius: var(--r-card);

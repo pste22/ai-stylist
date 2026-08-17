@@ -1866,7 +1866,7 @@ export default function App() {
                 <div className="vs-catalog-note">ℹ️ {vsCatalogNote}</div>
               )}
               <ProductGrid products={vsResults} loved={loved} onLove={wouldBuy} onBuy={buyClick}
-                onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} />
+                onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} onTryOn={openTryOn} />
             </div>
           )}
 
@@ -2054,6 +2054,10 @@ export default function App() {
             }}
             related={relatedProducts}
             onSelectRelated={setQuickViewProduct}
+            onTryOn={(product) => {
+              setQuickViewProduct(null);
+              openTryOn(product);
+            }}
           />
         </Suspense>
       )}
