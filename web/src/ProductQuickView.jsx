@@ -87,7 +87,7 @@ function productGallery(product) {
 
 export default function ProductQuickView({
   product, loved, inCart, onLove, onBuy, onAddToCart, onClose, prefs, onSetSize, onAskMira,
-  related = [], onSelectRelated,
+  related = [], onSelectRelated, onTryOn,
 }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [writingReview, setWritingReview] = useState(false);
@@ -336,6 +336,15 @@ export default function ProductQuickView({
             <strong className="qv-sticky-price">{formatPrice(product.price, product.currency)}</strong>
             <span className="qv-sticky-color">{product.color || product.category || ""}</span>
           </div>
+          {onTryOn && (
+            <button
+              className="qv-sticky-try"
+              type="button"
+              onClick={() => onTryOn(product)}
+            >
+              Try on
+            </button>
+          )}
           <button
             className={`qv-sticky-cart${inCart ? " in-cart" : ""}`}
             type="button"

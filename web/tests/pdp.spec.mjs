@@ -62,10 +62,30 @@ console.log("photo object-fit:", fit, "— contain:", fit === "contain");
 console.log("gallery above fold:", galleryAboveFold, `(top=${Math.round(layout.galleryTop ?? -1)})`);
 console.log("sticky bar on screen:", stickyOnScreen);
 
+const tryOnBtn = page.locator(".qv-sticky-try");
+const tryOnVisible = await tryOnBtn.isVisible();
+console.log("PDP Try on button:", tryOnVisible);
+await tryOnBtn.click();
+await page.waitForTimeout(500);
+const pdpClosedForVto = !(await panel.isVisible());
+const vtoModal = page.locator(".tryon-overlay");
+const signInGate = page.getByRole("heading", { name: /sign in to try/i });
+const vtoLaunched = (await vtoModal.isVisible()) || (await signInGate.isVisible());
+console.log("Try on closed the PDP:", pdpClosedForVto);
+console.log("VTO launched (modal or sign-in gate):", vtoLaunched);
+
 await page.screenshot({ path: "/tmp/pdp_verified.png" });
-await page.getByRole("button", { name: "Close" }).click();
-await page.waitForTimeout(400);
-const closed = !(await panel.isVisible());
+if (await signInGate.isVisible()) {
+  await page.locator(".delete-overlay").click({ position: { x: 8, y: 8 } });
+  await page.waitForTimeout(300);
+} else if (await vtoModal.isVisible()) {
+  await page.locator(".tryon-close").click();
+  await page.waitForTimeout(300);
+} else {
+  await page.getByRole("button", { name: "Close" }).click();
+  await page.waitForTimeout(400);
+}
+const closed = !(await panel.isVisible()) && !(await vtoModal.isVisible());
 console.log("close returns to browse:", closed);
 
 await browser.close();
@@ -76,6 +96,8 @@ if (!galleryOpen) failures.push("swipe gallery missing");
 if (!stickyOpen || !shopOpen) failures.push("sticky buy bar missing");
 if (fit !== "contain") failures.push(`photo is cropped (object-fit=${fit})`);
 if (!stickyOnScreen) failures.push("sticky buy bar is off-screen");
+if (!tryOnVisible) failures.push("PDP has no Try on button");
+if (!vtoLaunched) failures.push("Try on did not open VTO or the sign-in gate");
 if (!closed) failures.push("Close did not dismiss the PDP");
 if (failures.length) {
   console.error("FAIL:", failures.join("; "));
