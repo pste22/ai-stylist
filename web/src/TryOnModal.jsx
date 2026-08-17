@@ -17,6 +17,64 @@ const VIDEO_KINDS = [
 ];
 const VIDEO_KEYS = VIDEO_KINDS.map((k) => k.key);
 
+const BUFFER_PHASES = [
+  { after: 0,  text: "Setting the scene" },
+  { after: 10, text: "Lighting the shot" },
+  { after: 24, text: "Filming your look" },
+  { after: 48, text: "Cutting the clip" },
+  { after: 72, text: "Almost there" },
+];
+
+function bufferPhase(seconds) {
+  let text = BUFFER_PHASES[0].text;
+  for (const p of BUFFER_PHASES) {
+    if (seconds >= p.after) text = p.text;
+  }
+  return text;
+}
+
+/** Crawl toward ~90% over ~80s, then hold — never complete until the clip arrives. */
+function bufferPercent(ms) {
+  const t = Math.max(0, ms) / 1000;
+  const raw = 1 - Math.exp(-t / 28);
+  return Math.min(92, 6 + raw * 86);
+}
+
+function VideoBuffer({ kindLabel, still, stillMime, elapsedMs }) {
+  const seconds = Math.floor(elapsedMs / 1000);
+  const pct = bufferPercent(elapsedMs);
+  const phase = bufferPhase(seconds);
+  return (
+    <div className="vto-buffer" role="status" aria-live="polite" aria-busy="true">
+      {still && (
+        <img
+          className="vto-buffer-still"
+          src={`data:${stillMime || "image/png"};base64,${still}`}
+          alt=""
+        />
+      )}
+      <div className="vto-buffer-veil" aria-hidden="true" />
+      <div className="vto-buffer-core">
+        <div className="vto-buffer-ring" aria-hidden="true">
+          <svg viewBox="0 0 72 72">
+            <circle className="vto-buffer-track" cx="36" cy="36" r="30" />
+            <circle className="vto-buffer-arc" cx="36" cy="36" r="30" />
+          </svg>
+          <span className="vto-buffer-spark">✦</span>
+        </div>
+        <p className="vto-buffer-phase">{phase}</p>
+        <p className="vto-buffer-sub">
+          {kindLabel} · about a minute
+          {seconds > 4 ? ` · ${seconds}s` : ""}
+        </p>
+        <div className="vto-buffer-bar" aria-hidden="true">
+          <i style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // base64 → Blob
 function b64toBlob(b64, mime = "application/octet-stream") {
   const bytes = atob(b64);
@@ -227,6 +285,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const isVideoView = VIDEO_KEYS.includes(selectedView);
   const front = views.front;
   const [hd, setHd] = useState(false);
+  const [bufferMs, setBufferMs] = useState(0);
 
   /* Reset progressive UI whenever a new product's try-on begins */
   useEffect(() => {
@@ -235,6 +294,18 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
     setShowVideos(false);
     setHd(false);
   }, [product.id]);
+
+  /* Keep the buffer clock running until THIS clip arrives or errors out. */
+  useEffect(() => {
+    if (!videoLoadingKind) {
+      setBufferMs(0);
+      return;
+    }
+    const t0 = Date.now();
+    setBufferMs(0);
+    const id = setInterval(() => setBufferMs(Date.now() - t0), 250);
+    return () => clearInterval(id);
+  }, [videoLoadingKind]);
 
   const handleVideo = (kind) => {
     setSelectedView(kind);
@@ -312,21 +383,25 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 src={`data:${clips[selectedView].mime};base64,${clips[selectedView].video}`}
                 autoPlay loop muted playsInline controls
               />
+            ) : videoLoadingKind === selectedView ? (
+              <VideoBuffer
+                kindLabel={VIDEO_KINDS.find((k) => k.key === selectedView)?.label || "Video"}
+                still={stills[selectedView]?.image}
+                stillMime={stills[selectedView]?.mime}
+                elapsedMs={bufferMs}
+              />
             ) : stills[selectedView] ? (
-              /* Scene still — overlay the spinner only while THIS kind is rendering */
               <div className="tryon-scene-still-wrap">
                 <img
                   className="tryon-result-full"
                   src={`data:${stills[selectedView].mime};base64,${stills[selectedView].image}`}
                   alt="Scene preview"
                 />
-                {videoLoadingKind === selectedView ? (
-                  <span className="tryon-zoom-hint">✨ Bringing it to life…</span>
-                ) : videoError ? (
+                {videoError ? (
                   <span className="tryon-zoom-hint tryon-zoom-hint--error">{videoError}</span>
                 ) : null}
               </div>
-            ) : videoError && videoLoadingKind !== selectedView ? (
+            ) : videoError ? (
               <div className="tryon-result-placeholder">
                 <span className="tryon-product-emoji">🎬</span>
                 <p style={{ color: "#c0103a" }}>{videoError}</p>
@@ -334,9 +409,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             ) : (
               <div className="tryon-result-placeholder">
                 <span className="tryon-angle-dot big" aria-hidden="true" />
-                <p>{selectedView === "spin"
-                  ? "Filming your 360° spin… about a minute 🎬"
-                  : "Setting the scene & filming… about a minute 🎬"}</p>
+                <p>Tap a scene to film it.</p>
               </div>
             )}
           </div>
@@ -515,7 +588,9 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           {loading ? (
             <p className="tryon-magic-text">Styling it on you… this takes a few seconds 🪄</p>
           ) : anyDone ? (
-            videoError && isVideoView && videoLoadingKind !== selectedView ? (
+            videoLoadingKind === selectedView && isVideoView ? (
+              <p className="tryon-magic-text">Stay with Mira — this clip keeps filming until it’s ready</p>
+            ) : videoError && isVideoView && videoLoadingKind !== selectedView ? (
               <p className="tryon-desc" style={{ color: "#c0103a" }}>
                 {videoError}{" "}
                 <button type="button" className="tryon-stale-link" onClick={() => handleVideo(selectedView)}>
