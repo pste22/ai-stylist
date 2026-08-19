@@ -69,6 +69,7 @@ from curation_mix import (  # noqa: E402
     complements_for,
     look_slots_for,
     card_fields as _mix_card,
+    photo_quality,
 )
 import shop_agent  # noqa: E402  (deterministic typed-search agent)
 import recommender  # noqa: E402  (history-based personal picks)
@@ -1200,6 +1201,108 @@ async def handle(ws) -> None:
             print(f"  🛒 add_to_cart: {names}")
         return True
 
+    _COMPLETE_LOOK_RE = re.compile(
+        r"complete the look|fill what.?s missing|finish (the |this )?look|what.?s missing",
+        re.I,
+    )
+
+    def _ask_fallback_text(product: dict, prompt_key: str) -> str:
+        cat = (product.get("category") or "piece").rstrip("s")
+        color = (product.get("color") or "").strip()
+        color_bit = f" {color}" if color and color.lower() not in ("multi", "multicolor") else ""
+        if prompt_key == "wear":
+            return (
+                f"I'd wear this{color_bit} {cat} for easy days out, dinner, or anytime "
+                f"you want the outfit to do the talking. Want shoes and a bag to go with it?"
+            )
+        if prompt_key == "pair":
+            return (
+                f"Keep the rest simple — a clean bottom, neat shoes, and one accent so "
+                f"the {cat} stays the hero. Want me to pull those from the catalog?"
+            )
+        return (
+            f"Yes — this{color_bit} {cat} is an easy yes. Keep everything else quiet "
+            f"so it reads polished, not busy. Want similar pieces or something to pair with it?"
+        )
+
+    async def _inject_gemini(instruction: str, *, fallback: str | None = None) -> bool:
+        """Retry while Live connects; never leave an Ask-Mira tap unanswered."""
+        for _ in range(30):
+            sess = current["session"]
+            if sess is not None:
+                try:
+                    await sess.send_client_content(
+                        turns=[types.Content(
+                            role="user",
+                            parts=[types.Part(text=instruction)],
+                        )],
+                        turn_complete=True,
+                    )
+                    return True
+                except Exception as exc:
+                    print(f"  ! gemini inject failed: {exc}")
+                    break
+            await asyncio.sleep(0.2)
+        if fallback:
+            await _send_json(ws, type="transcript", who="mira", text=fallback)
+            await _send_json(ws, type="state", state="idle", mood="neutral")
+        return False
+
+    async def _maybe_complete_look(text: str) -> bool:
+        """Fill empty outfit slots around the last shown/saved piece — not a random accessory dump."""
+        if not _COMPLETE_LOOK_RE.search(text or ""):
+            return False
+        hero = None
+        if session_saved:
+            last_id = next(reversed(session_saved))
+            hero = _BY_ID.get(last_id)
+        if not hero:
+            for pid in reversed(last_shown_ids):
+                hero = _BY_ID.get(pid)
+                if hero:
+                    break
+        if not hero:
+            for pid in session_shown_ids:
+                cand = _BY_ID.get(pid)
+                if cand:
+                    hero = cand
+                    break
+        if not hero:
+            catalog_fulfilled_ids.add("complete_look")
+            await _send_json(
+                ws, type="transcript", who="mira",
+                text="Tap a piece you like first — then I'll fill in the rest of the look.",
+            )
+            return True
+        pieces = look_slots_for(hero, _CATALOG, exclude_ids=session_shown_ids)
+        if not pieces:
+            pieces = complements_for(hero, _CATALOG, n=4, exclude_ids=session_shown_ids)
+        if not pieces:
+            catalog_fulfilled_ids.add("complete_look")
+            await _send_json(
+                ws, type="transcript", who="mira",
+                text="I've already shown the companions I have for that piece. Want a different category?",
+            )
+            return True
+        batch = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in pieces]
+        last_shown_ids[:] = [p["id"] for p in batch]
+        for p in batch:
+            session_shown_ids.add(p["id"])
+            catalog_fulfilled_ids.add(p["id"])
+        cats = [p.get("category") for p in batch if p.get("category")]
+        if cats:
+            session_last_categories[:] = cats
+        await _send_json(
+            ws, type="products", items=batch, show_more=True,
+            label="To complete the look", paged=True,
+        )
+        await _send_json(
+            ws, type="transcript", who="mira",
+            text="Here's what I'd add to finish the look ✦",
+        )
+        print(f"  complete_look → hero={hero.get('name')!r} slots={[p.get('category') for p in batch]}")
+        return True
+
     _BUDGET_RE = re.compile(
         r'(?:under|below|within|budget|max|upto|up to|around|≈|~)?\s*'
         r'(?:rs\.?|₹|inr)?\s*(\d[\d,]*)\s*(?:rs\.?|₹|inr|rupees?)?',
@@ -1215,6 +1318,9 @@ async def handle(ws) -> None:
     async def _maybe_budget_look(text: str) -> bool:
         """If text requests a complete look with a budget, build and send looks. Return True if handled."""
         tl = text.lower()
+        # Slot-fill ("complete the look / what's missing") is handled separately.
+        if _COMPLETE_LOOK_RE.search(text or "") and "under" not in tl and "budget" not in tl:
+            return False
         has_look_phrase = any(phrase in tl for phrase in _BUDGET_LOOK_PHRASES)
         m = _BUDGET_RE.search(tl)
         if not (has_look_phrase or m):
@@ -2222,9 +2328,6 @@ async def handle(ws) -> None:
                         if text:
                             session_last_user_text = text
                             catalog_fulfilled_ids.clear()
-                            # Detect budget look intent first — build and send looks if matched.
-                            if await _maybe_budget_look(text):
-                                pass  # handled — let Mira still respond verbally
                             # Detect cart-add intent — handle before passing to Gemini.
                             if await _maybe_add_to_cart(text):
                                 # Still pass to Gemini so Mira can confirm verbally
@@ -2240,6 +2343,9 @@ async def handle(ws) -> None:
                             shop_ctx = ""
                             # Echo user text first so the thread order stays natural
                             await _send_json(ws, type="transcript", who="you", text=text)
+                            look_filled = await _maybe_complete_look(text)
+                            if not look_filled and await _maybe_budget_look(text):
+                                pass  # handled — let Mira still respond verbally
                             if _show_saved_intent:
                                 show_saved_mode = True
                                 saved_items = [_BY_ID[pid] for pid in session_saved if pid in _BY_ID]
@@ -2253,6 +2359,13 @@ async def handle(ws) -> None:
                                                          "affiliate_url": _affiliate_url(p),
                                                      } for p in saved_items],
                                                      show_more=False)
+                            elif look_filled:
+                                show_saved_mode = False
+                                shop_ctx = (
+                                    "[CATALOG RESULT] Complement cards to finish the look "
+                                    "are already on screen. Talk about those pieces only. "
+                                    "Do NOT dump more random accessories.\n"
+                                )
                             else:
                                 show_saved_mode = False
                                 # Deterministic search agent — answers from the in-memory
@@ -2283,6 +2396,7 @@ async def handle(ws) -> None:
                                         session_shown_ids, catalog_fulfilled_ids,
                                         session_last_categories,
                                     )
+                                    last_shown_ids[:] = [p["id"] for p in batch]
                                     # paged=True → fresh labeled bubble (never append to
                                     # welcome "few more picks" cards; show all matches).
                                     await _send_json(
@@ -2407,10 +2521,18 @@ async def handle(ws) -> None:
                                 }
 
                             def _pick_one(cat, exclude):
+                                best = None
+                                best_q = -1
                                 for p in _CATALOG:
-                                    if p["id"] not in exclude and p.get("category") == cat:
-                                        return _fmt(p)
-                                return None
+                                    if p["id"] in exclude or p.get("category") != cat:
+                                        continue
+                                    q = photo_quality(p)
+                                    if q > best_q:
+                                        best = _fmt(p)
+                                        best_q = q
+                                        if q >= 2:
+                                            return best
+                                return best
 
                             def _pick_batch(exclude):
                                 if not context_cats:
@@ -2444,7 +2566,13 @@ async def handle(ws) -> None:
                             # Prefer curation mix (2 on-brief + 1 curiosity) when we
                             # still have the shopper's last ask for color/category context.
                             batch = []
-                            if session_last_user_text:
+                            if session_last_user_text and not _COMPLETE_LOOK_RE.search(
+                                session_last_user_text
+                            ):
+                                _page = _shop_query(session_last_user_text, session_shown_ids)
+                                if _page.get("products"):
+                                    batch = _shop_client_cards(_page["products"][:3])
+                            if not batch and session_last_user_text:
                                 mixed = build_curation_mix(
                                     _CATALOG,
                                     session_last_user_text,
@@ -2469,6 +2597,7 @@ async def handle(ws) -> None:
                                 print(f"  show_more → catalog cycled, restarted, batch={len(batch)}")
 
                             if batch:
+                                last_shown_ids[:] = [p["id"] for p in batch]
                                 for p in batch:
                                     session_shown_ids.add(p["id"])
                                 has_more = any(
@@ -2609,8 +2738,16 @@ async def handle(ws) -> None:
                         pid = (data.get("product_id") or "").strip()
                         prompt_key = (data.get("prompt_key") or "suit").strip().lower()
                         product = _BY_ID.get(pid) if pid else None
-                        if product:
+                        if not product:
+                            await _send_json(
+                                ws, type="transcript", who="mira",
+                                text="I lost that piece for a second — tap it again and ask me?",
+                            )
+                            await _send_json(ws, type="state", state="idle", mood="neutral")
+                            print(f"  ask_about_product → missing product_id={pid!r}")
+                        else:
                             session_shown_ids.add(product["id"])
+                            last_shown_ids[:] = [product["id"]]
                             cat = product.get("category")
                             if cat:
                                 session_last_categories[:] = [cat]
@@ -2647,18 +2784,16 @@ async def handle(ws) -> None:
                                 f"Reply in 2–4 short sentences. Do NOT greet, do NOT re-introduce "
                                 f"yourself, do NOT repeat the full product name (card is visible)."
                             )
-                            sess = current["session"]
-                            if sess is not None:
-                                try:
-                                    await sess.send_client_content(
-                                        turns=[types.Content(
-                                            role="user",
-                                            parts=[types.Part(text=instruction)],
-                                        )],
-                                        turn_complete=True,
-                                    )
-                                except Exception as exc:
-                                    print(f"  ! ask_about_product inject failed: {exc}")
+                            fallback = _ask_fallback_text(product, prompt_key)
+                            # Always put an answer on screen first — Gemini Live often
+                            # swallows chip taps when the session is still connecting.
+                            await _send_json(ws, type="transcript", who="mira", text=fallback)
+                            await _send_json(ws, type="state", state="idle", mood="neutral")
+                            if not text_mode:
+                                await _inject_gemini(
+                                    instruction + f" Speak this to the shopper: {fallback}",
+                                    fallback=None,
+                                )
                             print(f"  ask_about_product → {product['id']} key={prompt_key}")
         finally:
             stop.set()  # browser closed → tear the whole conversation down

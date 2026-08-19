@@ -46,10 +46,12 @@ from typing import Any
 from curation_mix import (
     _CATEGORY_SYNONYMS,
     _COLOR_ALIASES,
+    _alias_re,
     _color_matches,
     detect_brand,
     detect_category,
     detect_color_key,
+    photo_quality,
 )
 
 __all__ = ["answer", "parse_query", "popularity_score", "warm_index"]
@@ -244,20 +246,33 @@ def _in_price(p: dict, lo: float | None, hi: float | None) -> bool:
     return True
 
 
+def _prefer_real_photos(products: list[dict]) -> list[dict]:
+    """Drop Pexels stand-ins whenever a real product JPEG is still in the pool."""
+    real = [p for p in products if photo_quality(p) > 0]
+    return real if real else products
+
+
 def _rank(products: list[dict], sort: str, pop: dict[str, float] | None = None) -> list[dict]:
     if sort == "price_asc":
-        return sorted(products, key=_price_of)
+        return sorted(products, key=lambda p: (_price_of(p), -photo_quality(p)))
     if sort == "price_desc":
-        return sorted(products, key=_price_of, reverse=True)
+        return sorted(products, key=lambda p: (_price_of(p), photo_quality(p)), reverse=True)
     if sort == "newest":
         return sorted(products, key=lambda p: p.get("created_at") or "", reverse=True)
     if pop is not None:
         return sorted(
             products,
-            key=lambda p: pop.get(p.get("id")) or popularity_score(p),
+            key=lambda p: (
+                photo_quality(p),
+                pop.get(p.get("id")) or popularity_score(p),
+            ),
             reverse=True,
         )
-    return sorted(products, key=popularity_score, reverse=True)
+    return sorted(
+        products,
+        key=lambda p: (photo_quality(p), popularity_score(p)),
+        reverse=True,
+    )
 
 
 def _dedupe(products: list[dict]) -> list[dict]:
@@ -293,7 +308,10 @@ def _facet_desc(brand, category, color, price_max=None, price_min=None) -> str:
 def _matched_category_terms(text: str) -> list[str]:
     """The literal words that triggered category detection ('kurtas' → kurta)."""
     t = (text or "").lower()
-    terms = [w for words in _CATEGORY_SYNONYMS.values() for w in words if w in t]
+    terms = [
+        w for words in _CATEGORY_SYNONYMS.values() for w in words
+        if _alias_re(w).search(t)
+    ]
     return sorted(terms, key=len, reverse=True)
 
 
@@ -595,7 +613,7 @@ def answer(
                      else f"over ₹{price_min:,.0f}")
             notes.append(f"Nothing {bound} for that ask — showing the closest matches.")
 
-    ranked = _dedupe(_rank(matched, sort, index.popularity))[:n]
+    ranked = _prefer_real_photos(_dedupe(_rank(matched, sort, index.popularity)))[:n]
     products = [{**p, "mix_role": "on_brief"} for p in ranked]
 
     if not products:

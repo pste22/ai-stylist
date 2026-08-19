@@ -348,9 +348,9 @@ export default function ProductQuickView({
           <button
             className={`qv-sticky-cart${inCart ? " in-cart" : ""}`}
             type="button"
-            onClick={() => !inCart && onAddToCart?.(product)}
+            onClick={() => onAddToCart?.(product)}
           >
-            {inCart ? "In cart" : "Add"}
+            {inCart ? "Remove" : "Add"}
           </button>
           <a
             className="qv-sticky-shop"

@@ -197,6 +197,26 @@ def test_recommend_cold_start_popularity():
     assert recs  # popularity-ranked, never empty on a non-empty catalog
 
 
+def test_complete_look_chip_is_not_an_accessories_dump():
+    hit = answer(_catalog(), "Complete the look — fill what's missing")
+    assert hit["category"] is None
+    assert hit["mode"] == "none"
+
+
+def test_amazon_photo_ranks_above_pexels_when_popularity_ties():
+    shop_agent._query_cache.clear()
+    cat = [
+        _p("px", "tops", "white", 4000, rating=4.5, votes=100,
+           image_url="https://images.pexels.com/photos/boot.jpg"),
+        _p("amz", "tops", "white", 4000, rating=4.5, votes=100,
+           image_url="https://m.media-amazon.com/images/I/shirt.jpg"),
+    ]
+    hit = answer(cat, "show me some tops")
+    assert hit["products"]
+    assert hit["products"][0]["id"] == "amz"
+    assert "px" not in {p["id"] for p in hit["products"]}
+
+
 if __name__ == "__main__":
     import sys
     mod = sys.modules[__name__]

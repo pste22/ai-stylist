@@ -1104,7 +1104,7 @@ button.primary.stop { background: var(--accent); }
   background: #e6f5e6;
   border-color: #5aaa5a;
   color: #2a7a2a;
-  cursor: default;
+  cursor: pointer;
 }
 
 /* Filled "Shop →" anchor */
@@ -1477,7 +1477,7 @@ button.primary.stop { background: var(--accent); }
   text-transform: uppercase; letter-spacing: .06em; transition: background .12s, color .12s;
 }
 .fr-tile-cart:hover { background: var(--accent); color: #fff; }
-.fr-tile-cart.in-cart { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.5); cursor: default; }
+.fr-tile-cart.in-cart { background: transparent; color: #fff; border: 1px solid rgba(255,255,255,.5); cursor: pointer; }
 /* In the compare column the tile-cart sits on light bg */
 .fr-cmp-col .fr-tile-cart { background: var(--ink); color: #fff; }
 .fr-cmp-col .fr-tile-cart:hover { background: var(--accent); }
@@ -2140,7 +2140,7 @@ button.primary.stop { background: var(--accent); }
   font-size: .82rem; font-weight: 700; font-family: inherit; cursor: pointer;
   border: 1.5px solid var(--ink); background: transparent; color: var(--ink);
 }
-.qv-sticky-cart.in-cart { opacity: .7; cursor: default; }
+.qv-sticky-cart.in-cart { cursor: pointer; }
 .qv-sticky-try {
   flex-shrink: 0;
   padding: .72rem .8rem; border-radius: var(--r-pill);
@@ -2236,7 +2236,7 @@ button.primary.stop { background: var(--accent); }
   transition: background .15s, border-color .15s;
 }
 .qv-cart-btn:hover  { background: var(--bg); border-color: var(--ink); }
-.qv-cart-btn.in-cart { background: var(--bg); border-color: var(--accent); color: var(--accent); cursor: default; }
+.qv-cart-btn.in-cart { background: var(--bg); border-color: var(--accent); color: var(--accent); cursor: pointer; }
 .qv-shop-btn--full {
   display: block; text-align: center; margin-top: .6rem;
   width: 100%; box-sizing: border-box;

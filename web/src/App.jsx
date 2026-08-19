@@ -261,6 +261,7 @@ const PRODUCTS_PER_TURN = 3;
 function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll, userSize, onTryOn, rail }) {
   if (!products?.length) return null;
   const shown = showAll ? products : products.slice(0, PRODUCTS_PER_TURN);
+  const allInCart = products.every((p) => inCart?.(p.id));
   return (
     <div className={`product-grid-wrap${rail ? " product-grid-wrap--rail" : ""}`}>
       {label && <div className="product-grid-label"><span>{label}</span></div>}
@@ -274,7 +275,9 @@ function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, 
       {onShopAll && (
         <div className="product-grid-shop-all-row">
           <button className="product-grid-shop-all" onClick={() => onShopAll(products)}>
-            🛒 Shop all {products.length} items
+            {allInCart
+              ? `Remove all ${products.length} from bag`
+              : `🛒 Shop all ${products.length} items`}
           </button>
         </div>
       )}
@@ -385,8 +388,8 @@ function LookSlot({ slotKey, product, loved, onLove, onBuy, onAddToCart, inCart 
           >{isLoved ? "♥" : "♡"}</button>
           <button
             className={`look-slot-cart${inCart?.(product.id) ? " in-cart" : ""}`}
-            onClick={(e) => { e.stopPropagation(); if (!inCart?.(product.id)) onAddToCart?.(product); }}
-            aria-label={inCart?.(product.id) ? "In cart" : "Add to cart"}
+            onClick={(e) => { e.stopPropagation(); onAddToCart?.(product); }}
+            aria-label={inCart?.(product.id) ? "Remove from bag" : "Add to bag"}
           >{inCart?.(product.id) ? "🛒✓" : "🛒"}</button>
         </div>
       </div>
@@ -400,6 +403,7 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
   const outfitItems = slots.outfit || look.items || [];
   const allItems = look.items || [];
   const allSaved = allItems.every((p) => loved?.has(p.id));
+  const allInCart = allItems.length > 0 && allItems.every((p) => inCart?.(p.id));
   const total = allItems.reduce((s, p) => s + (Number(p.price) || 0), 0);
 
   return (
@@ -486,7 +490,7 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
         <button
           className="look-cart-btn"
           onClick={() => onAddAllToCart?.(allItems)}
-        >🛒 Shop this look</button>
+        >{allInCart ? "Remove look from bag" : "🛒 Shop this look"}</button>
       </div>
     </article>
   );
@@ -1317,6 +1321,20 @@ export default function App() {
   const [vsQuery, setVsQuery]             = useState("");
   const [vsCatalogNote, setVsCatalogNote] = useState(null);
   const { items: cartItems, addItem: addToCart, addItems: addAllToCart, removeItem: removeFromCart, clearCart, inCart } = useCart();
+  const toggleCart = (product) => {
+    if (!product?.id) return;
+    if (inCart(product.id)) removeFromCart(product.id);
+    else addToCart(product);
+  };
+  const toggleAllInCart = (products, { openCart = true } = {}) => {
+    if (!products?.length) return;
+    if (products.every((p) => inCart(p.id))) {
+      products.forEach((p) => removeFromCart(p.id));
+      return;
+    }
+    addAllToCart(products);
+    if (openCart) setShowCart(true);
+  };
   const { photo: savedPhoto, savePhoto, clearPhoto } = usePhotoProfile();
   // Sizes set inline (Size Advisor) — persisted for logged-in users, in-memory for guests.
   const [sizeOverride, setSizeOverride] = useState({});
@@ -1759,7 +1777,7 @@ export default function App() {
             <p className="shelf-title">💜 Your saved items</p>
             <div className="grid">
               {savedProducts.map((p) => (
-                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} onSelect={setQuickViewProduct} inCart={inCart(p.id)} onAddToCart={addToCart} onTryOn={openTryOn} />
+                <ProductCard key={p.id} product={p} loved onLove={wouldBuy} onBuy={buyClick} onSelect={setQuickViewProduct} inCart={inCart(p.id)} onAddToCart={toggleCart} onTryOn={openTryOn} />
               ))}
             </div>
           </div>
@@ -1839,7 +1857,7 @@ export default function App() {
                     onBuy={buyClick}
                     onSelect={setQuickViewProduct}
                     inCart={inCart}
-                    onAddToCart={addToCart}
+                    onAddToCart={toggleCart}
                     showAll
                     userSize={effectivePrefs?.top_size || effectivePrefs?.bottom_size || null}
                     onTryOn={openTryOn}
@@ -1887,15 +1905,15 @@ export default function App() {
                 <div className="vs-catalog-note">ℹ️ {vsCatalogNote}</div>
               )}
               <ProductGrid products={vsResults} loved={loved} onLove={wouldBuy} onBuy={buyClick}
-                onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart} onTryOn={openTryOn} />
+                onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={toggleCart} onTryOn={openTryOn} />
             </div>
           )}
 
           {/* Look deck at the top of thread */}
           {looks.length > 0 && (
             <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook}
-              onAddAllToCart={(items) => { addAllToCart(items); setShowCart(true); }}
-              onAddToCart={addToCart} inCart={inCart} />
+              onAddAllToCart={toggleAllInCart}
+              onAddToCart={toggleCart} inCart={inCart} />
           )}
 
           {messages.length === 0 && (
@@ -1928,20 +1946,20 @@ export default function App() {
             />
           )}
           {messages.length === 0 && showDiscovery && trendingProducts.length > 0 && (
-            <TrendingStrip products={trendingProducts} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} onSelect={setQuickViewProduct} />
+            <TrendingStrip products={trendingProducts} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={toggleCart} onSelect={setQuickViewProduct} />
           )}
           {messages.length === 0 && showDiscovery && editorialLooks.length > 0 && (
             <ShopTheLookStrip
               looks={editorialLooks}
               loved={loved}
               onLove={handleLove}
-              onAddToCart={addToCart}
+              onAddToCart={toggleCart}
               inCart={inCart}
-              onShopLook={(look) => { addAllToCart(look.items || []); setShowCart(true); }}
+              onShopLook={(look) => toggleAllInCart(look.items || [])}
             />
           )}
           {youMightLike && (
-            <YouMightLike data={youMightLike} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={addToCart} onDismiss={() => setYouMightLike(null)} onSelect={setQuickViewProduct} />
+            <YouMightLike data={youMightLike} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={toggleCart} onDismiss={() => setYouMightLike(null)} onSelect={setQuickViewProduct} />
           )}
             </>
           )}
@@ -1950,9 +1968,9 @@ export default function App() {
             msg.role === "event"
               ? <EventDivider key={msg.id} text={msg.text} />
               : <MessageBubble key={msg.id} msg={msg} loved={loved} onLove={handleLove} onBuy={buyClick}
-                  highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={addToCart}
+                  highlightedId={highlightedId} onSelect={setQuickViewProduct} inCart={inCart} onAddToCart={toggleCart}
                   reasonPickerProductId={reasonPickerProductId} onReasonDone={handleReasonDone}
-                  onAddAllToCart={(items) => { addAllToCart(items); setShowCart(true); }}
+                  onAddAllToCart={toggleAllInCart}
                   userSize={effectivePrefs?.top_size || effectivePrefs?.bottom_size || null}
                   onTryOn={openTryOn} />
           )}
@@ -2051,7 +2069,7 @@ export default function App() {
             inCart={inCart(quickViewProduct.id)}
             onLove={wouldBuy}
             onBuy={buyClick}
-            onAddToCart={addToCart}
+            onAddToCart={toggleCart}
             onClose={() => setQuickViewProduct(null)}
             prefs={effectivePrefs}
             onSetSize={setUserSize}
@@ -2099,7 +2117,11 @@ export default function App() {
             onClose={() => setShowFittingRoom(false)}
             onOpenTryOn={(product) => openTryOn(product)}
             onCountChange={setFittingRoomCount}
-            onAddToCart={(p) => { addToCart(p); setShowFittingRoom(false); setShowCart(true); }}
+            onAddToCart={(p) => {
+              const adding = !inCart(p.id);
+              toggleCart(p);
+              if (adding) { setShowFittingRoom(false); setShowCart(true); }
+            }}
             inCart={inCart}
           />
         </Suspense>

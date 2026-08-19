@@ -46,6 +46,39 @@ def test_detect_purple_tops():
     assert detect_color_key("today I want purple tops") == "purple"
 
 
+def test_whats_missing_is_not_accessories():
+    """'hat' used to match inside \"what's\" and dump accessory cards."""
+    assert detect_category("Complete the look — fill what's missing") is None
+    assert detect_category("fill what's missing") is None
+    assert detect_category("show me some tops") == "tops"
+    assert detect_category("baseball cap") == "accessories"
+    assert detect_category("show me some hats") == "accessories"
+
+
+def test_photo_quality_amazon_beats_pexels():
+    from curation_mix import photo_quality
+    amazon = _p("amz", "tops", "white", 1000,
+                image_url="https://m.media-amazon.com/images/I/xx.jpg")
+    pexels = _p("px", "tops", "white", 5000,
+                image_url="https://images.pexels.com/photos/xx.jpg")
+    other = _p("cdn", "tops", "white", 2000,
+               image_url="https://cdn.shopify.com/xx.jpg")
+    assert photo_quality(amazon) > photo_quality(other) > photo_quality(pexels)
+
+
+def test_mix_prefers_real_photos_over_pexels():
+    cat = _catalog() + [
+        {**_p("px", "tops", "purple", 9000),
+         "image_url": "https://images.pexels.com/photos/standin.jpg"},
+        {**_p("amz", "tops", "purple", 1400),
+         "image_url": "https://m.media-amazon.com/images/I/real.jpg"},
+    ]
+    mix = build_curation_mix(cat, "purple tops", n=3, category="tops")
+    assert mix
+    assert mix[0]["id"] != "px"
+    assert any(p["id"] == "amz" for p in mix)
+
+
 def test_mix_majority_on_brief_with_curiosity():
     mix = build_curation_mix(_catalog(), "purple tops", n=3, category="tops")
     assert 1 <= len(mix) <= 3
