@@ -42,6 +42,7 @@ def _catalog():
 
 def test_detect_purple_tops():
     assert detect_category("today I want purple tops") == "tops"
+    assert detect_category("show me some tops") == "tops"
     assert detect_color_key("today I want purple tops") == "purple"
 
 

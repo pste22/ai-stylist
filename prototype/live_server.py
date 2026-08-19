@@ -211,7 +211,7 @@ def _resolve_pincode_sync(pin_code: str) -> dict | None:
     return None
 
 
-def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None, location_info: dict | None = None) -> str:
+def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None, location_info: dict | None = None, opened_with_ask: str | None = None) -> str:
     """Persona + optional user memory + curated product spotlight as grounding."""
     parts = [SYSTEM_PROMPT]
 
@@ -286,8 +286,14 @@ def full_grounding_prompt(memory: str = "", prefs: dict | None = None, taste: st
         f"If the user asks to see more than 3 at once, apologise briefly: 'I can only show 3 at a time — let me make sure these are exactly right for you.'\n"
         f"- After they like/save/try on something, shop as a buddy: complete the look with tops, "
         f"hats/caps, glasses, bags — describe the upgrade they'll feel, not more of the same.\n"
-        f"- 3 curated picks are already on screen when the user opens the app — greet them warmly and invite them to ask anything.\n"
-        f"- When the shopper wants to browse further, say 'tap Show more to see the next 3'."
+        + (
+            f"- The shopper opened with: \"{opened_with_ask}\". Matching catalog cards are "
+            f"already on their screen. Speak about those cards. Do not invent other items, "
+            f"and do not assume the welcome 3 picks are showing.\n"
+            if opened_with_ask else
+            f"- 3 curated picks are already on screen when the user opens the app — greet them warmly and invite them to ask anything.\n"
+        )
+        + f"- When the shopper wants to browse further, say 'tap Show more to see the next 3'."
     )
     return "\n\n".join(parts)
 
@@ -639,7 +645,7 @@ def _match_products(transcript: str) -> list[dict]:
     return hits
 
 
-def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None, location_info: dict | None = None, text_mode: bool = False):
+def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None, event_brief: dict | None = None, location_info: dict | None = None, text_mode: bool = False, opened_with_ask: str | None = None):
     from google import genai
     from google.genai import types
 
@@ -648,7 +654,7 @@ def _build(memory: str = "", prefs: dict | None = None, taste: str | None = None
     # dropped; the transcript still flows via output_audio_transcription.
     config = types.LiveConnectConfig(
         response_modalities=["AUDIO"],
-        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info))]),
+        system_instruction=types.Content(parts=[types.Part(text=full_grounding_prompt(memory, prefs, taste, event_brief, location_info, opened_with_ask=opened_with_ask))]),
         input_audio_transcription=types.AudioTranscriptionConfig(),
         output_audio_transcription=types.AudioTranscriptionConfig(),
         speech_config=types.SpeechConfig(
@@ -675,6 +681,84 @@ async def _send_json(ws, **payload) -> None:
         await ws.send(json.dumps(payload))
     except Exception:
         pass  # connection already closed — silently drop
+
+
+def _shop_query(text: str, exclude_ids: set[str]) -> dict:
+    """Deterministic catalog answer for a typed/boot shop ask."""
+    return shop_agent.answer(_CATALOG, text, exclude_ids=exclude_ids)
+
+
+def _overlay_recommendations(
+    shop: dict,
+    history_events: list | None,
+    exclude_ids: set[str],
+    saved_ids: set[str],
+) -> dict:
+    """Swap facet results for history-ranked picks when the user asked to be surprised."""
+    if not shop.get("recommend"):
+        return shop
+    recs = recommender.recommend(
+        _CATALOG, history_events or [],
+        by_id=_BY_ID, n=shop.get("count") or 6,
+        exclude_ids=exclude_ids | set(saved_ids),
+    )
+    if not recs:
+        return shop
+    return {
+        **shop, "products": recs, "mode": "recommend",
+        "label": "Picked for you ✦", "notes": [],
+        "message": None,
+    }
+
+
+def _shop_client_cards(products: list[dict]) -> list[dict]:
+    return [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in products]
+
+
+def _mark_shop_shown(
+    batch: list[dict],
+    shop: dict,
+    session_shown_ids: set[str],
+    catalog_fulfilled_ids: set[str],
+    session_last_categories: list[str],
+) -> None:
+    """Record that catalog search already answered this turn — skip speech-match dumps."""
+    catalog_fulfilled_ids.clear()
+    for p in batch:
+        session_shown_ids.add(p["id"])
+        catalog_fulfilled_ids.add(p["id"])
+    if shop.get("category"):
+        session_last_categories[:] = [shop["category"]]
+
+
+def _shop_gemini_ctx(shop: dict, batch: list[dict]) -> str:
+    """Context so Gemini talks about cards already on screen instead of inventing items."""
+    names = ", ".join(f'"{p.get("name")}"' for p in shop["products"][:3])
+    ctx = (
+        f"[CATALOG RESULT] Shown {len(batch)} products on screen "
+        f"for this ask ({shop['mode']}). "
+        f"Lead picks: {names}. "
+    )
+    note = (shop.get("notes") or [None])[0]
+    if note:
+        ctx += f"IMPORTANT: {note} Be honest briefly, then style what IS shown. "
+    elif shop["mode"] == "recommend":
+        ctx += (
+            "These are personal picks from their history — "
+            "reference what they loved before. "
+        )
+    else:
+        ctx += "Speak about these picks naturally — do not invent other brands. "
+    return ctx
+
+
+def _shop_ack_text(shop: dict) -> str:
+    note = (shop.get("notes") or [None])[0]
+    if note:
+        return note + " Here are the closest picks."
+    if shop["mode"] == "recommend":
+        return "Based on what you've loved so far — these feel very you."
+    return "Here are some picks that match what you asked."
 
 
 def _log_session_cost(
@@ -795,6 +879,7 @@ async def handle(ws) -> None:
     # Only when they arrived with nothing in mind. The socket also opens lazily on
     # the first typed question, and unlabelled picks pushed then land underneath
     # that question as "a few more picks for you" — bags in answer to a dress ask.
+    boot_shop_ctx = ""
     if not initial_request:
         raw_picks = _personalized_top_picks(prefs, exclude_ids=set(session_saved.keys()), n=3)
         top_picks = []
@@ -803,6 +888,38 @@ async def handle(ws) -> None:
             session_shown_ids.add(p["id"])
         if top_picks:
             await _send_json(ws, type="products", items=top_picks, show_more=True)
+    else:
+        # First typed ask arrives as init.initial_request, not text_input — run
+        # the catalog agent here so "show me some tops" gets tops, not spotlight
+        # bags/dresses matched from Gemini's generic greeting.
+        session_last_user_text = initial_request
+        _boot_shop = _shop_query(initial_request, session_shown_ids)
+        if _boot_shop["products"]:
+            _boot_batch = _shop_client_cards(_boot_shop["products"])
+            _mark_shop_shown(
+                _boot_batch, _boot_shop,
+                session_shown_ids, catalog_fulfilled_ids, session_last_categories,
+            )
+            await _send_json(
+                ws, type="products", items=_boot_batch, show_more=True,
+                label=_boot_shop.get("label"), paged=True,
+            )
+            boot_shop_ctx = _shop_gemini_ctx(_boot_shop, _boot_batch)
+            print(
+                f"  shop_agent (boot) → mode={_boot_shop['mode']} "
+                f"brand={_boot_shop.get('brand')!r} "
+                f"cat={_boot_shop.get('category')!r} "
+                f"n={len(_boot_batch)} "
+                f"{_boot_shop.get('elapsed_ms', 0):.1f}ms"
+            )
+        elif _boot_shop.get("message"):
+            await _send_json(
+                ws, type="transcript", who="mira", text=_boot_shop["message"],
+            )
+            boot_shop_ctx = (
+                f"[CATALOG RESULT] {_boot_shop['message']} "
+                f"Ask what else they'd like.\n"
+            )
 
     # Send 3 editorial "Shop the look" cards for the homepage
     _editorial_occasions = [
@@ -910,7 +1027,22 @@ async def handle(ws) -> None:
 
     await asyncio.gather(_resolve_location(), _load_user_context())
 
-    client, config, types = _build(memory, prefs=prefs, taste=taste, event_brief=event_brief, location_info=location_info, text_mode=text_mode)
+    if user_id and chat_session_id and initial_request:
+        if not chat_title:
+            chat_title = initial_request[:120]
+        try:
+            await asyncio.to_thread(
+                chat_store.save_message,
+                chat_session_id, user_id, "user", initial_request,
+            )
+        except Exception as exc:
+            print(f"  ! chat_store.save_message (boot) failed: {exc}")
+
+    client, config, types = _build(
+        memory, prefs=prefs, taste=taste, event_brief=event_brief,
+        location_info=location_info, text_mode=text_mode,
+        opened_with_ask=initial_request or None,
+    )
     session_id = events.new_session_id()
     if event_brief.get("occasion"):
         await asyncio.to_thread(user_store.save_event_brief, user_id, session_id, event_brief)
@@ -2018,9 +2150,7 @@ async def handle(ws) -> None:
                                 # Deterministic search agent — answers from the in-memory
                                 # catalog in <10 ms so cards are on screen well inside 3 s,
                                 # never waiting on Gemini Live.
-                                _shop = shop_agent.answer(
-                                    _CATALOG, text, exclude_ids=session_shown_ids,
-                                )
+                                _shop = _shop_query(text, session_shown_ids)
                                 # "Recommend something for me" → rank by the user's own
                                 # purchase / love / view history instead of facet search.
                                 if _shop.get("recommend"):
@@ -2034,28 +2164,17 @@ async def handle(ws) -> None:
                                             )
                                         except Exception:
                                             session_history_events = []
-                                    _recs = recommender.recommend(
-                                        _CATALOG, session_history_events or [],
-                                        by_id=_BY_ID, n=_shop.get("count") or 6,
-                                        exclude_ids=session_shown_ids | set(session_saved),
+                                    _shop = _overlay_recommendations(
+                                        _shop, session_history_events,
+                                        session_shown_ids, set(session_saved),
                                     )
-                                    if _recs:
-                                        _shop = {
-                                            **_shop, "products": _recs, "mode": "recommend",
-                                            "label": "Picked for you ✦", "notes": [],
-                                            "message": None,
-                                        }
                                 if _shop["products"]:
-                                    batch = [
-                                        _mix_card(p, affiliate_url=_affiliate_url(p))
-                                        for p in _shop["products"]
-                                    ]
-                                    catalog_fulfilled_ids.clear()
-                                    for p in batch:
-                                        session_shown_ids.add(p["id"])
-                                        catalog_fulfilled_ids.add(p["id"])
-                                    if _shop.get("category"):
-                                        session_last_categories[:] = [_shop["category"]]
+                                    batch = _shop_client_cards(_shop["products"])
+                                    _mark_shop_shown(
+                                        batch, _shop,
+                                        session_shown_ids, catalog_fulfilled_ids,
+                                        session_last_categories,
+                                    )
                                     # paged=True → fresh labeled bubble (never append to
                                     # welcome "few more picks" cards; show all matches).
                                     await _send_json(
@@ -2071,41 +2190,11 @@ async def handle(ws) -> None:
                                         f"{_shop.get('elapsed_ms', 0):.1f}ms "
                                         f"notes={_shop.get('notes')}"
                                     )
-                                    note = (_shop.get("notes") or [None])[0]
-                                    names = ", ".join(
-                                        f'"{p.get("name")}"' for p in _shop["products"][:3]
+                                    shop_ctx = _shop_gemini_ctx(_shop, batch)
+                                    await _send_json(
+                                        ws, type="transcript", who="mira",
+                                        text=_shop_ack_text(_shop),
                                     )
-                                    shop_ctx = (
-                                        f"[CATALOG RESULT] Shown {len(batch)} products on screen "
-                                        f"for this ask ({_shop['mode']}). "
-                                        f"Lead picks: {names}. "
-                                    )
-                                    if note:
-                                        shop_ctx += (
-                                            f"IMPORTANT: {note} Be honest briefly, then style what IS shown. "
-                                        )
-                                        await _send_json(
-                                            ws, type="transcript", who="mira",
-                                            text=note + " Here are the closest picks.",
-                                        )
-                                    elif _shop["mode"] == "recommend":
-                                        shop_ctx += (
-                                            "These are personal picks from their history — "
-                                            "reference what they loved before. "
-                                        )
-                                        await _send_json(
-                                            ws, type="transcript", who="mira",
-                                            text="Based on what you've loved so far — these feel very you.",
-                                        )
-                                    else:
-                                        shop_ctx += (
-                                            "Speak about these picks naturally — do not invent other brands. "
-                                        )
-                                        # Guaranteed acknowledgment even if Live is quiet
-                                        await _send_json(
-                                            ws, type="transcript", who="mira",
-                                            text="Here are some picks that match what you asked.",
-                                        )
                                 elif _shop.get("message"):
                                     await _send_json(
                                         ws, type="transcript", who="mira",
@@ -2750,12 +2839,23 @@ async def handle(ws) -> None:
                             # User arrived with a specific request (e.g. occasion chip, typed query).
                             # Skip the greeting entirely — respond directly to their request.
                             profile_ctx = f" Their style profile: {profile_str}." if profile_str else ""
-                            greeting_instruction = (
-                                f"[START SESSION] {user_name} opened Mira with this request: "
-                                f'"{initial_request}".{profile_ctx} '
-                                f"Do NOT say hello or ask what they need — go straight to helping. "
-                                f"If it is a product request, show picks immediately."
-                            )
+                            if boot_shop_ctx:
+                                greeting_instruction = (
+                                    f"[START SESSION] {user_name} opened Mira with this request: "
+                                    f'"{initial_request}".{profile_ctx}\n'
+                                    f"{boot_shop_ctx}"
+                                    "Those product cards are ALREADY on their screen. "
+                                    "Do NOT say hello. Do not invent other brands or items. "
+                                    "Do not ask to show products. Talk about the cards on screen "
+                                    "in 1–2 warm sentences."
+                                )
+                            else:
+                                greeting_instruction = (
+                                    f"[START SESSION] {user_name} opened Mira with this request: "
+                                    f'"{initial_request}".{profile_ctx} '
+                                    f"Do NOT say hello or ask what they need — go straight to helping. "
+                                    f"If it is a product request, show picks immediately."
+                                )
                         elif event_brief.get("occasion"):
                             greeting_instruction = (
                                 f"[START SESSION] Greet {user_name} warmly by name and acknowledge "

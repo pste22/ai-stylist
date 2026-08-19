@@ -135,6 +135,16 @@ def test_label_never_claims_relaxed_facets():
     assert "Tommy" in (hit["label"] or "")
 
 
+def test_show_me_some_tops_is_tops_category():
+    """The first typed ask 'show me some tops' must resolve to tops, not bags/dresses."""
+    hit = answer(_catalog(), "show me some tops")
+    assert hit["category"] == "tops"
+    assert hit["mode"] in ("category", "cat_color")
+    assert hit["products"]
+    assert all(p["category"] == "tops" for p in hit["products"])
+    assert hit["label"] and "Top" in hit["label"]
+
+
 def test_chitchat_is_not_a_shop_ask():
     hit = answer(_catalog(), "hello how are you today")
     assert hit["mode"] == "none"
