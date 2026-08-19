@@ -20,7 +20,7 @@ export function useOnboarding(userId) {
     let cancelled = false;
     const watchdog = setTimeout(() => {
       if (!cancelled) setNeedsOnboarding((cur) => (cur === null ? false : cur));
-    }, 4000);
+    }, 1800);
     supabase
       .from("user_preferences")
       .select("style_vibe, shopping_focus, top_size, bottom_size, budget, pin_code")
@@ -31,6 +31,11 @@ export function useOnboarding(userId) {
         if (error) { console.error("prefs fetch:", error); setNeedsOnboarding(false); return; }
         if (data) { setPrefs(data); setNeedsOnboarding(false); }
         else      { setNeedsOnboarding(true); }
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("prefs fetch:", error);
+        setNeedsOnboarding(false);
       });
     return () => { cancelled = true; clearTimeout(watchdog); };
   }, [userId]);
