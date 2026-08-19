@@ -386,7 +386,12 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
             const ownBubble = msg.paged || !!msg.label;
             if (ownBubble) {
               if (items.length) {
-                const bubbleText = msg.label || "Here are a few more picks for you ✦";
+                const label = String(msg.label || "").trim();
+                const bubbleText = label
+                  ? (label.includes("·")
+                      ? label
+                      : `Here are some ${label.toLowerCase()} I like on you ✦`)
+                  : "Here are a few more picks for you ✦";
                 attachedBubId = _addMsg("mira", bubbleText);
                 _attachProducts(attachedBubId, items);
                 // Stamp the label so ProductGrid shows all matched items
