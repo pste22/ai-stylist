@@ -1547,7 +1547,7 @@ async def handle(ws) -> None:
                     return inl.data, (inl.mime_type or "image/png")
             return None, None
 
-        def _gen_video(seed_bytes, seed_mime, prompt):
+        def _gen_video(seed_bytes, seed_mime, prompt, fallback_prompt=None):
             # Gemini Developer API rejects generate_audio=False (Enterprise-only).
             # Omitting it lets Veo attach a silent-ish native track; we still play muted.
             client = _new_client()
@@ -1556,38 +1556,56 @@ async def handle(ws) -> None:
                 aspect_ratio="9:16",
                 person_generation="allow_adult",
             )
-            op = client.models.generate_videos(
-                model=video_model, prompt=prompt,
-                image=_types.Image(image_bytes=seed_bytes, mime_type=seed_mime),
-                config=config,
-            )
-            t0 = time.time()
-            while not op.done:
-                if time.time() - t0 > 240:
-                    raise TimeoutError("video generation timed out")
-                time.sleep(8)
-                op = client.operations.get(op)
-            err = getattr(op, "error", None)
-            if err:
-                msg = getattr(err, "message", None) or str(err)
-                raise RuntimeError(msg)
-            resp = getattr(op, "response", None)
-            if resp is None:
-                raise RuntimeError("video generation returned no clip")
-            gv = (getattr(resp, "generated_videos", None) or [None])[0]
-            vid = getattr(gv, "video", None)
-            vb = getattr(vid, "video_bytes", None)
-            if not vb and getattr(vid, "uri", None):
-                client.files.download(file=vid)
-                vb = vid.video_bytes
-            if not vb:
-                raise RuntimeError("video generation returned an empty clip")
-            return vb
+
+            def _once(p):
+                op = client.models.generate_videos(
+                    model=video_model, prompt=p,
+                    image=_types.Image(image_bytes=seed_bytes, mime_type=seed_mime),
+                    config=config,
+                )
+                t0 = time.time()
+                while not op.done:
+                    if time.time() - t0 > 240:
+                        raise TimeoutError("video generation timed out")
+                    time.sleep(8)
+                    op = client.operations.get(op)
+                err = getattr(op, "error", None)
+                if err:
+                    msg = getattr(err, "message", None) or str(err)
+                    raise RuntimeError(msg)
+                resp = getattr(op, "response", None)
+                if resp is None:
+                    raise RuntimeError("video generation returned no clip")
+                why = _tryon.veo_filter_reason(resp)
+                videos = getattr(resp, "generated_videos", None)
+                if not videos:
+                    inner = getattr(resp, "generate_video_response", None)
+                    if inner is not None:
+                        videos = getattr(inner, "generated_videos", None)
+                        if not why:
+                            why = _tryon.veo_filter_reason(inner)
+                gv = (videos or [None])[0]
+                vid = getattr(gv, "video", None) if gv is not None else None
+                vb = getattr(vid, "video_bytes", None) if vid is not None else None
+                if not vb and vid is not None and getattr(vid, "uri", None):
+                    client.files.download(file=vid)
+                    vb = vid.video_bytes
+                if not vb:
+                    raise RuntimeError(why or "video generation returned an empty clip")
+                return vb
+
+            try:
+                return _once(prompt)
+            except Exception as exc:
+                if fallback_prompt and fallback_prompt != prompt and _tryon.is_video_filter_failure(exc):
+                    print(f"  [try_on_video] RAI/empty — retrying simpler motion: {exc}")
+                    return _once(fallback_prompt)
+                raise
 
         try:
             # Cache hit → serve the stored clip instantly, no generation / no spend.
             # Keyed by quality so Lite and HD clips are cached separately.
-            key_vid = _cache_key(image_b64, product_id, f"{kind}:reel:hd" if hd else f"{kind}:reel")
+            key_vid = _cache_key(image_b64, product_id, f"{kind}:reel3:hd" if hd else f"{kind}:reel3")
             vid_hit = _cache_get(key_vid)
             if vid_hit:
                 vb_c, mime_c = vid_hit
@@ -1615,11 +1633,13 @@ async def handle(ws) -> None:
                                  image=base64.b64encode(still_bytes).decode(), mime=still_mime)
                 seed_bytes, seed_mime = still_bytes, still_mime
                 prompt = _tryon.scene_motion_prompt(name, kind)
+                fallback = _tryon.scene_motion_fallback(name, kind)
             else:
                 seed_bytes, seed_mime = base64.b64decode(image_b64), mime
                 prompt = _tryon.spin_prompt(name)
+                fallback = _tryon.spin_fallback(name)
 
-            vb = await _gen_run(_gen_video, seed_bytes, seed_mime, prompt)
+            vb = await _gen_run(_gen_video, seed_bytes, seed_mime, prompt, fallback)
             if vb:
                 _cache_put(key_vid, vb, "video/mp4")
                 est = clip_cost + (_EST_IMAGE if is_scene else 0)

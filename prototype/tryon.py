@@ -54,7 +54,8 @@ def video_error_message(exc: BaseException) -> str:
         return "That video took too long — tap the scene to try again."
     if any(tok in s for tok in (
         "safety", "rai", "person_generation", "audio for your prompt",
-        "could not create your video", "filtered",
+        "could not create your video", "filtered", "empty clip", "no clip",
+        "no video",
     )):
         return "This clip didn't pass the preview check — try another scene or photo."
     if any(tok in s for tok in ("429", "resource_exhausted", "resource exhausted", "quota")):
@@ -62,6 +63,47 @@ def video_error_message(exc: BaseException) -> str:
     if "generate_audio" in s:
         return "Couldn't generate the video. Please try again."
     return "Something went wrong generating the video. Please try again."
+
+
+def is_video_filter_failure(exc: BaseException) -> bool:
+    """True when Veo finished but RAI/audio filters dropped the clip — worth one simpler retry."""
+    s = f"{type(exc).__name__} {exc}".lower()
+    if "timeout" in s:
+        return False
+    return any(tok in s for tok in (
+        "safety", "rai", "audio for your prompt", "could not create your video",
+        "filtered", "empty clip", "no clip", "no video",
+    ))
+
+
+def veo_filter_reason(resp) -> str | None:
+    """Read RAI filter copy off a Veo operation response (SDK nesting varies)."""
+    if resp is None:
+        return None
+    objs: list = [resp]
+    if isinstance(resp, dict):
+        inner = resp.get("generate_video_response") or resp.get("generateVideoResponse")
+        if inner:
+            objs.append(inner)
+    else:
+        inner = getattr(resp, "generate_video_response", None) or getattr(resp, "generateVideoResponse", None)
+        if inner is not None:
+            objs.append(inner)
+    for obj in objs:
+        if obj is None:
+            continue
+        if isinstance(obj, dict):
+            val = obj.get("rai_media_filtered_reasons") or obj.get("raiMediaFilteredReasons")
+        else:
+            val = getattr(obj, "rai_media_filtered_reasons", None) or getattr(
+                obj, "raiMediaFilteredReasons", None
+            )
+        if not val:
+            continue
+        text = " ".join(str(x) for x in val) if isinstance(val, (list, tuple)) else str(val)
+        if text.strip():
+            return text.strip()
+    return None
 
 _SCENE_SETTINGS = {
     "sangeet":   "at a joyful Indian sangeet celebration — warm fairy lights and softly blurred "
@@ -77,9 +119,9 @@ _SCENE_SETTINGS = {
 }
 
 
-# Indian fashion-Reel body language (hair-touch + downward glance, collarbone/
-# neckline pose, walk-away to show the back, saree pallu drape + confident smile).
-# Veo 3.1 follows one camera + one continuous action best — do not stack cuts.
+# Fashion-reel body language, written for Veo image-to-video.
+# Prompt ONLY the motion (the still is the subject). Skip brand names, "filming",
+# "voiceover", and body-touch beats — those trip Veo's audio/RAI filters in ~30s.
 _ETHNIC_RE = re.compile(
     r"saree|sari|lehenga|anarkali|kurta|kurti|salwar|sharara|gharara|dupatta",
     re.I,
@@ -87,29 +129,22 @@ _ETHNIC_RE = re.compile(
 
 _SCENE_MOTION = {
     "sangeet": (
-        "One continuous action: a joyful fashion twirl so the outfit flares and catches "
-        "the fairy lights, then they settle facing the camera with a bright, confident smile."
+        "A slow joyful twirl so the outfit flares under the warm lights, ending on a smile."
     ),
     "beach": (
-        "One continuous action: a slow walk a few steps toward the camera, hair and fabric "
-        "lifting in the sea breeze, then a glance off to the side with a soft smile."
+        "A slow walk a few steps toward the camera; hair and fabric lift in a light breeze."
     ),
     "date": (
-        "One continuous action: they look down at the outfit as if checking the mirror, "
-        "then lift their chin to the camera with a small smile, fingertips grazing the "
-        "neckline or collarbone so the fit is the hero."
+        "A small smile and a slow look toward the camera; candlelight flickers; the outfit shifts naturally."
     ),
     "office": (
-        "One continuous action: a gentle in-place sway as if music is playing, weight on "
-        "one hip, one hand on the waist, ending on a confident smile at the camera."
+        "A gentle in-place sway, weight on one hip, ending on a confident smile."
     ),
     "vacation": (
-        "One continuous action: a relaxed stroll a few steps, then they look back over "
-        "one shoulder at the camera so the back of the outfit is visible."
+        "A relaxed few steps, then a glance back over one shoulder with a smile."
     ),
     "redcarpet": (
-        "One continuous action: a short fashion-walk, stop on the mark, shift weight onto "
-        "one hip and hold a red-carpet pose, chin slightly lifted."
+        "A short walk, then a pause with weight on one hip and chin slightly lifted."
     ),
 }
 
@@ -118,31 +153,17 @@ def _is_ethnic_drape(product_name: str) -> bool:
     return bool(_ETHNIC_RE.search(product_name or ""))
 
 
-def _reel_camera() -> str:
+def _identity_guard() -> str:
     return (
-        "Vertical 9:16 Instagram fashion reel, locked-off smartphone camera, "
-        "subject centered, photorealistic natural light."
-    )
-
-
-def _identity_guard(name: str) -> str:
-    return (
-        f"Keep the person's face, hair, skin, body and the exact {name} identical to the "
-        "input image — no beauty filters, no slimming, no face morphing, no extra people. "
-        "No text, logos, or watermark."
+        "Keep the same person and the same outfit as the photo. Photorealistic, full body "
+        "in frame. Soft room tone and fabric rustle."
     )
 
 
 def _drape_beat(name: str) -> str:
     if _is_ethnic_drape(name):
-        return (
-            f"Let the pallu or dupatta of the {name} drape and catch the light as they move; "
-            "the fabric should feel alive, never glued to the body."
-        )
-    return (
-        f"Let the fabric of the {name} move with the body — folds, hem and sleeves should "
-        "show how it actually wears."
-    )
+        return "The drape of the garment moves naturally with the turn."
+    return "Fabric folds move naturally with the body."
 
 
 def scene_still_prompt(product_name: str, scene: str) -> str:
@@ -150,54 +171,69 @@ def scene_still_prompt(product_name: str, scene: str) -> str:
     name = (product_name or "the outfit").strip() or "the outfit"
     setting = _SCENE_SETTINGS.get(scene, "in a beautiful, elegant setting")
     pose = (
-        "Fashion-reel starting pose: weight on one hip, relaxed shoulders, one hand lightly "
-        "at the hair or garment, soft smile, looking slightly off-camera."
+        "Natural fashion pose: weight on one hip, relaxed shoulders, soft smile, "
+        "looking slightly off-camera."
     )
     if _is_ethnic_drape(name):
         pose = (
-            "Fashion-reel starting pose: pallu or dupatta draped over one shoulder, one hand "
-            "lightly adjusting the drape, weight on one hip, soft smile, looking slightly off-camera."
+            "Natural fashion pose: the drape over one shoulder, weight on one hip, "
+            "soft smile, looking slightly off-camera."
         )
     return (
         f"Re-render the SAME person wearing the SAME {name} from the input image, now {setting}. "
-        f"{pose} Full body in frame, photorealistic and editorial. {_identity_guard(name)}"
+        f"{pose} Full body in frame, photorealistic and editorial. "
+        f"Keep their face, hair, body and the exact outfit identical to the input. "
+        f"No text, no logos, no watermark."
     )
 
 
 def scene_motion_prompt(product_name: str, scene: str) -> str:
-    """Animate the scene still as an Instagram-style fashion reel (one action)."""
+    """Animate the scene still. Motion-only; the still already has the person + setting."""
     name = (product_name or "the outfit").strip() or "the outfit"
     action = _SCENE_MOTION.get(
         scene,
-        "One continuous action: a slow graceful turn with a look over the shoulder.",
+        "A slow graceful turn with a glance over the shoulder.",
     )
     return (
-        f"{_reel_camera()} Full body in frame. The same person wearing the same {name} as in "
-        f"the input image. {action} {_drape_beat(name)} {_identity_guard(name)} "
-        "Quiet ambient sound, fabric rustle, no voiceover."
+        f"Locked-off vertical camera. {action} {_drape_beat(name)} {_identity_guard()}"
+    )
+
+
+def scene_motion_fallback(product_name: str, scene: str) -> str:
+    """Safer second try if Veo RAI-filters the styled motion prompt."""
+    name = (product_name or "the outfit").strip() or "the outfit"
+    return (
+        f"Locked-off vertical camera. Gentle natural motion of the person in the {name}: "
+        f"a small smile, hair and fabric moving slightly, the scene quietly alive. "
+        f"{_identity_guard()}"
     )
 
 
 def spin_prompt(product_name: str) -> str:
-    """Showcase clip: Instagram-reel body language, seeded from the front try-on."""
+    """Showcase clip: slow fashion turn from the front try-on still."""
     name = (product_name or "the outfit").strip() or "the outfit"
     if _is_ethnic_drape(name):
         action = (
-            "One continuous action: they lightly touch their hair, glance down at the drape, "
-            "then a slow graceful turn until they look back over one shoulder with a soft "
-            "confident smile, so the pallu and the back of the blouse are visible."
+            "The person slowly turns in place and glances back over one shoulder with a "
+            "small smile, so the drape of the garment is visible."
         )
     else:
         action = (
-            "One continuous action: a slow fashion-reel showcase — weight shifts onto one hip, "
-            "one hand smooths the garment, then they rotate until they glance back over one "
-            "shoulder at the camera with a soft smile, showing how the outfit sits front-to-back. "
-            "Not a mechanical 360 spin; it should feel like an Indian fashion creator filming a Reel."
+            "The person slowly turns in place, shifting weight onto one hip, then glances "
+            "back over one shoulder with a small smile so the outfit is visible front to back."
         )
     return (
-        f"{_reel_camera()} Full body in frame, clean studio or plain wall behind. "
-        f"The same person wearing the same {name} as in the input image. {action} "
-        f"{_drape_beat(name)} {_identity_guard(name)} Quiet room ambience, no voiceover."
+        f"Locked-off vertical camera, plain backdrop. The person is wearing the {name}. "
+        f"{action} {_drape_beat(name)} {_identity_guard()}"
+    )
+
+
+def spin_fallback(product_name: str) -> str:
+    """Safer second try — the motion that used to succeed before styled Reels language."""
+    name = (product_name or "the outfit").strip() or "the outfit"
+    return (
+        f"The person slowly turns in place to show the {name} from the front, side and back. "
+        f"Smooth natural motion, hair and fabric moving. {_identity_guard()}"
     )
 
 
