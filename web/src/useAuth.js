@@ -44,26 +44,31 @@ export function useAuth() {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    let settled = false;
-    const finish = (session, { sticky = false } = {}) => {
-      if (settled && !sticky) return;
-      if (!sticky) settled = true;
-      setUser(session?.user ?? null);
-      setLoading(false);
-    };
+    let cancelled = false;
+    let gotEvent = false;
 
-    // onAuthStateChange fires with INITIAL_SESSION on mount (covers PKCE code exchange too)
+    // onAuthStateChange fires INITIAL_SESSION on mount (covers implicit hash + PKCE).
+    // Never call getSession() here — it shares navigator.locks with this
+    // callback and can deadlock, leaving the pulsing splash forever.
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        finish(session, { sticky: true });
+        gotEvent = true;
+        if (cancelled) return;
+        setUser(session?.user ?? null);
+        setLoading(false);
       }
     );
-    // Never call getSession() here — it shares navigator.locks with
-    // onAuthStateChange and can deadlock, leaving the pulsing splash forever.
-    const watchdog = setTimeout(() => finish(null), 1800);
+
+    // Unstick loading if Supabase never emits. Do NOT setUser(null): a real
+    // INITIAL_SESSION often arrives first, and wiping it dumps a signed-in
+    // shopper back on the marketing home as if they never logged in.
+    const watchdog = setTimeout(() => {
+      if (cancelled || gotEvent) return;
+      setLoading(false);
+    }, 1800);
 
     return () => {
-      settled = true;
+      cancelled = true;
       clearTimeout(watchdog);
       subscription.unsubscribe();
     };

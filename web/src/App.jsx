@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import ProductCard from "./ProductCard.jsx";
-import LoginScreen from "./LoginScreen.jsx";
+import LoginScreen, { AuthButtons } from "./LoginScreen.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
 import { useAuth } from "./useAuth.js";
 import { useOnboarding } from "./useOnboarding.js";
@@ -10,6 +10,7 @@ import { useCart } from "./useCart.js";
 import { usePhotoProfile } from "./usePhotoProfile.js";
 import { saveTryOn, getTryOn, listTryOns, photoSignature } from "./tryOnDB.js";
 import { track, identify } from "./analytics.js";
+import { stashPendingTryOn, takePendingTryOn } from "./pendingTryOn.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { ReasonPicker } from "./ReasonPicker.jsx";
 import { usePlatformPulse } from "./usePlatformPulse.js";
@@ -1523,6 +1524,7 @@ export default function App() {
     recordPulseAction("try_on");
     // Gate the paid try-on behind sign-in (guest video/image gen is a cost vector).
     if (!user) {
+      stashPendingTryOn(product);
       setSignInPrompt(true);
       track("signin_prompt_shown", { from: "try_on", product_id: product?.id });
       return;
@@ -1539,6 +1541,16 @@ export default function App() {
       else start();
     }
   };
+
+  // After OAuth, reopen the piece they tapped Try-On on — don't dump them on home.
+  const resumedTryOnRef = useRef(false);
+  useEffect(() => {
+    if (!user || needsOnboarding !== false || resumedTryOnRef.current) return;
+    const pending = takePendingTryOn();
+    if (!pending) return;
+    resumedTryOnRef.current = true;
+    openTryOn(pending);
+  }, [user, needsOnboarding]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Persist a try-on to the Fitting Room (IndexedDB) as results/videos arrive.
   useEffect(() => {
@@ -2109,11 +2121,13 @@ export default function App() {
             <p className="delete-modal-body">
               Create a free account to see outfits on you, save your Fitting Room, and share your looks.
             </p>
-            <div className="delete-modal-actions">
-              <button className="delete-btn-confirm" style={{ background: "var(--accent)" }}
-                onClick={() => { setSignInPrompt(false); setWantsSignIn(true); setIsGuest(false); track("signin_prompt_accepted", { from: "try_on" }); }}>
-                Sign in / Sign up
-              </button>
+            <div className="delete-modal-actions" style={{ flexDirection: "column", alignItems: "stretch" }}>
+              <AuthButtons
+                onGoogle={() => { track("signin_prompt_accepted", { from: "try_on", provider: "google" }); signInWithGoogle(); }}
+                onFacebook={() => { track("signin_prompt_accepted", { from: "try_on", provider: "facebook" }); signInWithFacebook(); }}
+                onGithub={() => { track("signin_prompt_accepted", { from: "try_on", provider: "github" }); signInWithGithub(); }}
+                authError={authError}
+              />
               <button className="delete-btn-cancel" onClick={() => setSignInPrompt(false)}>Maybe later</button>
             </div>
           </div>
