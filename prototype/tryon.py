@@ -138,7 +138,7 @@ _SCENE_MOTION = {
         "A small smile and a slow look toward the camera; candlelight flickers; the outfit shifts naturally."
     ),
     "office": (
-        "A gentle in-place sway, weight on one hip, ending on a confident smile."
+        "A slow outfit-check: small smile toward the camera, a gentle turn so the workwear is visible."
     ),
     "vacation": (
         "A relaxed few steps, then a glance back over one shoulder with a smile."
@@ -171,8 +171,8 @@ def scene_still_prompt(product_name: str, scene: str) -> str:
     name = (product_name or "the outfit").strip() or "the outfit"
     setting = _SCENE_SETTINGS.get(scene, "in a beautiful, elegant setting")
     pose = (
-        "Natural fashion pose: weight on one hip, relaxed shoulders, soft smile, "
-        "looking slightly off-camera."
+        "Outfit-check pose as if in a mirror: weight on one hip, relaxed shoulders, "
+        "soft smile toward the camera."
     )
     if _is_ethnic_drape(name):
         pose = (
@@ -234,6 +234,39 @@ def spin_fallback(product_name: str) -> str:
     return (
         f"The person slowly turns in place to show the {name} from the front, side and back. "
         f"Smooth natural motion, hair and fabric moving. {_identity_guard()}"
+    )
+
+
+_LOOK_SLOT_ROLE = {
+    "bottoms": "bottoms",
+    "shoes": "shoes",
+    "bags": "bag they are carrying",
+    "tops": "top",
+    "accessories": "accessory",
+    "outerwear": "outer layer",
+    "dresses": "dress",
+}
+
+
+def complete_look_prompt(hero_name: str, pieces: list[dict]) -> str:
+    """Image-edit prompt: keep the hero garment, add catalog bottoms/shoes/bag."""
+    hero = (hero_name or "the hero piece").strip() or "the hero piece"
+    extras = []
+    ordinals = ("SECOND", "THIRD", "FOURTH", "FIFTH")
+    for i, piece in enumerate(pieces):
+        cat = (piece.get("category") or "piece").lower()
+        role = _LOOK_SLOT_ROLE.get(cat, cat)
+        pname = (piece.get("name") or role).strip() or role
+        label = ordinals[i] if i < len(ordinals) else f"IMAGE {i + 2}"
+        extras.append(f"The {label} image is the {role}: {pname}.")
+    extra_s = " ".join(extras) if extras else "Add coordinating bottoms, shoes and a bag."
+    return (
+        f"The FIRST image is the person already wearing the {hero}. "
+        f"Keep their face, hair, body and that {hero} identical. {extra_s} "
+        f"Dress them in a complete full-body outfit-check look using those extra pieces — "
+        f"as if they paused in front of a mirror before heading out. "
+        f"Photorealistic, natural light. Do not change the {hero}. "
+        f"No text, logos, watermark, or extra people."
     )
 
 
@@ -307,9 +340,8 @@ def build_tryon_request(product, user_image_b64, user_mime: str = "image/jpeg") 
         f"the FIRST photo wearing the {product_name} shown in the SECOND photo. "
         f"Show the person's COMPLETE face clearly and their ENTIRE body from the top of "
         f"the head down to the feet — do not crop the head, face or legs. "
-        f"Frame it like a premium editorial fashion lookbook shot: confident posture, "
-        f"natural soft studio light, clean backdrop, fabric drape and fit that feel "
-        f"elevated and exciting on them — a real 'wow, that's me upgraded' moment. "
+        f"Outfit-check pose as if standing in front of a bedroom mirror: weight on one hip, "
+        f"relaxed shoulders, soft smile toward the camera, natural soft light, clean backdrop. "
         f"Keep their face, hair, skin tone, identity and body proportions EXACTLY as in "
         f"the first photo — no beauty filters, no slimming, no face morphing; only change "
         f"the outfit to the garment. Fit the garment naturally with realistic cloth folds. "

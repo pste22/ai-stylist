@@ -145,3 +145,19 @@ def test_video_error_message_maps_known_failures():
     generic = video_error_message(RuntimeError("generate_audio is only supported in Gemini Enterprise"))
     assert "try again" in generic.lower()
     assert "traceback" not in generic.lower()
+
+
+def test_complete_look_prompt_keeps_hero_and_names_slots():
+    from tryon import complete_look_prompt
+    p = complete_look_prompt("Allen Solly Women Blouse", [
+        {"name": "Navy Slim Trousers", "category": "bottoms"},
+        {"name": "Block Heel Sandals", "category": "shoes"},
+        {"name": "Tan Crossbody", "category": "bags"},
+    ])
+    low = p.lower()
+    assert "allen solly women blouse" in low
+    assert "navy slim trousers" in low
+    assert "block heel sandals" in low
+    assert "tan crossbody" in low
+    assert "do not change" in low
+    assert "instagram" not in low

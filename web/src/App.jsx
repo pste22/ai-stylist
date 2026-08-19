@@ -1350,7 +1350,7 @@ export default function App() {
     sendLikeReason, quickReplies, dismissQuickReplies,
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat, askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
-    sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
+    sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn, tryOnLookItems,
     sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
   } = useMiraVoice({
     userId, userName, userEmail: user?.email, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
@@ -1552,9 +1552,10 @@ export default function App() {
       views: { ...(savedTryOn?.views || {}), ...(r?.views || {}) },
       clips: { ...(savedTryOn?.clips || {}), ...(v?.clips || {}) },
       stills: { ...(savedTryOn?.stills || {}), ...(v?.stills || {}) },
+      lookItems: tryOnLookItems.length ? tryOnLookItems : (savedTryOn?.lookItems || []),
       photoSig: photoSignature(savedPhoto?.image),
     }).then(() => setFittingRoomCount((c) => (savedTryOn ? c : c + 1)));
-  }, [tryOnResult, tryOnVideo, tryOnProduct]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tryOnResult, tryOnVideo, tryOnProduct, tryOnLookItems]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Whether the saved try-on was made with a now-replaced profile photo.
   const savedTryOnStale = !!(
@@ -2183,6 +2184,20 @@ export default function App() {
             savedStale={savedTryOnStale}
             userPrefs={effectivePrefs}
             onSetSize={setUserSize}
+            lookItems={tryOnLookItems.length ? tryOnLookItems : (savedTryOn?.lookItems || [])}
+            onShopLookItem={(item) => {
+              if (!item) return;
+              addToCart(item);
+              track("try_on_look_add", { product_id: tryOnProduct?.id, add_id: item.id, category: item.category });
+            }}
+            onTryLookItem={(item) => {
+              if (!item) return;
+              track("try_on_look_switch", { product_id: tryOnProduct?.id, next_id: item.id, category: item.category });
+              clearTryOn();
+              setTryOnProduct(item);
+              getTryOn(item.id).then((rec) => { if (rec) setSavedTryOn(rec); else setSavedTryOn(null); });
+              if (savedPhoto?.image) sendTryOn(item.id, savedPhoto.image, savedPhoto.mime || "image/jpeg");
+            }}
             onCompleteLook={(p) => {
               addToLookProgress(p);
               const label = p?.name ? ` around the ${p.name}` : "";

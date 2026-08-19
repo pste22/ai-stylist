@@ -496,6 +496,12 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
             });
             break;
           }
+          case "try_on_look": {
+            if (msg.product_id) {
+              setTryOnLookItems(Array.isArray(msg.items) ? msg.items : []);
+            }
+            break;
+          }
           case "try_on_view_error":
             // A single angle failed — keep the others; mark this one so the UI stops waiting.
             setTryOnResult((prev) =>
@@ -575,6 +581,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
   const [outfitLoading, setOutfitLoading] = useState(false);
   const [outfitError, setOutfitError] = useState(null);
   const [tryOnResult, setTryOnResult] = useState(null);   // { productId, views:{}, failed:{}, total }
+  const [tryOnLookItems, setTryOnLookItems] = useState([]);
   const [tryOnLoading, setTryOnLoading] = useState(false);
   const [tryOnError, setTryOnError] = useState(null);
   const tryOnTimeoutRef = useRef(null);
@@ -587,6 +594,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
 
   const clearTryOn = useCallback(() => {
     setTryOnResult(null);
+    setTryOnLookItems([]);
     setTryOnError(null);
     setTryOnLoading(false);
     setTryOnVideo(null);
@@ -614,6 +622,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !productId || !imageBase64) return;
     setTryOnResult(null);
+    setTryOnLookItems([]);
     setTryOnError(null);
     setTryOnLoading(true);
     ws.send(JSON.stringify({ type: "try_on", product_id: productId, image: imageBase64, mime }));
@@ -778,7 +787,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
-    sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn,
+    sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn, tryOnLookItems,
     sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
   };
 }

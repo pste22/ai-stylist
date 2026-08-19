@@ -1589,6 +1589,104 @@ button.primary.stop { background: var(--accent); }
 }
 .tryon-angle-dot.big { width: 22px; height: 22px; border-width: 3px; color: var(--accent); }
 
+.tryon-look-wrap {
+  margin: .35rem 1.1rem 0;
+  padding: .85rem .15rem .2rem;
+  border-top: 1px solid var(--line, rgba(0,0,0,.08));
+}
+.tryon-look-label {
+  margin: 0;
+  font-size: .72rem;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.tryon-look-sub {
+  margin: .2rem 0 .65rem;
+  font-size: .78rem;
+  color: var(--ink-2);
+  line-height: 1.4;
+}
+.tryon-look-rail {
+  display: flex;
+  gap: .65rem;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 0 0 .4rem;
+  -webkit-overflow-scrolling: touch;
+}
+.tryon-look-card {
+  flex: 0 0 132px;
+  scroll-snap-align: start;
+  background: var(--paper, #fff);
+  border: 1px solid var(--line, rgba(0,0,0,.08));
+  border-radius: 14px;
+  padding: .45rem .45rem .55rem;
+  text-align: left;
+}
+.tryon-look-img {
+  width: 100%;
+  height: 110px;
+  object-fit: contain;
+  background: #f6f3ee;
+  border-radius: 10px;
+  display: block;
+}
+.tryon-look-img--ph {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+.tryon-look-slot {
+  display: inline-block;
+  margin-top: .35rem;
+  font-size: .62rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--accent, #8b2e2e);
+}
+.tryon-look-name {
+  margin: .15rem 0 0;
+  font-size: .72rem;
+  font-weight: 650;
+  line-height: 1.25;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-height: 1.8em;
+}
+.tryon-look-price {
+  margin: .15rem 0 .4rem;
+  font-size: .78rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.tryon-look-actions {
+  display: flex;
+  gap: .3rem;
+}
+.tryon-look-btn {
+  flex: 1;
+  border: 1px solid var(--line, rgba(0,0,0,.14));
+  background: transparent;
+  border-radius: 999px;
+  font-size: .68rem;
+  font-weight: 700;
+  padding: .28rem .2rem;
+  cursor: pointer;
+  color: var(--ink);
+}
+.tryon-look-btn.primary {
+  background: var(--accent, #8b2e2e);
+  border-color: var(--accent, #8b2e2e);
+  color: #fff;
+}
+
 /* ── Video buffer — stays up until the clip actually arrives ── */
 .vto-buffer {
   position: relative;

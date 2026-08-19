@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import SizeAdvice from "./SizeAdvice.jsx";
 import { track } from "./analytics.js";
 
-const VIEW_ORDER = ["front", "side", "back"];
-const VIEW_LABEL = { front: "Front", side: "Side", back: "Back" };
+const VIEW_ORDER = ["front", "look", "side", "back"];
+const VIEW_LABEL = { front: "Front", look: "Full look", side: "Side", back: "Back" };
 
 // On-demand videos: Instagram-style showcase + curated occasion reels.
 const VIDEO_KINDS = [
@@ -200,7 +200,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                                      onVideo, video, videoLoadingKind, videoError,
                                      savedPhoto, onSavePhoto, onClearPhoto,
                                      savedTryOn, savedStale, userPrefs, onSetSize,
-                                     onCompleteLook }) {
+                                     onCompleteLook, lookItems, onShopLookItem, onTryLookItem }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -276,9 +276,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const failed = myResult?.failed || {};
   const total = Math.max(myResult?.total || 0, Object.keys(views).length) || 0;
   // Which angle buttons to show: the expected set (front/side/back), capped to total.
-  const angleKeys = Object.keys(views).length
-    ? VIEW_ORDER.slice(0, Math.max(total, Object.keys(views).length) || 1)
-    : [];
+  const angleKeys = VIEW_ORDER.filter((v) => views[v] || failed[v]);
   const selected = views[selectedView];
   const selectedPending = myResult && !selected && !failed[selectedView];
   const selectedFailed = myResult && !selected && failed[selectedView];
@@ -300,6 +298,11 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
     setShowVideos(false);
     setHd(false);
   }, [product.id]);
+
+  /* Reveal angle tabs once the full-look still lands. */
+  useEffect(() => {
+    if (views.look) setShowAngles(true);
+  }, [views.look]);
 
   /* Keep the buffer clock running until THIS clip arrives or errors out. */
   useEffect(() => {
@@ -523,6 +526,43 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 </button>
               );
             })}
+          </div>
+        )}
+
+        {anyDone && (lookItems || []).length > 0 && (
+          <div className="tryon-look-wrap">
+            <p className="tryon-look-label">Finish this look · from Mira’s rack</p>
+            <p className="tryon-look-sub">Bottoms, shoes and a bag that go with this piece — try them or add to bag.</p>
+            <div className="tryon-look-rail">
+              {lookItems.map((item) => {
+                const cur = item.currency === "USD" ? "$" : "₹";
+                const slot = String(item.category || "piece");
+                return (
+                  <article key={item.id} className="tryon-look-card">
+                    {item.image_url
+                      ? <img className="tryon-look-img" src={item.image_url} alt="" />
+                      : <div className="tryon-look-img tryon-look-img--ph">🛍️</div>}
+                    <span className="tryon-look-slot">{slot}</span>
+                    <p className="tryon-look-name">{item.name}</p>
+                    <p className="tryon-look-price">
+                      {item.price != null ? `${cur}${Number(item.price).toLocaleString("en-IN")}` : ""}
+                    </p>
+                    <div className="tryon-look-actions">
+                      {onTryLookItem && (
+                        <button type="button" className="tryon-look-btn" onClick={() => onTryLookItem(item)}>
+                          Try on
+                        </button>
+                      )}
+                      {onShopLookItem && (
+                        <button type="button" className="tryon-look-btn primary" onClick={() => onShopLookItem(item)}>
+                          Add
+                        </button>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         )}
 
