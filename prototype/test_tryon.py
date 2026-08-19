@@ -161,3 +161,36 @@ def test_complete_look_prompt_keeps_hero_and_names_slots():
     assert "tan crossbody" in low
     assert "do not change" in low
     assert "instagram" not in low
+
+
+def test_image_jpg_alias_is_jpeg():
+    req = build_tryon_request(_PRODUCT, _IMG_B64, "image/jpg")
+    assert req["user_mime"] == "image/jpeg"
+
+
+def test_candidate_amazon_urls_include_fallbacks():
+    from tryon import candidate_image_urls
+    url = "https://m.media-amazon.com/images/I/71rTi9Q0L3L._AC_UL320_.jpg"
+    cands = candidate_image_urls(url)
+    assert cands[0] == url
+    assert any("._AC_SL800_." in u for u in cands)
+    assert any(u.endswith("71rTi9Q0L3L.jpg") for u in cands)
+
+
+def test_sniff_image_mime_jpeg_magic():
+    from tryon import sniff_image_mime
+    jpeg = b"\xff\xd8\xff" + b"\x00" * 32
+    assert sniff_image_mime(jpeg, "application/octet-stream") == "image/jpeg"
+
+
+def test_tryon_error_message_maps_fetch_and_busy():
+    from tryon import tryon_error_message
+    assert "piece's photo" in tryon_error_message(RuntimeError("HTTP Error 403: Forbidden")).lower()
+    assert "busy" in tryon_error_message(RuntimeError("429 RESOURCE_EXHAUSTED")).lower()
+    assert "smaller" in tryon_error_message(RuntimeError("INVALID_ARGUMENT payload too large")).lower()
+
+
+def test_max_look_ref_images_fits_gemini_cap():
+    from tryon import MAX_LOOK_REF_IMAGES
+    assert MAX_LOOK_REF_IMAGES == 2
+    assert 1 + MAX_LOOK_REF_IMAGES <= 3

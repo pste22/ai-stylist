@@ -13,6 +13,13 @@ import re
 
 # Image formats Gemini accepts for the person photo.
 ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp"}
+_MIME_ALIASES = {"image/jpg": "image/jpeg"}
+
+# Gemini 2.5 Flash Image accepts at most 3 images per request. The front still
+# occupies one slot, so the full-look composite can attach at most two extras.
+MAX_LOOK_REF_IMAGES = 2
+
+_AMAZON_IMG_BLOCK = re.compile(r"\._.+\.(jpe?g|png|webp)$", re.I)
 
 # Ordered camera angles for the "see it from all sides" try-on turntable.
 # "front" is generated from the person + garment; the rest are generated FROM the
@@ -303,6 +310,72 @@ def view_instruction(product_name: str, view: str) -> str:
     )
 
 
+def normalize_user_mime(user_mime: str | None) -> str:
+    mime = (user_mime or "image/jpeg").split(";")[0].strip().lower() or "image/jpeg"
+    return _MIME_ALIASES.get(mime, mime)
+
+
+def candidate_image_urls(url: str) -> list[str]:
+    """Catalog image URL plus Amazon-size fallbacks (Fly IPs often 403 the first)."""
+    url = (url or "").strip()
+    if not url:
+        return []
+    out = [url]
+
+    def add(candidate: str) -> None:
+        if candidate and candidate not in out:
+            out.append(candidate)
+
+    match = _AMAZON_IMG_BLOCK.search(url)
+    if match:
+        ext = match.group(1)
+        add(_AMAZON_IMG_BLOCK.sub(f"._AC_SL800_.{ext}", url))
+        add(_AMAZON_IMG_BLOCK.sub(f"._AC_SL1500_.{ext}", url))
+        add(_AMAZON_IMG_BLOCK.sub(f".{ext}", url))
+    return out
+
+
+def sniff_image_mime(data: bytes, claimed: str | None = None) -> str:
+    """Prefer magic bytes so HTML/octet-stream Amazon responses don't reach Gemini."""
+    if not data or len(data) < 24:
+        raise ValueError("image too small")
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    claimed = (claimed or "").split(";")[0].strip().lower()
+    claimed = _MIME_ALIASES.get(claimed, claimed)
+    if claimed in ALLOWED_MIMES:
+        return claimed
+    raise ValueError(f"unrecognized image type ({claimed or 'unknown'})")
+
+
+def tryon_error_message(exc: BaseException) -> str:
+    """User-facing copy for a still try-on failure. Never leak stack traces."""
+    s = f"{type(exc).__name__} {exc}".lower()
+    if any(tok in s for tok in (
+        "429", "resource_exhausted", "resource exhausted", "quota",
+        "unavailable", "503", "genbusy", "timeout", "timed out", "deadline",
+    )):
+        return "Mira's studio is busy right now — please try again in a moment."
+    if any(tok in s for tok in (
+        "safety", "blocked", "prohibited", "finish_reason", "rai",
+    )):
+        return "Try-on couldn't be generated for this photo. Try a clear, front-facing full-body shot."
+    if any(tok in s for tok in (
+        "http error", "urlopen", "403", "404", "fetch",
+        "unrecognized image", "image too small",
+    )):
+        return "Couldn't load this piece's photo. Try another item."
+    if any(tok in s for tok in (
+        "invalid_argument", "too large", "payload", "7 mb", "maximum",
+    )):
+        return "That photo is too heavy for try-on. Try a smaller or clearer shot."
+    return "Something went wrong generating your try-on. Please try again."
+
+
 def build_tryon_request(product, user_image_b64, user_mime: str = "image/jpeg") -> dict:
     """Validate inputs and assemble the try-on request payload.
 
@@ -328,6 +401,7 @@ def build_tryon_request(product, user_image_b64, user_mime: str = "image/jpeg") 
     if not user_image_b64:
         raise ValueError("user_image_b64 is required")
 
+    user_mime = normalize_user_mime(user_mime)
     if user_mime not in ALLOWED_MIMES:
         raise ValueError(
             f"unsupported user_mime {user_mime!r}; expected one of {sorted(ALLOWED_MIMES)}"

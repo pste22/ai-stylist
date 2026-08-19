@@ -9,6 +9,7 @@ import {
   visibleSlots,
   VTO_SLOT_LABELS,
 } from "./lookProgress.js";
+import { resizePhotoForTryOn } from "./resizePhoto.js";
 
 const VIEW_ORDER = ["front", "look", "side", "back"];
 const VIEW_LABEL = { front: "Front", look: "Full look", side: "Side", back: "Back" };
@@ -314,25 +315,36 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const handleFile = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result;
-      setUserPhoto(dataUrl);
-      const base64 = String(dataUrl).split(",")[1];
-      const mime = file.type || "image/jpeg";
-      track("try_on_photo_uploaded", { product_id: product.id, source: "upload" });
-      onSavePhoto?.(base64, mime);   // remember for next time (client-side only)
-      onTryOn?.(product.id, base64, mime);
-    };
-    reader.readAsDataURL(file);
     e.target.value = "";
+    (async () => {
+      try {
+        const { dataUrl, base64, mime } = await resizePhotoForTryOn(file);
+        setUserPhoto(dataUrl);
+        track("try_on_photo_uploaded", { product_id: product.id, source: "upload" });
+        onSavePhoto?.(base64, mime);
+        onTryOn?.(product.id, base64, mime);
+      } catch (err) {
+        console.warn("[try_on] photo resize failed, sending original", err);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const dataUrl = reader.result;
+          setUserPhoto(dataUrl);
+          const base64 = String(dataUrl).split(",")[1];
+          const mime = file.type || "image/jpeg";
+          track("try_on_photo_uploaded", { product_id: product.id, source: "upload" });
+          onSavePhoto?.(base64, mime);
+          onTryOn?.(product.id, base64, mime);
+        };
+        reader.readAsDataURL(file);
+      }
+    })();
   };
 
   // One-tap "try it on me" using the previously saved photo — no re-upload.
   const tryWithSaved = () => {
     if (!savedPhoto?.image) return;
     track("try_on_photo_uploaded", { product_id: product.id, source: "saved" });
-    setUserPhoto(`data:${savedPhoto.mime};base64,${savedPhoto.image}`);
+    setUserPhoto(`data:${savedPhoto.mime || "image/jpeg"};base64,${savedPhoto.image}`);
     onTryOn?.(product.id, savedPhoto.image, savedPhoto.mime || "image/jpeg");
   };
 
