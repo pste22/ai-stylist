@@ -200,7 +200,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                                      onVideo, video, videoLoadingKind, videoError,
                                      savedPhoto, onSavePhoto, onClearPhoto,
                                      savedTryOn, savedStale, userPrefs, onSetSize,
-                                     onCompleteLook, lookItems, onShopLookItem, onTryLookItem }) {
+                                     onCompleteLook, lookItems, onShopLookItem, onTryLookItem, onOpenLookItem }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -532,21 +532,28 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
         {anyDone && (lookItems || []).length > 0 && (
           <div className="tryon-look-wrap">
             <p className="tryon-look-label">Finish this look · from Mira’s rack</p>
-            <p className="tryon-look-sub">Bottoms, shoes and a bag that go with this piece — try them or add to bag.</p>
+            <p className="tryon-look-sub">Tap a piece to open it on Mira — or try it on / add it.</p>
             <div className="tryon-look-rail">
               {lookItems.map((item) => {
                 const cur = item.currency === "USD" ? "$" : "₹";
                 const slot = String(item.category || "piece");
                 return (
                   <article key={item.id} className="tryon-look-card">
-                    {item.image_url
-                      ? <img className="tryon-look-img" src={item.image_url} alt="" />
-                      : <div className="tryon-look-img tryon-look-img--ph">🛍️</div>}
-                    <span className="tryon-look-slot">{slot}</span>
-                    <p className="tryon-look-name">{item.name}</p>
-                    <p className="tryon-look-price">
-                      {item.price != null ? `${cur}${Number(item.price).toLocaleString("en-IN")}` : ""}
-                    </p>
+                    <button
+                      type="button"
+                      className="tryon-look-open"
+                      onClick={() => onOpenLookItem?.(item)}
+                      aria-label={`Open ${item.name} on Mira`}
+                    >
+                      {item.image_url
+                        ? <img className="tryon-look-img" src={item.image_url} alt="" />
+                        : <div className="tryon-look-img tryon-look-img--ph">🛍️</div>}
+                      <span className="tryon-look-slot">{slot}</span>
+                      <p className="tryon-look-name">{item.name}</p>
+                      <p className="tryon-look-price">
+                        {item.price != null ? `${cur}${Number(item.price).toLocaleString("en-IN")}` : ""}
+                      </p>
+                    </button>
                     <div className="tryon-look-actions">
                       {onTryLookItem && (
                         <button type="button" className="tryon-look-btn" onClick={() => onTryLookItem(item)}>
