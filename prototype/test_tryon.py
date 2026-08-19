@@ -84,6 +84,44 @@ def test_party_alias_is_office_scene():
     assert normalize_video_kind(None) == "spin"
 
 
+def test_spin_prompt_is_fashion_reel_not_turntable():
+    from tryon import spin_prompt
+    p = spin_prompt("VERO MODA Women's Slim")
+    assert "VERO MODA Women's Slim" in p
+    assert "turntable" not in p.lower()
+    assert "shoulder" in p.lower()
+    assert "9:16" in p
+    assert "identical" in p.lower()
+
+
+def test_saree_showcase_uses_pallu_language():
+    from tryon import spin_prompt
+    p = spin_prompt("Pink Banarasi Saree")
+    assert "pallu" in p.lower()
+    western = spin_prompt("Slim Fit Jeans")
+    assert "pallu" not in western.lower()
+
+
+def test_scene_motion_is_occasion_specific():
+    from tryon import scene_motion_prompt
+    date = scene_motion_prompt("silk dress", "date")
+    sangeet = scene_motion_prompt("silk dress", "sangeet")
+    beach = scene_motion_prompt("silk dress", "beach")
+    assert date != sangeet != beach
+    assert "neckline" in date.lower() or "collarbone" in date.lower()
+    assert "twirl" in sangeet.lower()
+    assert "breeze" in beach.lower() or "walk" in beach.lower()
+    assert "9:16" in date
+
+
+def test_scene_still_starts_in_a_reel_pose():
+    from tryon import scene_still_prompt
+    still = scene_still_prompt("office blazer", "office")
+    assert "hip" in still.lower()
+    saree = scene_still_prompt("Red Silk Saree", "sangeet")
+    assert "pallu" in saree.lower() or "dupatta" in saree.lower()
+
+
 def test_video_error_message_maps_known_failures():
     from tryon import video_error_message
     assert "too long" in video_error_message(TimeoutError("video generation timed out")).lower()

@@ -5,9 +5,9 @@ import { track } from "./analytics.js";
 const VIEW_ORDER = ["front", "side", "back"];
 const VIEW_LABEL = { front: "Front", side: "Side", back: "Back" };
 
-// On-demand videos: the 360° spin + curated, occasion-led scenes.
+// On-demand videos: Instagram-style showcase + curated occasion reels.
 const VIDEO_KINDS = [
-  { key: "spin",      label: "Spin",        emoji: "🎬" },
+  { key: "spin",      label: "Showcase",    emoji: "💃" },
   { key: "sangeet",   label: "Sangeet",     emoji: "🪩" },
   { key: "beach",     label: "Beach",       emoji: "🏖️" },
   { key: "date",      label: "Date night",  emoji: "🍷" },
@@ -284,7 +284,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const selectedFailed = myResult && !selected && failed[selectedView];
   const anyDone = Object.keys(views).length > 0;
 
-  // ── Videos (Veo): 360° spin + curated scenes (live overlaid on saved) ──
+  // ── Videos (Veo): fashion-reel showcase + occasion clips ──
   const myVideo = video && video.productId === product.id ? video : null;
   const clips = { ...(saved?.clips || {}), ...(myVideo?.clips || {}) };
   const stills = { ...(saved?.stills || {}), ...(myVideo?.stills || {}) };
@@ -579,7 +579,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                     className={`tryon-angle tryon-scene${selectedView === key ? " active" : ""}${ready ? " ready" : ""}`}
                     disabled={!front}
                     onClick={() => handleVideo(key)}
-                    title={`${label} video (~1 min)`}
+                    title={`${label} fashion reel (~1 min)`}
                   >
                     <span aria-hidden="true">{emoji}</span> {label}
                     {busy && <span className="tryon-angle-dot" aria-hidden="true" />}
