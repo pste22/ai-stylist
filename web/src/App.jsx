@@ -2185,6 +2185,11 @@ export default function App() {
             userPrefs={effectivePrefs}
             onSetSize={setUserSize}
             lookItems={tryOnLookItems.length ? tryOnLookItems : (savedTryOn?.lookItems || [])}
+            onOpenLookItem={(item) => {
+              if (!item) return;
+              track("try_on_look_open", { product_id: tryOnProduct?.id, open_id: item.id, category: item.category });
+              setQuickViewProduct(item);
+            }}
             onShopLookItem={(item) => {
               if (!item) return;
               addToCart(item);
