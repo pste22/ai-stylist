@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import SizeAdvice from "./SizeAdvice.jsx";
 import { track } from "./analytics.js";
-import { hdProductImageUrl, isProductPhotoUrl } from "./imageUrl.js";
+import { hdProductImageUrl, isProductPhotoUrl, proxiedProductImageUrl } from "./imageUrl.js";
 import {
   matchesLookSlot,
   nextEmptySlot,
@@ -308,8 +308,13 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   }[product.category] || "🛍️";
 
   const hasPhoto = isProductPhotoUrl(product.image_url);
-  const itemPhoto = hasPhoto
+  const amazonPhoto = hasPhoto
     ? hdProductImageUrl(product.image_url, { longest: 1200 })
+    : product.image_url;
+  // Same-origin proxy warms the garment cache Gemini uses. Fall back to Amazon
+  // if Fly couldn't fetch the CDN (the <img> tag can still paint it).
+  const itemPhoto = hasPhoto
+    ? proxiedProductImageUrl(product.image_url, { longest: 1200 })
     : product.image_url;
 
   const handleFile = (e) => {
@@ -568,7 +573,17 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           <div className="tryon-stage">
             <div className="tryon-product-preview">
               {hasPhoto ? (
-                <img className="tryon-product-img" src={itemPhoto} alt={product.name} loading="lazy" />
+                <img
+                  className="tryon-product-img"
+                  src={itemPhoto}
+                  alt={product.name}
+                  loading="lazy"
+                  onError={(e) => {
+                    if (amazonPhoto && e.currentTarget.src !== amazonPhoto) {
+                      e.currentTarget.src = amazonPhoto;
+                    }
+                  }}
+                />
               ) : (
                 <div className="tryon-product-emoji-wrap">
                   <span className="tryon-product-emoji">{emoji}</span>

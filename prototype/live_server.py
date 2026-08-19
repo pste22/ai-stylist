@@ -33,6 +33,8 @@ import json
 import os
 import re
 import time
+import urllib.error
+import urllib.request
 
 from dotenv import load_dotenv
 
@@ -70,6 +72,7 @@ from curation_mix import (  # noqa: E402
 )
 import shop_agent  # noqa: E402  (deterministic typed-search agent)
 import recommender  # noqa: E402  (history-based personal picks)
+import tryon as _tryon  # noqa: E402
 from product_store import vector_search as _vector_search  # noqa: E402
 from festival_calendar import festival_greeting_line, upcoming_festival  # noqa: E402
 import gen_spend  # noqa: E402
@@ -681,6 +684,121 @@ async def _send_json(ws, **payload) -> None:
         await ws.send(json.dumps(payload))
     except Exception:
         pass  # connection already closed — silently drop
+
+
+_GARMENT_CACHE: collections.OrderedDict[str, tuple[bytes, str]] = collections.OrderedDict()
+_GARMENT_CACHE_MAX = 80
+_GARMENT_CACHE_BYTES = 0
+_GARMENT_CACHE_BYTES_MAX = 25 * 1024 * 1024
+
+
+def _garment_cache_get(key: str) -> tuple[bytes, str] | None:
+    hit = _GARMENT_CACHE.get(key)
+    if hit:
+        _GARMENT_CACHE.move_to_end(key)
+    return hit
+
+
+def _garment_cache_put(key: str, data: bytes, mime: str) -> None:
+    global _GARMENT_CACHE_BYTES
+    if key in _GARMENT_CACHE:
+        old, _ = _GARMENT_CACHE.pop(key)
+        _GARMENT_CACHE_BYTES -= len(old)
+    _GARMENT_CACHE[key] = (data, mime)
+    _GARMENT_CACHE_BYTES += len(data)
+    while _GARMENT_CACHE and (
+        len(_GARMENT_CACHE) > _GARMENT_CACHE_MAX
+        or _GARMENT_CACHE_BYTES > _GARMENT_CACHE_BYTES_MAX
+    ):
+        _, (old, _) = _GARMENT_CACHE.popitem(last=False)
+        _GARMENT_CACHE_BYTES -= len(old)
+
+
+class _SafeImageRedirect(urllib.request.HTTPRedirectHandler):
+    """Follow CDN hops, but never onto an address we didn't allowlist."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if not _tryon.is_allowed_image_fetch_url(newurl):
+            raise urllib.error.HTTPError(newurl, code, "redirect not allowed", headers, fp)
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_IMAGE_OPENER = urllib.request.build_opener(_SafeImageRedirect)
+
+
+def _http_get_image(url: str) -> tuple[bytes, str]:
+    if not _tryon.is_allowed_image_fetch_url(url):
+        raise ValueError("unsupported image host")
+    timeout = 8 if "wsrv.nl" in url or "weserv.nl" in url else 3
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+        ),
+        "Accept": "image/avif,image/webp,image/apng,image/jpeg,image/png,*/*;q=0.8",
+        "Accept-Language": "en-IN,en;q=0.9",
+        "Referer": "https://www.amazon.in/",
+    }
+    r = urllib.request.Request(url, headers=headers)
+    with _IMAGE_OPENER.open(r, timeout=timeout) as resp:
+        raw = resp.read(6_000_000)
+        claimed = resp.headers.get_content_type() or ""
+    return raw, _tryon.sniff_image_mime(raw, claimed)
+
+
+def fetch_catalog_image(url: str) -> tuple[bytes, str]:
+    """Download a catalog CDN image, with size/host/proxy fallbacks and a RAM cache."""
+    url = (url or "").strip()
+    if not url:
+        raise ValueError("missing image url")
+    if not _tryon.is_catalog_image_url(url):
+        raise ValueError("unsupported image host")
+    hit = _garment_cache_get(url)
+    if hit:
+        return hit
+    last: Exception | None = None
+    for candidate in _tryon.candidate_image_urls(url):
+        try:
+            data, mime = _http_get_image(candidate)
+            _garment_cache_put(url, data, mime)
+            return data, mime
+        except Exception as exc:
+            last = exc
+            print(f"  [img] fetch miss {candidate}: {exc}")
+    raise last or RuntimeError("could not fetch garment image")
+
+
+def fetch_product_garment(product: dict | None) -> tuple[bytes, str]:
+    last: Exception | None = None
+    seeds: list[str] = []
+    if isinstance(product, dict):
+        for u in [product.get("image_url"), *(product.get("image_urls") or [])]:
+            if isinstance(u, str) and u.strip() and u.strip() not in seeds:
+                seeds.append(u.strip())
+    if not seeds:
+        raise RuntimeError("could not fetch garment image")
+    for seed in seeds:
+        try:
+            return fetch_catalog_image(seed)
+        except Exception as exc:
+            last = exc
+    raise last or RuntimeError("could not fetch garment image")
+
+
+def _binary_http_response(status: int, body: bytes, content_type: str):
+    """HTTP response with a raw body. connection.respond() UTF-8-encodes strings."""
+    import email.utils
+    from http import HTTPStatus
+    from websockets.datastructures import Headers
+    from websockets.http11 import Response
+    st = HTTPStatus(status)
+    headers = Headers([
+        ("Date", email.utils.formatdate(usegmt=True)),
+        ("Connection", "close"),
+        ("Content-Length", str(len(body))),
+        ("Content-Type", content_type),
+    ])
+    return Response(st.value, st.phrase, headers, body)
 
 
 def _shop_query(text: str, exclude_ids: set[str]) -> dict:
@@ -1473,7 +1591,6 @@ async def handle(ws) -> None:
         client as it finishes (progressive turntable). Never crashes the session.
         """
         import base64
-        import urllib.request as _req
         import tryon as _tryon
         from google import genai as _genai
         from google.genai import types as _types
@@ -1505,46 +1622,18 @@ async def handle(ws) -> None:
                     return inline.data, (inline.mime_type or "image/png")
             return None, None
 
-        def _fetch_one(candidate: str):
-            headers = {
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
-                ),
-                "Accept": "image/avif,image/webp,image/apng,image/jpeg,image/png,*/*;q=0.8",
-                "Accept-Language": "en-IN,en;q=0.9",
-                "Referer": "https://www.amazon.in/",
-            }
-            r = _req.Request(candidate, headers=headers)
-            with _req.urlopen(r, timeout=8) as resp:
-                raw = resp.read()
-                claimed = resp.headers.get_content_type() or ""
-            return raw, _tryon.sniff_image_mime(raw, claimed)
-
-        def _fetch(url):
-            last = None
-            for candidate in _tryon.candidate_image_urls(url):
-                try:
-                    return _fetch_one(candidate)
-                except Exception as fetch_exc:
-                    last = fetch_exc
-                    print(f"  [try_on] image fetch miss {candidate}: {fetch_exc}")
-            raise last or RuntimeError("could not fetch garment image")
-
         def _load_garment(prod: dict):
             if garment_b64:
                 try:
-                    return _tryon.decode_inline_image(garment_b64, garment_mime)
+                    data, gmime = _tryon.decode_inline_image(garment_b64, garment_mime)
+                    seed = (prod.get("image_url") or "").strip()
+                    if seed:
+                        _garment_cache_put(seed, data, gmime)
+                    print(f"  [try_on] using client garment ({len(data)} bytes, {gmime})")
+                    return data, gmime
                 except Exception as ge:
                     print(f"  [try_on] client garment rejected: {ge}")
-            last = None
-            for candidate in _tryon.garment_fetch_urls(prod):
-                try:
-                    return _fetch_one(candidate)
-                except Exception as fetch_exc:
-                    last = fetch_exc
-                    print(f"  [try_on] image fetch miss {candidate}: {fetch_exc}")
-            raise last or RuntimeError("could not fetch garment image")
+            return fetch_product_garment(prod)
 
         try:
             person_bytes = base64.b64decode(image_b64)
@@ -1697,7 +1786,7 @@ async def handle(ws) -> None:
                         if not url:
                             continue
                         try:
-                            raw, pmime = await asyncio.to_thread(_fetch, url)
+                            raw, pmime = await asyncio.to_thread(fetch_catalog_image, url)
                         except Exception as fetch_exc:
                             print(f"  [try_on] look slot fetch failed {p.get('id')}: {fetch_exc}")
                             continue
@@ -3230,6 +3319,32 @@ async def process_request(connection, request):
         resp.headers["Content-Type"] = "application/json"
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["Cache-Control"] = "no-store"
+        return resp
+
+    if request.path.startswith("/api/product-image"):
+        from urllib.parse import urlparse, parse_qs
+
+        parsed = urlparse(request.path)
+        url = (parse_qs(parsed.query).get("url") or [""])[0].strip()
+        if not url or len(url) > 2000 or not _tryon.is_catalog_image_url(url):
+            resp = connection.respond(400, "invalid image url")
+            resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-store"
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            return resp
+        try:
+            data, mime = await asyncio.to_thread(fetch_catalog_image, url)
+        except Exception as exc:
+            print(f"  [img] /api/product-image failed: {exc}")
+            resp = connection.respond(502, "could not fetch image")
+            resp.headers["Content-Type"] = "text/plain; charset=utf-8"
+            resp.headers["Cache-Control"] = "no-store"
+            resp.headers["Access-Control-Allow-Origin"] = "*"
+            return resp
+        resp = _binary_http_response(200, data, mime)
+        resp.headers["Cache-Control"] = "public, max-age=3600"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["X-Content-Type-Options"] = "nosniff"
         return resp
 
     if request.path.startswith("/api/browse") or request.path.startswith("/api/filters"):

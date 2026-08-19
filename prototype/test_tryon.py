@@ -177,6 +177,11 @@ def test_candidate_amazon_urls_include_fallbacks():
     assert any(u.endswith("71rTi9Q0L3L.jpg") for u in cands)
     assert any("images-eu.ssl-images-amazon.com" in u for u in cands)
     assert any(u.startswith("https://wsrv.nl/?url=") for u in cands)
+    assert any(u.startswith("https://images.weserv.nl/?url=") for u in cands)
+    wsrv_i = next(i for i, u in enumerate(cands) if u.startswith("https://wsrv.nl/"))
+    sl1500_i = next(i for i, u in enumerate(cands) if "SL1500" in u)
+    host_i = next(i for i, u in enumerate(cands) if "ssl-images-amazon.com" in u)
+    assert wsrv_i < sl1500_i < host_i
 
 
 def test_garment_fetch_urls_include_gallery():
@@ -197,6 +202,21 @@ def test_decode_inline_image_sniffs_jpeg():
     data, mime = decode_inline_image(b64, "application/octet-stream")
     assert data == raw
     assert mime == "image/jpeg"
+
+
+def test_is_catalog_image_url_allows_amazon_rejects_ssrf():
+    from tryon import is_allowed_image_fetch_url, is_catalog_image_url
+    assert is_catalog_image_url("https://m.media-amazon.com/images/I/71r.jpg")
+    assert is_catalog_image_url("https://images-eu.ssl-images-amazon.com/images/I/71r.jpg")
+    assert is_catalog_image_url("https://images.pexels.com/photos/1.jpg")
+    assert not is_catalog_image_url("http://127.0.0.1/secret")
+    assert not is_catalog_image_url("http://localhost/x.jpg")
+    assert not is_catalog_image_url("file:///etc/passwd")
+    assert not is_catalog_image_url("https://evil.example/x.jpg")
+    assert not is_catalog_image_url("https://wsrv.nl/?url=https://m.media-amazon.com/x.jpg")
+    assert is_allowed_image_fetch_url("https://wsrv.nl/?url=https://m.media-amazon.com/x.jpg")
+    assert is_allowed_image_fetch_url("https://images.weserv.nl/?url=https://m.media-amazon.com/x.jpg")
+    assert not is_allowed_image_fetch_url("http://127.0.0.1/secret")
 
 
 def test_sniff_image_mime_jpeg_magic():

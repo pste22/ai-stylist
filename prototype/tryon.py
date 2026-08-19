@@ -339,9 +339,21 @@ def candidate_image_urls(url: str) -> list[str]:
 
     add(url)
     match = _AMAZON_IMG_BLOCK.search(url)
+    sl800 = None
     if match:
         ext = match.group(1)
-        add(_AMAZON_IMG_BLOCK.sub(f"._AC_SL800_.{ext}", url))
+        sl800 = _AMAZON_IMG_BLOCK.sub(f"._AC_SL800_.{ext}", url)
+
+    # Image proxies immediately after the original URL. Fly IPs often hang or
+    # 403 on Amazon, and waiting through size/host swaps blew the try-on budget
+    # before weserv ever ran.
+    if "wsrv.nl" not in url and "weserv.nl" not in url:
+        proxied = sl800 or url
+        add(f"https://wsrv.nl/?url={quote(proxied, safe='')}&output=jpg&n=-1")
+        add(f"https://images.weserv.nl/?url={quote(proxied, safe='')}&output=jpg&n=-1")
+
+    if match:
+        add(sl800)
         add(_AMAZON_IMG_BLOCK.sub(f"._AC_SL1500_.{ext}", url))
         add(_AMAZON_IMG_BLOCK.sub(f".{ext}", url))
 
@@ -355,17 +367,9 @@ def candidate_image_urls(url: str) -> list[str]:
                 swapped = urlunparse(parsed._replace(netloc=alt))
                 add(swapped)
                 if match:
-                    ext = match.group(1)
                     add(_AMAZON_IMG_BLOCK.sub(f"._AC_SL800_.{ext}", swapped))
     except Exception:
         pass
-
-    if "wsrv.nl" not in url and "weserv.nl" not in url:
-        add(f"https://wsrv.nl/?url={quote(url, safe='')}&output=jpg&n=-1")
-        if match:
-            sl = _AMAZON_IMG_BLOCK.sub(f"._AC_SL800_.{match.group(1)}", url)
-            if sl != url:
-                add(f"https://wsrv.nl/?url={quote(sl, safe='')}&output=jpg&n=-1")
 
     return out[:12]
 
@@ -384,6 +388,40 @@ def garment_fetch_urls(product: dict | None) -> list[str]:
             if candidate not in out:
                 out.append(candidate)
     return out[:12]
+
+
+def is_catalog_image_url(url: str) -> bool:
+    """True when `url` is a catalog CDN we are willing to fetch (SSRF guard)."""
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower().rstrip(".")
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    if not host:
+        return False
+    if host in {"images.pexels.com", "m.media-amazon.com", "images-amazon.com"}:
+        return True
+    if host.endswith(".media-amazon.com") or host.endswith(".ssl-images-amazon.com"):
+        return True
+    if host.endswith(".images-amazon.com"):
+        return True
+    return False
+
+
+def is_allowed_image_fetch_url(url: str) -> bool:
+    """Catalog CDNs plus the image proxies we use when Amazon 403s Fly IPs."""
+    if is_catalog_image_url(url):
+        return True
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower().rstrip(".")
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    return host in {"wsrv.nl", "images.weserv.nl"}
 
 
 def decode_inline_image(b64: str, claimed: str | None = None) -> tuple[bytes, str]:

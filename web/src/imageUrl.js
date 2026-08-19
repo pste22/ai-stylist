@@ -76,30 +76,40 @@ function bytesToBase64(buf) {
   return btoa(binary);
 }
 
+export function proxiedProductImageUrl(url, { longest = 1200 } = {}) {
+  const hd = hdProductImageUrl(url, { longest }) || url;
+  if (!hd) return hd;
+  return `/api/product-image?url=${encodeURIComponent(hd)}`;
+}
+
 /**
  * Pull garment bytes the browser can actually load (Amazon often 403s Fly IPs).
- * Prefers a CORS-friendly image proxy, then a direct fetch.
+ * Same-origin proxy first (warms the server cache Gemini uses), then CORS proxies.
  */
-export async function fetchProductImageBytes(url, { timeoutMs = 8000 } = {}) {
+export async function fetchProductImageBytes(url, { timeoutMs = 20000 } = {}) {
   if (!url) return null;
   const hd = hdProductImageUrl(url, { longest: 1200 }) || url;
   const sources = [
-    `https://wsrv.nl/?url=${encodeURIComponent(hd)}&output=jpg&w=1200&n=-1`,
-    `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&w=1200&n=-1`,
+    { src: proxiedProductImageUrl(url, { longest: 1200 }), timeoutMs },
+    { src: `https://wsrv.nl/?url=${encodeURIComponent(hd)}&output=jpg&w=1200&n=-1`, timeoutMs: 8000 },
+    { src: `https://images.weserv.nl/?url=${encodeURIComponent(hd)}&output=jpg&w=1200&n=-1`, timeoutMs: 8000 },
+    { src: `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&w=1200&n=-1`, timeoutMs: 8000 },
   ];
-  for (const src of sources) {
+  for (const { src, timeoutMs: ms } of sources) {
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), ms) : null;
     try {
       const resp = await fetch(src, {
         mode: "cors",
+        credentials: "omit",
         signal: ctrl?.signal,
       });
       if (!resp.ok) continue;
       const buf = await resp.arrayBuffer();
       if (!buf || buf.byteLength < 32) continue;
       const mime = (resp.headers.get("content-type") || "image/jpeg").split(";")[0];
-      return { base64: bytesToBase64(buf), mime: mime.startsWith("image/") ? mime : "image/jpeg" };
+      if (!mime.startsWith("image/")) continue;
+      return { base64: bytesToBase64(buf), mime };
     } catch {
       /* try next source */
     } finally {
