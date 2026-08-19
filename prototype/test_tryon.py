@@ -175,6 +175,28 @@ def test_candidate_amazon_urls_include_fallbacks():
     assert cands[0] == url
     assert any("._AC_SL800_." in u for u in cands)
     assert any(u.endswith("71rTi9Q0L3L.jpg") for u in cands)
+    assert any("images-eu.ssl-images-amazon.com" in u for u in cands)
+    assert any(u.startswith("https://wsrv.nl/?url=") for u in cands)
+
+
+def test_garment_fetch_urls_include_gallery():
+    from tryon import garment_fetch_urls
+    urls = garment_fetch_urls({
+        "image_url": "https://m.media-amazon.com/images/I/aaa._AC_UL320_.jpg",
+        "image_urls": ["https://m.media-amazon.com/images/I/bbb._AC_UL320_.jpg"],
+    })
+    joined = " ".join(urls)
+    assert "aaa" in joined and "bbb" in joined
+    assert "wsrv.nl" in joined
+
+
+def test_decode_inline_image_sniffs_jpeg():
+    from tryon import decode_inline_image
+    raw = b"\xff\xd8\xff" + b"\x00" * 32
+    b64 = base64.b64encode(raw).decode()
+    data, mime = decode_inline_image(b64, "application/octet-stream")
+    assert data == raw
+    assert mime == "image/jpeg"
 
 
 def test_sniff_image_mime_jpeg_magic():

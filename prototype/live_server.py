@@ -1462,7 +1462,8 @@ async def handle(ws) -> None:
         await _send_json(ws, type="state", state="idle", mood="neutral")
         print(f"  outfit_anatomy → gender={outfit_gender} {len(result_items)} items detected")
 
-    async def _try_on(product_id: str, image_b64: str, mime: str = "image/jpeg") -> None:
+    async def _try_on(product_id: str, image_b64: str, mime: str = "image/jpeg",
+                      garment_b64: str = "", garment_mime: str = "image/jpeg") -> None:
         """Generate a multi-angle AI virtual try-on (front / side / back).
 
         recontext_image is Vertex-only, so on the Developer API we edit with an
@@ -1504,7 +1505,7 @@ async def handle(ws) -> None:
                     return inline.data, (inline.mime_type or "image/png")
             return None, None
 
-        def _fetch(url):
+        def _fetch_one(candidate: str):
             headers = {
                 "User-Agent": (
                     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -1514,14 +1515,32 @@ async def handle(ws) -> None:
                 "Accept-Language": "en-IN,en;q=0.9",
                 "Referer": "https://www.amazon.in/",
             }
+            r = _req.Request(candidate, headers=headers)
+            with _req.urlopen(r, timeout=8) as resp:
+                raw = resp.read()
+                claimed = resp.headers.get_content_type() or ""
+            return raw, _tryon.sniff_image_mime(raw, claimed)
+
+        def _fetch(url):
             last = None
             for candidate in _tryon.candidate_image_urls(url):
                 try:
-                    r = _req.Request(candidate, headers=headers)
-                    with _req.urlopen(r, timeout=12) as resp:
-                        raw = resp.read()
-                        claimed = resp.headers.get_content_type() or ""
-                    return raw, _tryon.sniff_image_mime(raw, claimed)
+                    return _fetch_one(candidate)
+                except Exception as fetch_exc:
+                    last = fetch_exc
+                    print(f"  [try_on] image fetch miss {candidate}: {fetch_exc}")
+            raise last or RuntimeError("could not fetch garment image")
+
+        def _load_garment(prod: dict):
+            if garment_b64:
+                try:
+                    return _tryon.decode_inline_image(garment_b64, garment_mime)
+                except Exception as ge:
+                    print(f"  [try_on] client garment rejected: {ge}")
+            last = None
+            for candidate in _tryon.garment_fetch_urls(prod):
+                try:
+                    return _fetch_one(candidate)
                 except Exception as fetch_exc:
                     last = fetch_exc
                     print(f"  [try_on] image fetch miss {candidate}: {fetch_exc}")
@@ -1550,7 +1569,7 @@ async def handle(ws) -> None:
             else:
                 try:
                     product_bytes, product_mime = await asyncio.to_thread(
-                        _fetch, payload["product_image_url"]
+                        _load_garment, product or {}
                     )
                 except Exception as fetch_exc:
                     print(f"  [try_on] garment fetch failed: {fetch_exc}")
@@ -2436,8 +2455,12 @@ async def handle(ws) -> None:
                         img = data.get("image", "")
                         mime = data.get("mime", "image/jpeg")
                         pid = data.get("product_id", "")
+                        garment = data.get("garment") or data.get("product_image") or ""
+                        garment_mime = data.get("garment_mime") or "image/jpeg"
                         if img and pid:
-                            asyncio.ensure_future(_try_on(pid, img, mime))
+                            asyncio.ensure_future(
+                                _try_on(pid, img, mime, garment, garment_mime)
+                            )
                     elif data.get("type") == "try_on_video":
                         img = data.get("image", "")
                         mime = data.get("mime", "image/png")

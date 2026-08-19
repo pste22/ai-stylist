@@ -307,10 +307,10 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
     shoes: "👟", bags: "👜", accessories: "✨", activewear: "🏃",
   }[product.category] || "🛍️";
 
-  const hasPhoto =
-    product.image_url &&
-    (product.image_url.includes("m.media-amazon.com") ||
-      product.image_url.includes("images.pexels.com"));
+  const hasPhoto = isProductPhotoUrl(product.image_url);
+  const itemPhoto = hasPhoto
+    ? hdProductImageUrl(product.image_url, { longest: 1200 })
+    : product.image_url;
 
   const handleFile = (e) => {
     const file = e.target.files?.[0];
@@ -322,7 +322,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
         setUserPhoto(dataUrl);
         track("try_on_photo_uploaded", { product_id: product.id, source: "upload" });
         onSavePhoto?.(base64, mime);
-        onTryOn?.(product.id, base64, mime);
+        onTryOn?.(product.id, base64, mime, product.image_url);
       } catch (err) {
         console.warn("[try_on] photo resize failed, sending original", err);
         const reader = new FileReader();
@@ -333,7 +333,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           const mime = file.type || "image/jpeg";
           track("try_on_photo_uploaded", { product_id: product.id, source: "upload" });
           onSavePhoto?.(base64, mime);
-          onTryOn?.(product.id, base64, mime);
+          onTryOn?.(product.id, base64, mime, product.image_url);
         };
         reader.readAsDataURL(file);
       }
@@ -345,8 +345,24 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
     if (!savedPhoto?.image) return;
     track("try_on_photo_uploaded", { product_id: product.id, source: "saved" });
     setUserPhoto(`data:${savedPhoto.mime || "image/jpeg"};base64,${savedPhoto.image}`);
-    onTryOn?.(product.id, savedPhoto.image, savedPhoto.mime || "image/jpeg");
+    onTryOn?.(product.id, savedPhoto.image, savedPhoto.mime || "image/jpeg", product.image_url);
   };
+
+  /* Reuse a photo already shared in chat (camera / outfit) so VTO doesn't ask again.
+     Wait a beat so IndexedDB can restore a prior still and we don't double-spend. */
+  const autoTriedFor = useRef(null);
+  useEffect(() => {
+    if (autoTriedFor.current === product.id) return;
+    const t = setTimeout(() => {
+      if (autoTriedFor.current === product.id) return;
+      if (!savedPhoto?.image) return;
+      if (savedTryOn?.views?.front) return;
+      autoTriedFor.current = product.id;
+      tryWithSaved();
+    }, 280);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [product.id, savedPhoto, savedTryOn]);
 
   // Live result for THIS product, plus the saved (Fitting Room) fallback so a
   // previously-tried product shows instantly with no regeneration.
@@ -552,7 +568,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           <div className="tryon-stage">
             <div className="tryon-product-preview">
               {hasPhoto ? (
-                <img className="tryon-product-img" src={product.image_url} alt={product.name} loading="lazy" />
+                <img className="tryon-product-img" src={itemPhoto} alt={product.name} loading="lazy" />
               ) : (
                 <div className="tryon-product-emoji-wrap">
                   <span className="tryon-product-emoji">{emoji}</span>
@@ -572,13 +588,16 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             </div>
 
             <div className="tryon-silhouette-wrap">
-              {loading ? (
+              {userPhoto ? (
+                <>
+                  <img className="tryon-product-img" src={userPhoto} alt="Your photo" />
+                  {loading && <div className="tryon-shimmer-bar" aria-hidden="true" />}
+                </>
+              ) : loading ? (
                 <>
                   <SilhouetteSVG />
                   <div className="tryon-shimmer-bar" aria-hidden="true" />
                 </>
-              ) : userPhoto ? (
-                <img className="tryon-product-img" src={userPhoto} alt="Your photo" />
               ) : (
                 <SilhouetteSVG />
               )}

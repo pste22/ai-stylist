@@ -65,3 +65,46 @@ export function isProductPhotoUrl(url) {
       url.includes("images.pexels.com"))
   );
 }
+
+function bytesToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  const chunk = 0x8000;
+  let binary = "";
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  }
+  return btoa(binary);
+}
+
+/**
+ * Pull garment bytes the browser can actually load (Amazon often 403s Fly IPs).
+ * Prefers a CORS-friendly image proxy, then a direct fetch.
+ */
+export async function fetchProductImageBytes(url, { timeoutMs = 8000 } = {}) {
+  if (!url) return null;
+  const hd = hdProductImageUrl(url, { longest: 1200 }) || url;
+  const sources = [
+    `https://wsrv.nl/?url=${encodeURIComponent(hd)}&output=jpg&w=1200&n=-1`,
+    `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&w=1200&n=-1`,
+  ];
+  for (const src of sources) {
+    const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+    try {
+      const resp = await fetch(src, {
+        mode: "cors",
+        signal: ctrl?.signal,
+      });
+      if (!resp.ok) continue;
+      const buf = await resp.arrayBuffer();
+      if (!buf || buf.byteLength < 32) continue;
+      const mime = (resp.headers.get("content-type") || "image/jpeg").split(";")[0];
+      return { base64: bytesToBase64(buf), mime: mime.startsWith("image/") ? mime : "image/jpeg" };
+    } catch {
+      /* try next source */
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+  return null;
+}
