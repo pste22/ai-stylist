@@ -21,9 +21,9 @@ Prepaid credits deplete fast because **video is the expensive part** (see costs 
 |---|---|---|
 | Try-on, front only | 1 image | ~€0.04 |
 | Try-on, 3 angles | 3 images | ~€0.12 |
-| Spin / scene video — **Lite** (default) | 1 clip (~8s) | **~€0.30–0.40** |
-| Spin / scene video — Fast | 1 clip (~8s) | ~€1.20 |
-| Spin / scene video — Quality | 1 clip (~8s) | ~€1.60–3.20 |
+| Showcase / scene video — **Lite** (default) | 1 clip (~8s) | **~€0.30–0.40** |
+| Showcase / scene video — Fast | 1 clip (~8s) | ~€1.20 |
+| Showcase / scene video — Quality | 1 clip (~8s) | ~€1.60–3.20 |
 
 ### Cost controls already in the app (env-tunable)
 - `GEMINI_VEO_MODEL` — default `veo-3.1-lite-generate-preview` (cheapest). Bump to
@@ -34,7 +34,7 @@ Prepaid credits deplete fast because **video is the expensive part** (see costs 
   isn't killed after ~3 videos; they still count toward the studio-wide ceiling.
 - `MIRA_GEN_DISABLED=1` — kill switch: pause ALL generation instantly.
 - Content-hash cache: identical photo+item+view/scene never re-bills.
-- Video is opt-in only (user taps ✨ Spin), gated behind sign-in.
+- Video is opt-in only (user taps Showcase), gated behind sign-in.
 - Watch live spend at `GET /health` (`spend_today_usd`, `cache_*`, `gen_circuit_open`).
 
 ## 2. Supabase — apply RLS (data-security launch blocker)

@@ -9,6 +9,8 @@ Contract is pinned by `test_tryon.py`.
 """
 from __future__ import annotations
 
+import re
+
 # Image formats Gemini accepts for the person photo.
 ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp"}
 
@@ -75,37 +77,127 @@ _SCENE_SETTINGS = {
 }
 
 
+# Indian fashion-Reel body language (hair-touch + downward glance, collarbone/
+# neckline pose, walk-away to show the back, saree pallu drape + confident smile).
+# Veo 3.1 follows one camera + one continuous action best — do not stack cuts.
+_ETHNIC_RE = re.compile(
+    r"saree|sari|lehenga|anarkali|kurta|kurti|salwar|sharara|gharara|dupatta",
+    re.I,
+)
+
+_SCENE_MOTION = {
+    "sangeet": (
+        "One continuous action: a joyful fashion twirl so the outfit flares and catches "
+        "the fairy lights, then they settle facing the camera with a bright, confident smile."
+    ),
+    "beach": (
+        "One continuous action: a slow walk a few steps toward the camera, hair and fabric "
+        "lifting in the sea breeze, then a glance off to the side with a soft smile."
+    ),
+    "date": (
+        "One continuous action: they look down at the outfit as if checking the mirror, "
+        "then lift their chin to the camera with a small smile, fingertips grazing the "
+        "neckline or collarbone so the fit is the hero."
+    ),
+    "office": (
+        "One continuous action: a gentle in-place sway as if music is playing, weight on "
+        "one hip, one hand on the waist, ending on a confident smile at the camera."
+    ),
+    "vacation": (
+        "One continuous action: a relaxed stroll a few steps, then they look back over "
+        "one shoulder at the camera so the back of the outfit is visible."
+    ),
+    "redcarpet": (
+        "One continuous action: a short fashion-walk, stop on the mark, shift weight onto "
+        "one hip and hold a red-carpet pose, chin slightly lifted."
+    ),
+}
+
+
+def _is_ethnic_drape(product_name: str) -> bool:
+    return bool(_ETHNIC_RE.search(product_name or ""))
+
+
+def _reel_camera() -> str:
+    return (
+        "Vertical 9:16 Instagram fashion reel, locked-off smartphone camera, "
+        "subject centered, photorealistic natural light."
+    )
+
+
+def _identity_guard(name: str) -> str:
+    return (
+        f"Keep the person's face, hair, skin, body and the exact {name} identical to the "
+        "input image — no beauty filters, no slimming, no face morphing, no extra people. "
+        "No text, logos, or watermark."
+    )
+
+
+def _drape_beat(name: str) -> str:
+    if _is_ethnic_drape(name):
+        return (
+            f"Let the pallu or dupatta of the {name} drape and catch the light as they move; "
+            "the fabric should feel alive, never glued to the body."
+        )
+    return (
+        f"Let the fabric of the {name} move with the body — folds, hem and sleeves should "
+        "show how it actually wears."
+    )
+
+
 def scene_still_prompt(product_name: str, scene: str) -> str:
     """Prompt to relocate the person (from the front try-on) into a scene as a still."""
     name = (product_name or "the outfit").strip() or "the outfit"
     setting = _SCENE_SETTINGS.get(scene, "in a beautiful, elegant setting")
+    pose = (
+        "Fashion-reel starting pose: weight on one hip, relaxed shoulders, one hand lightly "
+        "at the hair or garment, soft smile, looking slightly off-camera."
+    )
+    if _is_ethnic_drape(name):
+        pose = (
+            "Fashion-reel starting pose: pallu or dupatta draped over one shoulder, one hand "
+            "lightly adjusting the drape, weight on one hip, soft smile, looking slightly off-camera."
+        )
     return (
         f"Re-render the SAME person wearing the SAME {name} from the input image, now {setting}. "
-        f"Keep their face, hair, body and the exact outfit identical to the input. "
-        f"Full body in frame, natural confident pose, photorealistic and editorial. "
-        f"No text, no logos, no watermark."
+        f"{pose} Full body in frame, photorealistic and editorial. {_identity_guard(name)}"
     )
 
 
 def scene_motion_prompt(product_name: str, scene: str) -> str:
-    """Prompt to animate the scene still into a short cinematic clip (subtle ambient motion)."""
+    """Animate the scene still as an Instagram-style fashion reel (one action)."""
     name = (product_name or "the outfit").strip() or "the outfit"
+    action = _SCENE_MOTION.get(
+        scene,
+        "One continuous action: a slow graceful turn with a look over the shoulder.",
+    )
     return (
-        f"A short, photorealistic cinematic video of the person in the {name}. "
-        f"Subtle, natural ambient motion — a gentle breeze moving hair and fabric, a soft smile, "
-        f"the surroundings quietly alive — while the person stays elegantly in place, full body in "
-        f"frame. Keep identity and outfit consistent throughout. No text or logos."
+        f"{_reel_camera()} Full body in frame. The same person wearing the same {name} as in "
+        f"the input image. {action} {_drape_beat(name)} {_identity_guard(name)} "
+        "Quiet ambient sound, fabric rustle, no voiceover."
     )
 
 
 def spin_prompt(product_name: str) -> str:
-    """Prompt for the Veo 360° 'spin' video, seeded from the front try-on image."""
+    """Showcase clip: Instagram-reel body language, seeded from the front try-on."""
     name = (product_name or "the outfit").strip() or "the outfit"
+    if _is_ethnic_drape(name):
+        action = (
+            "One continuous action: they lightly touch their hair, glance down at the drape, "
+            "then a slow graceful turn until they look back over one shoulder with a soft "
+            "confident smile, so the pallu and the back of the blouse are visible."
+        )
+    else:
+        action = (
+            "One continuous action: a slow fashion-reel showcase — weight shifts onto one hip, "
+            "one hand smooths the garment, then they rotate until they glance back over one "
+            "shoulder at the camera with a soft smile, showing how the outfit sits front-to-back. "
+            "Not a mechanical 360 spin; it should feel like an Indian fashion creator filming a Reel."
+        )
     return (
-        f"The person slowly turns a full 360 degrees in place to show the {name} from "
-        f"every angle — front, side, back, side, front — a smooth fashion-runway turntable "
-        f"rotation. Keep the person's identity, hair and the outfit consistent throughout; "
-        f"studio background, full body in frame, natural lighting."
+        f"{_reel_camera()} Full body in frame, clean studio or plain wall behind. "
+        f"The same person wearing the same {name} as in the input image. {action} "
+        f"{_drape_beat(name)} {_identity_guard(name)} Quiet room ambience, no voiceover."
     )
 
 

@@ -1502,9 +1502,9 @@ async def handle(ws) -> None:
                             kind: str = "spin", hd: bool = False) -> None:
         """On-demand Veo video, seeded from the FRONT try-on image (sent by the client).
 
-        kind == "spin"  → a 360° turntable of the person in the outfit.
+        kind == "spin"  → Instagram-reel showcase (hip-shift, look-over-shoulder — not a turntable).
         kind in SCENES  → first composite the person into the scene (still image, sent as
-                          a quick preview), then animate that still into a cinematic clip.
+                          a quick preview), then animate that still with occasion-specific body language.
         hd → premium Veo tier (Fast) instead of the cheap default (Lite).
         Slow (~1-2 min) + costly, so only runs on explicit user tap. Never crashes.
         """
@@ -1587,7 +1587,7 @@ async def handle(ws) -> None:
         try:
             # Cache hit → serve the stored clip instantly, no generation / no spend.
             # Keyed by quality so Lite and HD clips are cached separately.
-            key_vid = _cache_key(image_b64, product_id, f"{kind}:hd" if hd else kind)
+            key_vid = _cache_key(image_b64, product_id, f"{kind}:reel:hd" if hd else f"{kind}:reel")
             vid_hit = _cache_get(key_vid)
             if vid_hit:
                 vb_c, mime_c = vid_hit
