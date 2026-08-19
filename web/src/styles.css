@@ -1608,6 +1608,73 @@ button.primary.stop { background: var(--accent); }
   color: var(--ink-2);
   line-height: 1.4;
 }
+.tryon-slots {
+  display: flex;
+  gap: .4rem;
+  margin: .45rem 0 .7rem;
+}
+.tryon-slot-wrap {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+}
+.tryon-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: .22rem;
+  width: 100%;
+  padding: .2rem;
+  border: 1px solid var(--border);
+  background: transparent;
+  cursor: pointer;
+  color: var(--ink-2);
+  font: inherit;
+}
+.tryon-slot.is-filled {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.tryon-slot.is-focus {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tryon-slot-thumb {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  object-position: center top;
+  display: block;
+  background: var(--bg-alt);
+}
+.tryon-slot-empty {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border: 1px dashed var(--border-dark);
+  background: var(--bg-alt);
+  display: block;
+}
+.tryon-slot-label {
+  font-size: .55rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.tryon-slot-clear {
+  position: absolute;
+  top: .12rem;
+  right: .12rem;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,.92);
+  color: var(--ink);
+  font-size: .78rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
 .tryon-look-rail {
   display: flex;
   gap: .65rem;
@@ -1617,6 +1684,7 @@ button.primary.stop { background: var(--accent); }
   -webkit-overflow-scrolling: touch;
 }
 .tryon-look-card {
+  position: relative;
   flex: 0 0 132px;
   scroll-snap-align: start;
   background: var(--paper, #fff);
@@ -1624,6 +1692,29 @@ button.primary.stop { background: var(--accent); }
   border-radius: 14px;
   padding: .45rem .45rem .55rem;
   text-align: left;
+}
+.tryon-look-card.is-focus {
+  border-color: var(--accent);
+}
+.tryon-look-love {
+  position: absolute;
+  top: .55rem;
+  right: .55rem;
+  z-index: 1;
+  width: 1.85rem;
+  height: 1.85rem;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255,255,255,.94);
+  color: var(--ink-2);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: 0 1px 4px rgba(20,20,20,.12);
+}
+.tryon-look-love.is-loved {
+  color: var(--accent);
 }
 .tryon-look-open {
   display: block;

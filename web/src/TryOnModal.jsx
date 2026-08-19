@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import SizeAdvice from "./SizeAdvice.jsx";
 import { track } from "./analytics.js";
+import { hdProductImageUrl, isProductPhotoUrl } from "./imageUrl.js";
+import {
+  matchesLookSlot,
+  nextEmptySlot,
+  slotProductIds,
+  visibleSlots,
+  VTO_SLOT_LABELS,
+} from "./lookProgress.js";
 
 const VIEW_ORDER = ["front", "look", "side", "back"];
 const VIEW_LABEL = { front: "Front", look: "Full look", side: "Side", back: "Back" };
@@ -196,11 +204,73 @@ function SilhouetteSVG() {
   );
 }
 
+function slotThumb(product) {
+  if (!product) return null;
+  return isProductPhotoUrl(product.image_url)
+    ? hdProductImageUrl(product.image_url, { longest: 240 })
+    : product.image_url;
+}
+
+function lookHint(slots, remaining) {
+  const next = slots.find((s) => !s.product && remaining.some((item) => matchesLookSlot(item, s.key)))
+    || slots.find((s) => !s.product);
+  if (!next) return "Look’s set — tap a slot to open it.";
+  const noun = next.label.toLowerCase();
+  const article = /^[aeiou]/.test(noun) ? "an" : "a";
+  return `♥ ${article} ${noun} to pin it on your look — then keep going.`;
+}
+
+function LookSlotRail({ lookProgress, focusSlot, onFocusSlot, onOpen, onUnpin }) {
+  const slots = visibleSlots(lookProgress, VTO_SLOT_LABELS);
+  if (!slots.length) return null;
+  return (
+    <div className="tryon-slots" role="list" aria-label="Your look">
+      {slots.map((s) => {
+        const p = s.product;
+        const img = slotThumb(p);
+        return (
+          <div key={s.key} className="tryon-slot-wrap" role="listitem">
+            <button
+              type="button"
+              className={`tryon-slot${p ? " is-filled" : ""}${focusSlot === s.key && !p ? " is-focus" : ""}`}
+              onClick={() => {
+                if (p) onOpen?.(p);
+                else onFocusSlot?.(s.key);
+              }}
+              title={p ? p.name : `Add ${s.label}`}
+              aria-label={p ? `${s.label}: ${p.name}` : `Empty ${s.label} slot`}
+            >
+              {p && img ? (
+                <img className="tryon-slot-thumb" src={img} alt="" />
+              ) : (
+                <span className="tryon-slot-empty" aria-hidden="true" />
+              )}
+              <span className="tryon-slot-label">{p ? "✓ " : ""}{s.label}</span>
+            </button>
+            {p && onUnpin && (
+              <button
+                type="button"
+                className="tryon-slot-clear"
+                aria-label={`Remove ${s.label} from look`}
+                title="Unpin"
+                onClick={() => onUnpin(p)}
+              >
+                ×
+              </button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function TryOnModal({ product, onClose, onTryOn, result, loading, error,
                                      onVideo, video, videoLoadingKind, videoError,
                                      savedPhoto, onSavePhoto, onClearPhoto,
                                      savedTryOn, savedStale, userPrefs, onSetSize,
-                                     onCompleteLook, lookItems, onShopLookItem, onTryLookItem, onOpenLookItem }) {
+                                     onCompleteLook, lookItems, onShopLookItem, onTryLookItem, onOpenLookItem,
+                                     lookProgress, loved, onLikeLookItem, onUnpinLookItem }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -208,6 +278,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const [zoom, setZoom] = useState(false); // fullscreen magnified result
   const [showAngles, setShowAngles] = useState(false);
   const [showVideos, setShowVideos] = useState(false);
+  const [focusSlot, setFocusSlot] = useState(null);
 
   /* Close on Escape key */
   useEffect(() => {
@@ -281,6 +352,17 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const selectedPending = myResult && !selected && !failed[selectedView];
   const selectedFailed = myResult && !selected && failed[selectedView];
   const anyDone = Object.keys(views).length > 0;
+  const lookSlots = visibleSlots(lookProgress, VTO_SLOT_LABELS);
+  const pinnedLookIds = slotProductIds(lookProgress);
+  const remainingLookItems = (lookItems || []).filter((item) => item?.id && !pinnedLookIds.has(item.id));
+  const shownLookItems = focusSlot
+    ? [...remainingLookItems].sort((a, b) => {
+        const am = matchesLookSlot(a, focusSlot) ? 0 : 1;
+        const bm = matchesLookSlot(b, focusSlot) ? 0 : 1;
+        return am - bm;
+      })
+    : remainingLookItems;
+  const nextLookSlot = nextEmptySlot(lookProgress, VTO_SLOT_LABELS);
 
   // ── Videos (Veo): fashion-reel showcase + occasion clips ──
   const myVideo = video && video.productId === product.id ? video : null;
@@ -297,6 +379,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
     setShowAngles(false);
     setShowVideos(false);
     setHd(false);
+    setFocusSlot(null);
   }, [product.id]);
 
   /* Reveal angle tabs once the full-look still lands. */
@@ -529,47 +612,81 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           </div>
         )}
 
-        {anyDone && (lookItems || []).length > 0 && (
+        {anyDone && (
           <div className="tryon-look-wrap">
-            <p className="tryon-look-label">Finish this look · from Mira’s rack</p>
-            <p className="tryon-look-sub">Tap a piece to open it on Mira — or try it on / add it.</p>
-            <div className="tryon-look-rail">
-              {lookItems.map((item) => {
-                const cur = item.currency === "USD" ? "$" : "₹";
-                const slot = String(item.category || "piece");
-                return (
-                  <article key={item.id} className="tryon-look-card">
-                    <button
-                      type="button"
-                      className="tryon-look-open"
-                      onClick={() => onOpenLookItem?.(item)}
-                      aria-label={`Open ${item.name} on Mira`}
-                    >
-                      {item.image_url
-                        ? <img className="tryon-look-img" src={item.image_url} alt="" />
-                        : <div className="tryon-look-img tryon-look-img--ph">🛍️</div>}
-                      <span className="tryon-look-slot">{slot}</span>
-                      <p className="tryon-look-name">{item.name}</p>
-                      <p className="tryon-look-price">
-                        {item.price != null ? `${cur}${Number(item.price).toLocaleString("en-IN")}` : ""}
-                      </p>
-                    </button>
-                    <div className="tryon-look-actions">
-                      {onTryLookItem && (
-                        <button type="button" className="tryon-look-btn" onClick={() => onTryLookItem(item)}>
-                          Try on
+            <p className="tryon-look-label">Your look</p>
+            <LookSlotRail
+              lookProgress={lookProgress}
+              focusSlot={focusSlot}
+              onFocusSlot={setFocusSlot}
+              onOpen={onOpenLookItem}
+              onUnpin={onUnpinLookItem}
+            />
+            {shownLookItems.length === 0 ? (
+              nextLookSlot ? (
+                <p className="tryon-look-sub">Mira’s still pulling pieces for the empty slots.</p>
+              ) : null
+            ) : (
+              <>
+                <p className="tryon-look-sub">{lookHint(lookSlots, shownLookItems)}</p>
+                <div className="tryon-look-rail">
+                  {shownLookItems.map((item) => {
+                    const cur = item.currency === "USD" ? "$" : "₹";
+                    const slot = String(item.category || "piece");
+                    const isLoved = !!(loved && loved.has(item.id));
+                    const isFocus = !!(focusSlot && matchesLookSlot(item, focusSlot));
+                    return (
+                      <article
+                        key={item.id}
+                        className={`tryon-look-card${isFocus ? " is-focus" : ""}`}
+                      >
+                        {onLikeLookItem && (
+                          <button
+                            type="button"
+                            className={`tryon-look-love${isLoved ? " is-loved" : ""}`}
+                            aria-label={isLoved ? `Pinned ${item.name}` : `Like and pin ${item.name}`}
+                            title="Like — pin on your look"
+                            onClick={() => {
+                              onLikeLookItem(item);
+                              setFocusSlot(null);
+                            }}
+                          >
+                            {isLoved ? "♥" : "♡"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="tryon-look-open"
+                          onClick={() => onOpenLookItem?.(item)}
+                          aria-label={`Open ${item.name} on Mira`}
+                        >
+                          {item.image_url
+                            ? <img className="tryon-look-img" src={item.image_url} alt="" />
+                            : <div className="tryon-look-img tryon-look-img--ph">🛍️</div>}
+                          <span className="tryon-look-slot">{slot}</span>
+                          <p className="tryon-look-name">{item.name}</p>
+                          <p className="tryon-look-price">
+                            {item.price != null ? `${cur}${Number(item.price).toLocaleString("en-IN")}` : ""}
+                          </p>
                         </button>
-                      )}
-                      {onShopLookItem && (
-                        <button type="button" className="tryon-look-btn primary" onClick={() => onShopLookItem(item)}>
-                          Add
-                        </button>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
+                        <div className="tryon-look-actions">
+                          {onTryLookItem && (
+                            <button type="button" className="tryon-look-btn" onClick={() => onTryLookItem(item)}>
+                              Try on
+                            </button>
+                          )}
+                          {onShopLookItem && (
+                            <button type="button" className="tryon-look-btn primary" onClick={() => onShopLookItem(item)}>
+                              Add
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </>
+            )}
           </div>
         )}
 

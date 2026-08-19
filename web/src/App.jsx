@@ -24,6 +24,7 @@ import {
   isLookIncomplete,
   isStripHiddenThisSession,
   loadLookProgress,
+  removeProductFromSlots,
   shouldShowFinishNudge,
 } from "./lookProgress.js";
 
@@ -2185,6 +2186,24 @@ export default function App() {
             userPrefs={effectivePrefs}
             onSetSize={setUserSize}
             lookItems={tryOnLookItems.length ? tryOnLookItems : (savedTryOn?.lookItems || [])}
+            lookProgress={lookProgress}
+            loved={loved}
+            onLikeLookItem={(item) => {
+              if (!item) return;
+              const wasLoved = loved.has(item.id);
+              if (!wasLoved) {
+                wouldBuy(item);
+                recordPulseAction("save");
+              }
+              addToLookProgress(item);
+              track("try_on_look_like", { product_id: tryOnProduct?.id, like_id: item.id, category: item.category });
+            }}
+            onUnpinLookItem={(item) => {
+              if (!item?.id) return;
+              setLookProgress((prev) => removeProductFromSlots(prev, item.id));
+              if (loved.has(item.id)) wouldBuy(item);
+              track("try_on_look_unpin", { product_id: tryOnProduct?.id, unlike_id: item.id, category: item.category });
+            }}
             onOpenLookItem={(item) => {
               if (!item) return;
               track("try_on_look_open", { product_id: tryOnProduct?.id, open_id: item.id, category: item.category });

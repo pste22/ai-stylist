@@ -98,21 +98,60 @@ export function progressLabel(state) {
   return `${n} of 4 — looking good`;
 }
 
-export function visibleSlots(state) {
+/** VTO rail: accessory slot reads as Bag, not Accent. */
+export const VTO_SLOT_LABELS = {
+  top: "Top",
+  bottom: "Bottom",
+  accent: "Bag",
+  shoes: "Shoes",
+  dress: "Dress",
+};
+
+export function visibleSlots(state, labels = SLOT_LABELS) {
   const s = state?.slots || {};
   const dressMode = !!(s.top && s.top._dress && !s.bottom);
   if (dressMode) {
     return [
-      { key: "dress", label: SLOT_LABELS.dress, product: s.top },
-      { key: "accent", label: SLOT_LABELS.accent, product: s.accent },
-      { key: "shoes", label: SLOT_LABELS.shoes, product: s.shoes },
+      { key: "dress", label: labels.dress || SLOT_LABELS.dress, product: s.top },
+      { key: "accent", label: labels.accent || SLOT_LABELS.accent, product: s.accent },
+      { key: "shoes", label: labels.shoes || SLOT_LABELS.shoes, product: s.shoes },
     ];
   }
   return SLOT_ORDER.map((key) => ({
     key,
-    label: SLOT_LABELS[key],
+    label: labels[key] || SLOT_LABELS[key],
     product: s[key],
   }));
+}
+
+export function slotProductIds(state) {
+  const s = state?.slots || {};
+  return new Set(Object.values(s).filter(Boolean).map((p) => p.id));
+}
+
+export function matchesLookSlot(product, slotKey) {
+  const slot = slotForCategory(product?.category);
+  if (slotKey === "dress") return slot === "dress" || slot === "top";
+  if (slotKey === "top" && slot === "dress") return true;
+  return slot === slotKey;
+}
+
+export function nextEmptySlot(state, labels = SLOT_LABELS) {
+  return visibleSlots(state, labels).find((s) => !s.product) || null;
+}
+
+export function removeProductFromSlots(state, productId) {
+  if (!productId) return state;
+  const slots = { ...state.slots };
+  let changed = false;
+  for (const key of Object.keys(slots)) {
+    if (slots[key]?.id === productId) {
+      slots[key] = null;
+      changed = true;
+    }
+  }
+  if (!changed) return state;
+  return saveLookProgress({ ...state, slots });
 }
 
 export function emptySlotPrompt(slotKey, state) {
@@ -154,4 +193,4 @@ export function dismissFinishNudgeForToday() {
   try { localStorage.setItem(NUDGE_KEY, todayKey()); } catch { /* */ }
 }
 
-export { SLOT_LABELS };
+export { SLOT_LABELS, SLOT_ORDER };
