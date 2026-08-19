@@ -1293,6 +1293,11 @@ export default function App() {
   }, [uiMode]);
 
   useEffect(() => {
+    const t = setTimeout(() => setBootReady(true), 1800);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
     // Soft return nudge once/day when look is incomplete
     setFinishNudgeVisible(shouldShowFinishNudge(lookProgress));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1307,6 +1312,7 @@ export default function App() {
   const pendingTryOnStartRef = useRef(false);
   const pendingAskRef = useRef(null); // { product, promptKey } after Quick View Ask Mira
   const [vsResults, setVsResults]         = useState([]);
+  const [bootReady, setBootReady]         = useState(false);
   const [vsQuery, setVsQuery]             = useState("");
   const [vsCatalogNote, setVsCatalogNote] = useState(null);
   const { items: cartItems, addItem: addToCart, addItems: addAllToCart, removeItem: removeFromCart, clearCart, inCart } = useCart();
@@ -1620,8 +1626,9 @@ export default function App() {
     });
   };
 
-  // Splash while checking for existing session or onboarding status
-  if (loading || (user && needsOnboarding === null)) {
+  // Splash while checking for existing session or onboarding status.
+  // Hard-capped: a hung Supabase lock must not leave the pulsing star up forever.
+  if (!bootReady && (loading || (user && needsOnboarding === null))) {
     return <div className="auth-loading"><span>✦</span></div>;
   }
 

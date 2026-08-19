@@ -45,9 +45,9 @@ export function useAuth() {
 
   useEffect(() => {
     let settled = false;
-    const finish = (session) => {
-      if (settled) return;
-      settled = true;
+    const finish = (session, { sticky = false } = {}) => {
+      if (settled && !sticky) return;
+      if (!sticky) settled = true;
       setUser(session?.user ?? null);
       setLoading(false);
     };
@@ -55,15 +55,12 @@ export function useAuth() {
     // onAuthStateChange fires with INITIAL_SESSION on mount (covers PKCE code exchange too)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        finish(session);
+        finish(session, { sticky: true });
       }
     );
-    // Don't leave the pulsing splash up if Supabase never answers (bad network / hung refresh).
-    const watchdog = setTimeout(() => {
-      supabase.auth.getSession()
-        .then(({ data }) => finish(data?.session ?? null))
-        .catch(() => finish(null));
-    }, 2500);
+    // Never call getSession() here — it shares navigator.locks with
+    // onAuthStateChange and can deadlock, leaving the pulsing splash forever.
+    const watchdog = setTimeout(() => finish(null), 1800);
 
     return () => {
       settled = true;
