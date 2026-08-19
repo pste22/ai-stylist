@@ -2,6 +2,18 @@
 
 const MAX_SIDE = 1280;
 const JPEG_QUALITY = 0.82;
+const SKIP_UNDER_BYTES = 1_200_000; // already small enough for Gemini
+const RESIZE_MS = 2500;
+
+function withTimeout(promise, ms, label = "timed out") {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label)), ms);
+    promise.then(
+      (v) => { clearTimeout(t); resolve(v); },
+      (e) => { clearTimeout(t); reject(e); },
+    );
+  });
+}
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -30,15 +42,44 @@ function canvasJpeg(img) {
   return { dataUrl, base64, mime: "image/jpeg" };
 }
 
+function skipResize(source, mimeHint) {
+  const mime = (mimeHint || "image/jpeg").split(";")[0].trim().toLowerCase();
+  const jpeg = mime === "image/jpeg" || mime === "image/jpg";
+  if (!jpeg) return null;
+  if (typeof Blob !== "undefined" && source instanceof Blob) {
+    if (source.size > 0 && source.size <= SKIP_UNDER_BYTES) return "blob-small";
+  }
+  if (typeof source === "string" && !source.startsWith("data:")) {
+    // raw base64; 1.6M chars ≈ 1.2MB binary
+    if (source.length > 0 && source.length <= 1_600_000) {
+      return { dataUrl: `data:${mime};base64,${source}`, base64: source, mime: "image/jpeg" };
+    }
+  }
+  return null;
+}
+
 /**
  * @param {File | Blob | string} source  File, data URL, or raw base64
  * @param {string} [mimeHint]
  * @returns {Promise<{ dataUrl: string, base64: string, mime: string }>}
  */
 export async function resizePhotoForTryOn(source, mimeHint = "image/jpeg") {
+  const skipped = skipResize(source, mimeHint);
+  if (skipped && skipped !== "blob-small") return skipped;
+
   let objectUrl = null;
   try {
     let src;
+    if (skipped === "blob-small" && typeof FileReader !== "undefined") {
+      const dataUrl = await withTimeout(new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("Could not read photo"));
+        reader.readAsDataURL(source);
+      }), RESIZE_MS);
+      const base64 = dataUrl.split(",")[1] || "";
+      return { dataUrl, base64, mime: "image/jpeg" };
+    }
     if (typeof Blob !== "undefined" && source instanceof Blob) {
       objectUrl = URL.createObjectURL(source);
       src = objectUrl;
@@ -49,7 +90,7 @@ export async function resizePhotoForTryOn(source, mimeHint = "image/jpeg") {
     } else {
       throw new Error("Could not read photo");
     }
-    const img = await loadImage(src);
+    const img = await withTimeout(loadImage(src), RESIZE_MS);
     return canvasJpeg(img);
   } finally {
     if (objectUrl) URL.revokeObjectURL(objectUrl);

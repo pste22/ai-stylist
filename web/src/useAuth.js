@@ -44,14 +44,32 @@ export function useAuth() {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
+    let settled = false;
+    const finish = (session) => {
+      if (settled) return;
+      settled = true;
+      setUser(session?.user ?? null);
+      setLoading(false);
+    };
+
     // onAuthStateChange fires with INITIAL_SESSION on mount (covers PKCE code exchange too)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, session) => {
-        setUser(session?.user ?? null);
-        setLoading(false);
+        finish(session);
       }
     );
-    return () => subscription.unsubscribe();
+    // Don't leave the pulsing splash up if Supabase never answers (bad network / hung refresh).
+    const watchdog = setTimeout(() => {
+      supabase.auth.getSession()
+        .then(({ data }) => finish(data?.session ?? null))
+        .catch(() => finish(null));
+    }, 2500);
+
+    return () => {
+      settled = true;
+      clearTimeout(watchdog);
+      subscription.unsubscribe();
+    };
   }, []);
 
   useEffect(() => {
