@@ -2,6 +2,47 @@ import { useEffect, useState } from "react";
 import ForBrands from "./ForBrands.jsx";
 import { fetchEnabledProviders } from "./supabaseClient.js";
 
+/** OAuth buttons shared by the home sheet and in-app prompts (VTO). */
+export function AuthButtons({ onGoogle, onFacebook, onGithub, authError }) {
+  const [providers, setProviders] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchEnabledProviders().then((p) => { if (active) setProviders(p); });
+    return () => { active = false; };
+  }, []);
+
+  const enabled = (name) => providers === null || providers[name] !== false;
+
+  return (
+    <>
+      {authError && (
+        <p className="login-error" role="alert">{authError}</p>
+      )}
+      <div className="login-actions">
+        {enabled("google") && (
+          <button type="button" className="oauth-btn oauth-google" onClick={onGoogle}>
+            <GoogleIcon />
+            Continue with Google
+          </button>
+        )}
+        {enabled("github") && (
+          <button type="button" className="oauth-btn oauth-github" onClick={onGithub}>
+            <GithubIcon />
+            Continue with GitHub
+          </button>
+        )}
+        {enabled("facebook") && (
+          <button type="button" className="oauth-btn oauth-facebook" onClick={onFacebook}>
+            <FacebookIcon />
+            Continue with Facebook
+          </button>
+        )}
+      </div>
+    </>
+  );
+}
+
 /**
  * Zara-inspired first screen: full-bleed editorial photo + oversized brand.
  * Auth is a secondary sheet so the hero stays one clean composition.
@@ -12,15 +53,6 @@ export default function LoginScreen({
 }) {
   const [showAuth, setShowAuth] = useState(autoOpen);
   const [showBrands, setShowBrands] = useState(false);
-  // null until we know; falling back to "show everything" beats hiding sign-in
-  // entirely if the settings lookup fails.
-  const [providers, setProviders] = useState(null);
-
-  useEffect(() => {
-    let active = true;
-    fetchEnabledProviders().then((p) => { if (active) setProviders(p); });
-    return () => { active = false; };
-  }, []);
 
   // An error only makes sense next to the buttons that produced it.
   useEffect(() => { if (authError) setShowAuth(true); }, [authError]);
@@ -33,8 +65,6 @@ export default function LoginScreen({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [showAuth]);
-
-  const enabled = (name) => providers === null || providers[name] !== false;
 
   return (
     <div className="mira-home">
@@ -106,29 +136,12 @@ export default function LoginScreen({
             <p className="mira-home-auth-sub">
               Save picks, try-ons, and a stylist that remembers you.
             </p>
-            {authError && (
-              <p className="login-error" role="alert">{authError}</p>
-            )}
-            <div className="login-actions">
-              {enabled("google") && (
-                <button className="oauth-btn oauth-google" onClick={onGoogle}>
-                  <GoogleIcon />
-                  Continue with Google
-                </button>
-              )}
-              {enabled("github") && (
-                <button className="oauth-btn oauth-github" onClick={onGithub}>
-                  <GithubIcon />
-                  Continue with GitHub
-                </button>
-              )}
-              {enabled("facebook") && (
-                <button className="oauth-btn oauth-facebook" onClick={onFacebook}>
-                  <FacebookIcon />
-                  Continue with Facebook
-                </button>
-              )}
-            </div>
+            <AuthButtons
+              onGoogle={onGoogle}
+              onFacebook={onFacebook}
+              onGithub={onGithub}
+              authError={authError}
+            />
             <button className="login-guest-btn" onClick={onGuest}>
               Browse without signing in →
             </button>
