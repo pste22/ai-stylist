@@ -84,20 +84,20 @@ def test_party_alias_is_office_scene():
     assert normalize_video_kind(None) == "spin"
 
 
-def test_spin_prompt_is_fashion_reel_not_turntable():
+def test_spin_prompt_is_fashion_turn_not_branded_reel():
     from tryon import spin_prompt
     p = spin_prompt("VERO MODA Women's Slim")
     assert "VERO MODA Women's Slim" in p
     assert "turntable" not in p.lower()
+    assert "instagram" not in p.lower()
+    assert "voiceover" not in p.lower()
     assert "shoulder" in p.lower()
-    assert "9:16" in p
-    assert "identical" in p.lower()
 
 
-def test_saree_showcase_uses_pallu_language():
+def test_saree_showcase_uses_drape_language():
     from tryon import spin_prompt
     p = spin_prompt("Pink Banarasi Saree")
-    assert "pallu" in p.lower()
+    assert "drape" in p.lower()
     western = spin_prompt("Slim Fit Jeans")
     assert "pallu" not in western.lower()
 
@@ -108,10 +108,11 @@ def test_scene_motion_is_occasion_specific():
     sangeet = scene_motion_prompt("silk dress", "sangeet")
     beach = scene_motion_prompt("silk dress", "beach")
     assert date != sangeet != beach
-    assert "neckline" in date.lower() or "collarbone" in date.lower()
+    assert "smile" in date.lower()
+    assert "instagram" not in date.lower()
+    assert "voiceover" not in date.lower()
     assert "twirl" in sangeet.lower()
     assert "breeze" in beach.lower() or "walk" in beach.lower()
-    assert "9:16" in date
 
 
 def test_scene_still_starts_in_a_reel_pose():
@@ -119,7 +120,21 @@ def test_scene_still_starts_in_a_reel_pose():
     still = scene_still_prompt("office blazer", "office")
     assert "hip" in still.lower()
     saree = scene_still_prompt("Red Silk Saree", "sangeet")
-    assert "pallu" in saree.lower() or "dupatta" in saree.lower()
+    assert "drape" in saree.lower() or "shoulder" in saree.lower()
+
+
+def test_video_error_message_maps_empty_clip_to_preview_check():
+    from tryon import is_video_filter_failure, veo_filter_reason, video_error_message
+    empty = RuntimeError("video generation returned an empty clip")
+    assert "preview check" in video_error_message(empty).lower()
+    assert is_video_filter_failure(empty)
+    assert not is_video_filter_failure(TimeoutError("video generation timed out"))
+    reason = veo_filter_reason({
+        "generateVideoResponse": {
+            "raiMediaFilteredReasons": ["We encountered an issue with the audio for your prompt"]
+        }
+    })
+    assert "audio for your prompt" in reason.lower()
 
 
 def test_video_error_message_maps_known_failures():
