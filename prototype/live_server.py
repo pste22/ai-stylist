@@ -65,6 +65,7 @@ from look_engine import build_looks  # noqa: E402
 from curation_mix import (  # noqa: E402
     build_curation_mix,
     complements_for,
+    look_slots_for,
     card_fields as _mix_card,
 )
 import shop_agent  # noqa: E402  (deterministic typed-search agent)
@@ -1370,6 +1371,12 @@ async def handle(ws) -> None:
                     return inline.data, (inline.mime_type or "image/png")
             return None, None
 
+        def _fetch(url):
+            headers = {"User-Agent": "Mozilla/5.0 (Mira try-on)"}
+            r = _req.Request(url, headers=headers)
+            with _req.urlopen(r, timeout=8) as resp:
+                return resp.read(), resp.headers.get_content_type() or "image/jpeg"
+
         try:
             person_bytes = base64.b64decode(image_b64)
             key_front = _cache_key(image_b64, product_id, "front")
@@ -1390,12 +1397,6 @@ async def handle(ws) -> None:
                 front_bytes, front_mime = front_hit
                 print("  [try_on] front — cache hit")
             else:
-                def _fetch(url):
-                    headers = {"User-Agent": "Mozilla/5.0 (Mira try-on)"}
-                    r = _req.Request(url, headers=headers)
-                    with _req.urlopen(r, timeout=8) as resp:
-                        return resp.read(), resp.headers.get_content_type() or "image/jpeg"
-
                 product_bytes, product_mime = await asyncio.to_thread(_fetch, payload["product_image_url"])
                 front_resp = await _gen_run(
                     _client.models.generate_content,
@@ -1482,7 +1483,65 @@ async def handle(ws) -> None:
                     print(f"  [try_on] {view} failed: {_ae}")
                     await _send_json(ws, type="try_on_view_error", product_id=product_id, view=view)
 
-            await asyncio.gather(*[_angle(v) for v in views if v != "front"])
+            async def _complete_look():
+                """Pair catalog bottoms/shoes/bag and optionally render the full getup."""
+                if not product:
+                    return
+                pieces = look_slots_for(product, _CATALOG)
+                if not pieces:
+                    return
+                items = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in pieces]
+                await _send_json(ws, type="try_on_look", product_id=product_id, items=items)
+                slot_key = "full_look:" + ",".join(p["id"] for p in pieces)
+                key_look = _cache_key(image_b64, product_id, slot_key)
+                hit = _cache_get(key_look)
+                if hit:
+                    b, m = hit
+                    await _send_json(ws, type="try_on_result", product_id=product_id, view="look",
+                                     total=total, image=base64.b64encode(b).decode(), mime=m)
+                    print("  [try_on] full look — cache hit")
+                    return
+                if _spend_check(user_id, _EST_IMAGE, user_email):
+                    print("  [try_on] full look skipped — spend cap")
+                    return
+                try:
+                    contents = [
+                        _types.Part.from_bytes(data=front_bytes, mime_type=front_mime),
+                    ]
+                    used = []
+                    for p in pieces:
+                        url = (p.get("image_url") or "").strip()
+                        if not url:
+                            continue
+                        try:
+                            raw, pmime = await asyncio.to_thread(_fetch, url)
+                        except Exception as fetch_exc:
+                            print(f"  [try_on] look slot fetch failed {p.get('id')}: {fetch_exc}")
+                            continue
+                        contents.append(_types.Part.from_bytes(data=raw, mime_type=pmime))
+                        used.append(p)
+                    if not used:
+                        return
+                    contents.append(_tryon.complete_look_prompt(payload["product_name"], used))
+                    resp = await _gen_run(
+                        _client.models.generate_content,
+                        model=_TRYON_MODEL,
+                        contents=contents,
+                        config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
+                    )
+                    b, m = _extract(resp)
+                    if not b:
+                        print("  [try_on] full look produced no image")
+                        return
+                    _cache_put(key_look, b, m)
+                    _costs.append(_img_gen_cost(resp))
+                    await _send_json(ws, type="try_on_result", product_id=product_id, view="look",
+                                     total=total, image=base64.b64encode(b).decode(), mime=m)
+                    print(f"  [try_on] full look sent ({', '.join(p.get('category','') for p in used)})")
+                except Exception as look_exc:
+                    print(f"  [try_on] full look skipped: {look_exc}")
+
+            await asyncio.gather(_complete_look(), *[_angle(v) for v in views if v != "front"])
             _spend_record(user_id, sum(_costs))
             print(f"  💰 [try_on] TOTAL ≈ ${sum(_costs):.4f} (gen {len(_costs)} img) "
                   f"— product={payload['product_name']!r}")

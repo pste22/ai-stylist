@@ -300,6 +300,76 @@ def complements_for(
     return picks
 
 
+# VTO "finish this look" — one real catalog piece per slot so a top try-on
+# also shows bottoms, shoes and a bag from THIS site (not more tops).
+_LOOK_SLOTS: dict[str, tuple[str, ...]] = {
+    "tops": ("bottoms", "shoes", "bags"),
+    "bottoms": ("tops", "shoes", "bags"),
+    "outerwear": ("bottoms", "shoes", "bags"),
+    "activewear": ("shoes", "bags", "tops"),
+    "dresses": ("shoes", "bags", "accessories"),
+    "ethnic": ("shoes", "bags", "accessories"),
+    "shoes": ("tops", "bottoms", "bags"),
+    "bags": ("tops", "bottoms", "shoes"),
+    "accessories": ("tops", "bottoms", "shoes"),
+    "swimwear": ("bags", "accessories", "shoes"),
+}
+
+
+def look_slots_for(
+    hero: dict,
+    catalog: Iterable[dict],
+    *,
+    exclude_ids: set[str] | None = None,
+) -> list[dict]:
+    """One catalog item per outfit slot around a try-on hero (bottoms/shoes/bag)."""
+    exclude = set(exclude_ids or set())
+    hid = hero.get("id")
+    if hid:
+        exclude.add(hid)
+    hero_cat = (hero.get("category") or "").lower()
+    slots = _LOOK_SLOTS.get(hero_cat, ("bottoms", "shoes", "bags"))
+    slots = tuple(s for s in slots if s != hero_cat)
+
+    by_cat: dict[str, list[dict]] = {}
+    for p in catalog:
+        if not p.get("id") or p["id"] in exclude:
+            continue
+        by_cat.setdefault((p.get("category") or "other").lower(), []).append(p)
+
+    hero_color = (hero.get("color") or "").strip().lower()
+    if hero_color in _UNKNOWN_COLOR_VALUES:
+        hero_color = None
+    hero_price = _as_price(hero)
+
+    picks: list[dict] = []
+    for cat in slots:
+        cands = [p for p in (by_cat.get(cat) or []) if p.get("id") not in exclude]
+        if not cands:
+            continue
+
+        def _score(p: dict, slot: str = cat) -> tuple:
+            s = 0
+            if hero_color and _color_matches(p, hero_color):
+                s += 5
+            blob = f"{p.get('color') or ''} {p.get('name') or ''}".lower()
+            if slot == "bottoms" and any(
+                tok in blob for tok in ("black", "navy", "white", "beige", "denim", "blue", "ivory")
+            ):
+                s += 2
+            pp = _as_price(p)
+            if hero_price and pp:
+                ratio = pp / hero_price
+                if 0.4 <= ratio <= 2.2:
+                    s += 1
+            return (s, -abs(pp - hero_price), p.get("id") or "")
+
+        best = max(cands, key=_score)
+        picks.append(_tag(best, "look_slot"))
+        exclude.add(best["id"])
+    return picks
+
+
 def render_mix_prompt(products: list[dict]) -> str:
     """Compact grounding lines; curiosity picks are explicitly tagged for the LLM.
 

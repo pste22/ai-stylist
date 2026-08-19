@@ -75,6 +75,25 @@ def test_complements_for_pants():
     assert all(p.get("mix_role") == "complement" for p in comps)
 
 
+def test_look_slots_for_top_picks_bottoms_shoes_bag():
+    from curation_mix import look_slots_for
+    hero = _p("hero-top", "tops", "white", 1200)
+    slots = look_slots_for(hero, _catalog())
+    cats = [p["category"] for p in slots]
+    assert cats == ["bottoms", "shoes", "bags"]
+    assert "hero-top" not in {p["id"] for p in slots}
+    assert all(p.get("mix_role") == "look_slot" for p in slots)
+
+
+def test_look_slots_for_dress_skips_bottoms():
+    from curation_mix import look_slots_for
+    hero = _p("hero-dress", "dresses", "red", 3000)
+    cats = {p["category"] for p in look_slots_for(hero, _catalog())}
+    assert "bottoms" not in cats
+    assert "shoes" in cats
+    assert "bags" in cats
+
+
 def test_render_tags_curiosity():
     mix = build_curation_mix(_catalog(), "purple tops", n=3)
     text = render_mix_prompt(mix)
