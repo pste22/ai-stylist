@@ -13,17 +13,26 @@ export function useOnboarding(userId) {
   const [prefs, setPrefs]                     = useState(null);
 
   useEffect(() => {
-    if (!userId) return;
+    if (!userId) {
+      setNeedsOnboarding(null);
+      return;
+    }
+    let cancelled = false;
+    const watchdog = setTimeout(() => {
+      if (!cancelled) setNeedsOnboarding((cur) => (cur === null ? false : cur));
+    }, 4000);
     supabase
       .from("user_preferences")
       .select("style_vibe, shopping_focus, top_size, bottom_size, budget, pin_code")
       .eq("user_id", userId)
       .maybeSingle()
       .then(({ data, error }) => {
+        if (cancelled) return;
         if (error) { console.error("prefs fetch:", error); setNeedsOnboarding(false); return; }
         if (data) { setPrefs(data); setNeedsOnboarding(false); }
         else      { setNeedsOnboarding(true); }
       });
+    return () => { cancelled = true; clearTimeout(watchdog); };
   }, [userId]);
 
   const completeOnboarding = async ({ styleVibe, shoppingFocus, topSize, bottomSize, budget, pinCode } = {}) => {
