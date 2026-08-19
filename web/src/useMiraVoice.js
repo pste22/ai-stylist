@@ -4,6 +4,7 @@ import { AvatarState, Mood } from "./avatarState.js";
 import { supabase } from "./supabaseClient.js";
 import { track } from "./analytics.js";
 import { resizePhotoForTryOn } from "./resizePhoto.js";
+import { fetchProductImageBytes } from "./imageUrl.js";
 
 function resolveWsUrl() {
   const override = import.meta.env.VITE_MIRA_WS_URL;
@@ -95,6 +96,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
 
   // If sendText is called before the WS is open, queue it and flush on connect.
   const pendingTextRef = useRef(null);
+  const pendingTryOnRef = useRef(null);
 
   // Send a typed message (silent / text chat). Always shows the bubble when possible.
   const sendText = useCallback((text) => {
@@ -312,6 +314,9 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
           _addMsg("you", initialText);
         }
         if (bootText) setState(AvatarState.THINKING);
+        const queuedTryOn = pendingTryOnRef.current;
+        pendingTryOnRef.current = null;
+        if (queuedTryOn) ws.send(JSON.stringify(queuedTryOn));
         if (!textMode) {
           const mic = new MicCapture((bytes) => {
             if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
@@ -624,9 +629,8 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     }, 240000);
   }, []);
 
-  const sendTryOn = useCallback(async (productId, imageBase64, mime = "image/jpeg") => {
-    const ws = wsRef.current;
-    if (!ws || ws.readyState !== WebSocket.OPEN || !productId || !imageBase64) return;
+  const sendTryOn = useCallback(async (productId, imageBase64, mime = "image/jpeg", garmentUrl = null) => {
+    if (!productId || !imageBase64) return;
     setTryOnResult(null);
     setTryOnLookItems([]);
     setTryOnError(null);
@@ -640,14 +644,30 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     } catch (e) {
       console.warn("[try_on] photo resize skipped", e);
     }
-    ws.send(JSON.stringify({ type: "try_on", product_id: productId, image: payload, mime: outMime }));
-    // Safety: clear loading if the server never responds.
+    const packet = { type: "try_on", product_id: productId, image: payload, mime: outMime };
+    if (garmentUrl) {
+      try {
+        const garment = await fetchProductImageBytes(garmentUrl);
+        if (garment?.base64) {
+          packet.garment = garment.base64;
+          packet.garment_mime = garment.mime || "image/jpeg";
+        }
+      } catch (e) {
+        console.warn("[try_on] garment fetch skipped", e);
+      }
+    }
     if (tryOnTimeoutRef.current) clearTimeout(tryOnTimeoutRef.current);
     tryOnTimeoutRef.current = setTimeout(() => {
       tryOnTimeoutRef.current = null;
       setTryOnLoading(false);
       setTryOnError((err) => err || "Try-on timed out. Please try again.");
     }, 90000);
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      pendingTryOnRef.current = packet;
+      return;
+    }
+    ws.send(JSON.stringify(packet));
   }, []);
 
   const sendOutfitImage = useCallback((imageBase64, mime = "image/jpeg") => {

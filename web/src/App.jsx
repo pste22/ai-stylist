@@ -1993,8 +1993,8 @@ export default function App() {
                   onSend={sendChat}
                   onStop={stop}
                   onSwitchVoice={switchToVoice}
-                  onVisualSearch={sendVisualSearch}
-                  onOutfitSearch={sendOutfitImage}
+                  onVisualSearch={(b64, mime) => { savePhoto(b64, mime); sendVisualSearch(b64, mime); }}
+                  onOutfitSearch={(b64, mime) => { savePhoto(b64, mime); sendOutfitImage(b64, mime); }}
                   onOutfitUrl={sendOutfitUrl}
                   vsLoading={vsLoading}
                   outfitLoading={outfitLoading}
@@ -2007,7 +2007,7 @@ export default function App() {
               )}
             </div>
           ) : textMode ? (
-            <TextInputRow onSend={sendChat} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={sendVisualSearch} onOutfitSearch={sendOutfitImage} onOutfitUrl={sendOutfitUrl} vsLoading={vsLoading} outfitLoading={outfitLoading} />
+            <TextInputRow onSend={sendChat} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={(b64, mime) => { savePhoto(b64, mime); sendVisualSearch(b64, mime); }} onOutfitSearch={(b64, mime) => { savePhoto(b64, mime); sendOutfitImage(b64, mime); }} onOutfitUrl={sendOutfitUrl} vsLoading={vsLoading} outfitLoading={outfitLoading} />
           ) : (
             <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
           )}
@@ -2220,7 +2220,7 @@ export default function App() {
               clearTryOn();
               setTryOnProduct(item);
               getTryOn(item.id).then((rec) => { if (rec) setSavedTryOn(rec); else setSavedTryOn(null); });
-              if (savedPhoto?.image) sendTryOn(item.id, savedPhoto.image, savedPhoto.mime || "image/jpeg");
+              if (savedPhoto?.image) sendTryOn(item.id, savedPhoto.image, savedPhoto.mime || "image/jpeg", item.image_url);
             }}
             onCompleteLook={(p) => {
               addToLookProgress(p);

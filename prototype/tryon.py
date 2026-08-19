@@ -9,7 +9,9 @@ Contract is pinned by `test_tryon.py`.
 """
 from __future__ import annotations
 
+import base64
 import re
+from urllib.parse import quote, urlparse, urlunparse
 
 # Image formats Gemini accepts for the person photo.
 ALLOWED_MIMES = {"image/jpeg", "image/png", "image/webp"}
@@ -20,6 +22,11 @@ _MIME_ALIASES = {"image/jpg": "image/jpeg"}
 MAX_LOOK_REF_IMAGES = 2
 
 _AMAZON_IMG_BLOCK = re.compile(r"\._.+\.(jpe?g|png|webp)$", re.I)
+_AMAZON_HOSTS = (
+    "m.media-amazon.com",
+    "images-eu.ssl-images-amazon.com",
+    "images-na.ssl-images-amazon.com",
+)
 
 # Ordered camera angles for the "see it from all sides" try-on turntable.
 # "front" is generated from the person + garment; the rest are generated FROM the
@@ -316,23 +323,75 @@ def normalize_user_mime(user_mime: str | None) -> str:
 
 
 def candidate_image_urls(url: str) -> list[str]:
-    """Catalog image URL plus Amazon-size fallbacks (Fly IPs often 403 the first)."""
+    """Catalog image URL plus Amazon-size / host / proxy fallbacks.
+
+    Fly IPs often 403 the first ``m.media-amazon.com`` thumb, while the browser
+    (and image proxies) can still load the same asset.
+    """
     url = (url or "").strip()
     if not url:
         return []
-    out = [url]
+    out: list[str] = []
 
     def add(candidate: str) -> None:
         if candidate and candidate not in out:
             out.append(candidate)
 
+    add(url)
     match = _AMAZON_IMG_BLOCK.search(url)
     if match:
         ext = match.group(1)
         add(_AMAZON_IMG_BLOCK.sub(f"._AC_SL800_.{ext}", url))
         add(_AMAZON_IMG_BLOCK.sub(f"._AC_SL1500_.{ext}", url))
         add(_AMAZON_IMG_BLOCK.sub(f".{ext}", url))
-    return out
+
+    try:
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        if any(h in host for h in ("media-amazon.com", "images-amazon.com", "ssl-images-amazon.com")):
+            for alt in _AMAZON_HOSTS:
+                if alt == host:
+                    continue
+                swapped = urlunparse(parsed._replace(netloc=alt))
+                add(swapped)
+                if match:
+                    ext = match.group(1)
+                    add(_AMAZON_IMG_BLOCK.sub(f"._AC_SL800_.{ext}", swapped))
+    except Exception:
+        pass
+
+    if "wsrv.nl" not in url and "weserv.nl" not in url:
+        add(f"https://wsrv.nl/?url={quote(url, safe='')}&output=jpg&n=-1")
+        if match:
+            sl = _AMAZON_IMG_BLOCK.sub(f"._AC_SL800_.{match.group(1)}", url)
+            if sl != url:
+                add(f"https://wsrv.nl/?url={quote(sl, safe='')}&output=jpg&n=-1")
+
+    return out[:12]
+
+
+def garment_fetch_urls(product: dict | None) -> list[str]:
+    """All fetch candidates for a catalog product (primary + gallery)."""
+    if not isinstance(product, dict):
+        return []
+    seeds: list[str] = []
+    for u in [product.get("image_url"), *(product.get("image_urls") or [])]:
+        if isinstance(u, str) and u.strip() and u.strip() not in seeds:
+            seeds.append(u.strip())
+    out: list[str] = []
+    for seed in seeds:
+        for candidate in candidate_image_urls(seed):
+            if candidate not in out:
+                out.append(candidate)
+    return out[:12]
+
+
+def decode_inline_image(b64: str, claimed: str | None = None) -> tuple[bytes, str]:
+    """Decode a client-supplied garment/person image and sniff its real MIME."""
+    if not b64:
+        raise ValueError("image too small")
+    raw = base64.b64decode(b64)
+    return raw, sniff_image_mime(raw, claimed)
 
 
 def sniff_image_mime(data: bytes, claimed: str | None = None) -> str:
