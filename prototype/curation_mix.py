@@ -79,9 +79,18 @@ _COMPLEMENTS: dict[str, tuple[str, ...]] = {
 
 
 def detect_category(text: str) -> str | None:
+    """Map free text onto a catalog category using whole-word synonyms.
+
+    Substring matching is unsafe: ``hat`` sits inside ``what's``, so
+    "Complete the look — fill what's missing" used to return accessories.
+    """
     t = (text or "").lower()
-    for cat, words in _CATEGORY_SYNONYMS.items():
-        if any(w in t for w in words):
+    ranked = sorted(
+        ((cat, word) for cat, words in _CATEGORY_SYNONYMS.items() for word in words),
+        key=lambda item: -len(item[1]),
+    )
+    for cat, word in ranked:
+        if _alias_re(word).search(t):
             return cat
     return None
 
@@ -157,6 +166,16 @@ def _as_price(p: dict) -> float:
         return 0.0
 
 
+def photo_quality(p: dict) -> int:
+    """Prefer a real product JPEG over a Pexels stand-in that doesn't match the name."""
+    url = (p.get("image_url") or "").lower()
+    if "media-amazon.com" in url or "images-amazon.com" in url:
+        return 2
+    if "pexels.com" in url:
+        return 0
+    return 1
+
+
 def _tag(p: dict, role: str) -> dict:
     out = dict(p)
     out["mix_role"] = role
@@ -191,8 +210,10 @@ def build_curation_mix(
     if not on_brief:
         on_brief = list(pool)
 
-    # Prefer mid-premium on-brief (not the cheapest dump).
-    on_brief_sorted = sorted(on_brief, key=_as_price, reverse=True)
+    # Prefer real product photos, then mid-premium on-brief (not the cheapest dump).
+    on_brief_sorted = sorted(
+        on_brief, key=lambda p: (photo_quality(p), _as_price(p)), reverse=True
+    )
     # Spread: take from top half for quality bias.
     mid = on_brief_sorted[: max(3, len(on_brief_sorted) // 2)] or on_brief_sorted
     brief_picks: list[dict] = []
@@ -255,11 +276,16 @@ def _pick_curiosity(
         elif not avg_brief and not accents:
             premium_hits.append(p)
 
+    def _cur_key(p: dict) -> tuple:
+        return (photo_quality(p), _as_price(p))
+
     pick = None
     if accent_hits:
-        pick = max(accent_hits, key=_as_price)
+        real = [p for p in accent_hits if photo_quality(p) > 0]
+        pick = max(real or accent_hits, key=_cur_key)
     elif premium_hits:
-        pick = max(premium_hits, key=_as_price)
+        real = [p for p in premium_hits if photo_quality(p) > 0]
+        pick = max(real or premium_hits, key=_cur_key)
     if pick is None:
         return None
     return _tag(pick, "curiosity")
@@ -291,8 +317,8 @@ def complements_for(
         candidates = by_cat.get(cat) or []
         if not candidates:
             continue
-        # Prefer slightly elevated price within the complement category.
-        best = max(candidates, key=_as_price)
+        # Prefer a real product photo, then slightly elevated price.
+        best = max(candidates, key=lambda p: (photo_quality(p), _as_price(p)))
         picks.append(_tag(best, "complement"))
         exclude.add(best["id"])
         if len(picks) >= n:
@@ -350,6 +376,7 @@ def look_slots_for(
 
         def _score(p: dict, slot: str = cat) -> tuple:
             s = 0
+            s += photo_quality(p) * 8
             if hero_color and _color_matches(p, hero_color):
                 s += 5
             blob = f"{p.get('color') or ''} {p.get('name') or ''}".lower()

@@ -56,12 +56,17 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
   const wsRef = useRef(null);
   const micRef = useRef(null);
   const playerRef = useRef(null);
+  const askWatchdogRef = useRef(null);
 
   const stop = useCallback(() => {
     micRef.current?.stop();
     playerRef.current?.flush();
     wsRef.current?.close();
     micRef.current = playerRef.current = wsRef.current = null;
+    if (askWatchdogRef.current) {
+      clearTimeout(askWatchdogRef.current);
+      askWatchdogRef.current = null;
+    }
     setConnected(false);
     setState(AvatarState.IDLE);
     setMood(Mood.NEUTRAL);
@@ -351,6 +356,10 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
               setCaptions((c) => ({ ...c, [msg.who]: msg.text }));
             }
             if (msg.who === "mira") {
+              if (askWatchdogRef.current) {
+                clearTimeout(askWatchdogRef.current);
+                askWatchdogRef.current = null;
+              }
               // Always stream into Mira bubble regardless of mode
               if (!miraBubbleId.current) {
                 miraBubbleId.current = _addMsg("mira", msg.text);
@@ -747,11 +756,26 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     pair: "What goes with it?",
   };
 
+  const askFallbackText = (product, promptKey) => {
+    const cat = String(product?.category || "piece").replace(/s$/, "");
+    const color = String(product?.color || "").trim();
+    const colorBit = color && !["multi", "multicolor"].includes(color.toLowerCase()) ? ` ${color}` : "";
+    if (promptKey === "wear") {
+      return `I'd wear this${colorBit} ${cat} for easy days out, dinner, or anytime you want the outfit to do the talking. Want shoes and a bag to go with it?`;
+    }
+    if (promptKey === "pair") {
+      return `Keep the rest simple — a clean bottom, neat shoes, and one accent so the ${cat} stays the hero. Want me to pull those from the catalog?`;
+    }
+    return `Yes — this${colorBit} ${cat} is an easy yes. Keep everything else quiet so it reads polished, not busy. Want similar pieces or something to pair with it?`;
+  };
+
   const askAboutProduct = useCallback((product, promptKey = "suit", { inject = true } = {}) => {
     const ws = wsRef.current;
     if (!product?.id) return false;
     const key = ASK_PROMPTS[promptKey] ? promptKey : "suit";
     const question = ASK_PROMPTS[key];
+    const fallback = askFallbackText(product, key);
+    miraBubbleId.current = null;
     if (inject) {
       // Show product + user question immediately; server drives Mira's reply.
       setMessages((prev) => [
@@ -773,13 +797,32 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
         quickReplyTimerRef.current = null;
       }
     }
-    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    const armWatchdog = () => {
+      if (askWatchdogRef.current) clearTimeout(askWatchdogRef.current);
+      askWatchdogRef.current = setTimeout(() => {
+        askWatchdogRef.current = null;
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "you" && last.text === question) {
+            return [...prev, { id: mkId(), role: "mira", text: fallback, ts: new Date() }];
+          }
+          return prev;
+        });
+        setState((s) => (s === AvatarState.THINKING ? AvatarState.IDLE : s));
+      }, 8000);
+    };
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setMessages((prev) => [...prev, { id: mkId(), role: "mira", text: fallback, ts: new Date() }]);
+      setState(AvatarState.IDLE);
+      return false;
+    }
     ws.send(JSON.stringify({
       type: "ask_about_product",
       product_id: product.id,
       prompt_key: key,
     }));
     setState(AvatarState.THINKING);
+    armWatchdog();
     return true;
   }, []);
   const quickReplyTimerRef = useRef(null);

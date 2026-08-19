@@ -225,8 +225,9 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
             <button
               className={`card-cart-btn${inCart ? " in-cart" : ""}`}
               type="button"
-              onClick={(e) => { e.stopPropagation(); if (!inCart) onAddToCart?.(product); }}
-              aria-label={inCart ? "In cart" : "Add to cart"}
+              onClick={(e) => { e.stopPropagation(); onAddToCart?.(product); }}
+              aria-label={inCart ? "Remove from bag" : "Add to bag"}
+              title={inCart ? "Remove from bag" : "Add to bag"}
             >
               {inCart ? "🛒✓" : "🛒"}
             </button>
