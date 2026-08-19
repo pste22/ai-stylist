@@ -347,7 +347,7 @@ from urllib.parse import quote_plus  # noqa: E402
 def _affiliate_url(p: dict) -> str:
     if p.get("affiliate_url"):
         return p["affiliate_url"]
-    query = quote_plus(f"{p['color']} {p['name']}")
+    query = quote_plus(f"{p.get('color') or ''} {p.get('name') or ''}".strip())
     return f"https://www.google.com/search?tbm=shop&q={query}"
 
 
@@ -1355,6 +1355,7 @@ async def handle(ws) -> None:
                              message="Couldn't start try-on — please pick a product and upload a clear photo.")
             return
 
+        mime = payload["user_mime"]
         views = _tryon.TRYON_VIEWS
         total = len(views)
         print(f"  [try_on] starting — product={payload['product_name']!r} views={total}")
@@ -1372,15 +1373,33 @@ async def handle(ws) -> None:
             return None, None
 
         def _fetch(url):
-            headers = {"User-Agent": "Mozilla/5.0 (Mira try-on)"}
-            r = _req.Request(url, headers=headers)
-            with _req.urlopen(r, timeout=8) as resp:
-                return resp.read(), resp.headers.get_content_type() or "image/jpeg"
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+                ),
+                "Accept": "image/avif,image/webp,image/apng,image/jpeg,image/png,*/*;q=0.8",
+                "Accept-Language": "en-IN,en;q=0.9",
+                "Referer": "https://www.amazon.in/",
+            }
+            last = None
+            for candidate in _tryon.candidate_image_urls(url):
+                try:
+                    r = _req.Request(candidate, headers=headers)
+                    with _req.urlopen(r, timeout=12) as resp:
+                        raw = resp.read()
+                        claimed = resp.headers.get_content_type() or ""
+                    return raw, _tryon.sniff_image_mime(raw, claimed)
+                except Exception as fetch_exc:
+                    last = fetch_exc
+                    print(f"  [try_on] image fetch miss {candidate}: {fetch_exc}")
+            raise last or RuntimeError("could not fetch garment image")
 
         try:
             person_bytes = base64.b64decode(image_b64)
             key_front = _cache_key(image_b64, product_id, "front")
             front_hit = _cache_get(key_front)
+            front_sent = False
 
             # Spend guardrail — only gate ACTUAL generation (cache hits are free).
             if not front_hit:
@@ -1397,7 +1416,17 @@ async def handle(ws) -> None:
                 front_bytes, front_mime = front_hit
                 print("  [try_on] front — cache hit")
             else:
-                product_bytes, product_mime = await asyncio.to_thread(_fetch, payload["product_image_url"])
+                try:
+                    product_bytes, product_mime = await asyncio.to_thread(
+                        _fetch, payload["product_image_url"]
+                    )
+                except Exception as fetch_exc:
+                    print(f"  [try_on] garment fetch failed: {fetch_exc}")
+                    await _send_json(
+                        ws, type="try_on_error", product_id=product_id,
+                        message=_tryon.tryon_error_message(fetch_exc),
+                    )
+                    return
                 front_resp = await _gen_run(
                     _client.models.generate_content,
                     model=_TRYON_MODEL,
@@ -1419,6 +1448,7 @@ async def handle(ws) -> None:
 
             await _send_json(ws, type="try_on_result", product_id=product_id, view="front",
                              total=total, image=base64.b64encode(front_bytes).decode(), mime=front_mime)
+            front_sent = True
 
             # Shopping buddy nudge after first angle — complete the look.
             try:
@@ -1485,31 +1515,33 @@ async def handle(ws) -> None:
 
             async def _complete_look():
                 """Pair catalog bottoms/shoes/bag and optionally render the full getup."""
-                if not product:
-                    return
-                pieces = look_slots_for(product, _CATALOG)
-                if not pieces:
-                    return
-                items = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in pieces]
-                await _send_json(ws, type="try_on_look", product_id=product_id, items=items)
-                slot_key = "full_look:" + ",".join(p["id"] for p in pieces)
-                key_look = _cache_key(image_b64, product_id, slot_key)
-                hit = _cache_get(key_look)
-                if hit:
-                    b, m = hit
-                    await _send_json(ws, type="try_on_result", product_id=product_id, view="look",
-                                     total=total, image=base64.b64encode(b).decode(), mime=m)
-                    print("  [try_on] full look — cache hit")
-                    return
-                if _spend_check(user_id, _EST_IMAGE, user_email):
-                    print("  [try_on] full look skipped — spend cap")
-                    return
                 try:
+                    if not product:
+                        return
+                    pieces = look_slots_for(product, _CATALOG)
+                    if not pieces:
+                        return
+                    items = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in pieces]
+                    await _send_json(ws, type="try_on_look", product_id=product_id, items=items)
+                    slot_key = "full_look:" + ",".join(p["id"] for p in pieces)
+                    key_look = _cache_key(image_b64, product_id, slot_key)
+                    hit = _cache_get(key_look)
+                    if hit:
+                        b, m = hit
+                        await _send_json(ws, type="try_on_result", product_id=product_id, view="look",
+                                         total=total, image=base64.b64encode(b).decode(), mime=m)
+                        print("  [try_on] full look — cache hit")
+                        return
+                    if _spend_check(user_id, _EST_IMAGE, user_email):
+                        print("  [try_on] full look skipped — spend cap")
+                        return
                     contents = [
                         _types.Part.from_bytes(data=front_bytes, mime_type=front_mime),
                     ]
                     used = []
                     for p in pieces:
+                        if len(used) >= _tryon.MAX_LOOK_REF_IMAGES:
+                            break
                         url = (p.get("image_url") or "").strip()
                         if not url:
                             continue
@@ -1541,7 +1573,11 @@ async def handle(ws) -> None:
                 except Exception as look_exc:
                     print(f"  [try_on] full look skipped: {look_exc}")
 
-            await asyncio.gather(_complete_look(), *[_angle(v) for v in views if v != "front"])
+            await asyncio.gather(
+                _complete_look(),
+                *[_angle(v) for v in views if v != "front"],
+                return_exceptions=True,
+            )
             _spend_record(user_id, sum(_costs))
             print(f"  💰 [try_on] TOTAL ≈ ${sum(_costs):.4f} (gen {len(_costs)} img) "
                   f"— product={payload['product_name']!r}")
@@ -1552,8 +1588,10 @@ async def handle(ws) -> None:
             import traceback as _tb
             print(f"  ! try_on failed: {e}")
             _tb.print_exc()
-            await _send_json(ws, type="try_on_error", product_id=product_id,
-                             message="Something went wrong generating your try-on. Please try again.")
+            # Don't wipe a successful front still with a later look/angle failure.
+            if not locals().get("front_sent"):
+                await _send_json(ws, type="try_on_error", product_id=product_id,
+                                 message=_tryon.tryon_error_message(e))
         finally:
             await _send_json(ws, type="state", state="idle", mood="neutral")
 

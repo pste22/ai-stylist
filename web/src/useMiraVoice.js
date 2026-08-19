@@ -3,6 +3,7 @@ import { MicCapture, PcmPlayer } from "./audio.js";
 import { AvatarState, Mood } from "./avatarState.js";
 import { supabase } from "./supabaseClient.js";
 import { track } from "./analytics.js";
+import { resizePhotoForTryOn } from "./resizePhoto.js";
 
 function resolveWsUrl() {
   const override = import.meta.env.VITE_MIRA_WS_URL;
@@ -618,20 +619,29 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     }, 240000);
   }, []);
 
-  const sendTryOn = useCallback((productId, imageBase64, mime = "image/jpeg") => {
+  const sendTryOn = useCallback(async (productId, imageBase64, mime = "image/jpeg") => {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || !productId || !imageBase64) return;
     setTryOnResult(null);
     setTryOnLookItems([]);
     setTryOnError(null);
     setTryOnLoading(true);
-    ws.send(JSON.stringify({ type: "try_on", product_id: productId, image: imageBase64, mime }));
+    let payload = imageBase64;
+    let outMime = mime || "image/jpeg";
+    try {
+      const resized = await resizePhotoForTryOn(imageBase64, outMime);
+      payload = resized.base64;
+      outMime = resized.mime;
+    } catch (e) {
+      console.warn("[try_on] photo resize skipped", e);
+    }
+    ws.send(JSON.stringify({ type: "try_on", product_id: productId, image: payload, mime: outMime }));
     // Safety: clear loading if the server never responds.
     if (tryOnTimeoutRef.current) clearTimeout(tryOnTimeoutRef.current);
     tryOnTimeoutRef.current = setTimeout(() => {
       tryOnTimeoutRef.current = null;
       setTryOnLoading(false);
-      setTryOnError((e) => e || "Try-on timed out. Please try again.");
+      setTryOnError((err) => err || "Try-on timed out. Please try again.");
     }, 90000);
   }, []);
 
