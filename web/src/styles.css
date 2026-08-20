@@ -4064,8 +4064,8 @@ button.primary.stop { background: var(--accent); }
 .app-chat {
   display: flex; flex-direction: column;
   height: 100dvh; height: 100vh;
-  /* Wide enough for a comfortable 3-up product row on desktop */
-  max-width: min(1040px, 100%);
+  /* Stylist console: wide enough for 3 roomy product cards, still a column not a site */
+  max-width: min(1280px, 100%);
   margin: 0 auto;
   background: var(--surface);
 }
@@ -4233,6 +4233,15 @@ button.primary.stop { background: var(--accent); }
   display: flex; flex-direction: column; gap: .5rem;
   scroll-behavior: smooth;
   background: transparent;
+}
+@media (min-width: 900px) {
+  .chat-header { padding: .65rem 1.5rem; }
+  .chat-thread { padding: 1.15rem 1.5rem 1rem; }
+  .chat-input-bar { padding: .85rem 1.5rem; }
+  .filter-bar,
+  .cf-pills { padding-left: 1.5rem; padding-right: 1.5rem; }
+  html[data-mira="atelier"] .cf-categories { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .app-chat .shelf { max-width: none; }
 }
 
 /* ── Welcome screen (legacy, kept for safety) ───────────────────────────────── */
@@ -4923,7 +4932,7 @@ button.primary.stop { background: var(--accent); }
 /* ── Message rows ────────────────────────────────────────────────────────────── */
 .msg-row {
   display: flex; align-items: flex-end; gap: .5rem;
-  max-width: min(520px, 88%);
+  max-width: min(640px, 92%);
 }
 .msg-row.you  { align-self: flex-end; flex-direction: row-reverse; }
 .msg-row.mira { align-self: flex-start; }
@@ -4934,7 +4943,7 @@ button.primary.stop { background: var(--accent); }
   align-self: stretch;
 }
 .msg-row.mira:has(.product-grid-wrap) .msg-bubble {
-  max-width: min(480px, 100%);
+  max-width: min(560px, 100%);
 }
 .msg-row.mira:has(.product-grid-wrap--rail) .msg-bubble-wrap {
   width: 100%;
@@ -4999,8 +5008,11 @@ button.primary.stop { background: var(--accent); }
   scroll-snap-align: start;
   scroll-snap-stop: always;
 }
-@media (min-width: 641px) {
-  .product-rail > .card { flex-basis: min(30%, 220px); }
+@media (min-width: 641px) and (max-width: 899px) {
+  .product-rail > .card { flex: 0 0 calc((100% - 0.75rem) / 2); }
+}
+@media (min-width: 900px) {
+  .product-rail > .card { flex: 0 0 calc((100% - 1.5rem) / 3); }
 }
 .product-grid-label {
   display: flex; align-items: center; justify-content: space-between;
@@ -5536,7 +5548,7 @@ html[data-mira="atelier"] body {
 }
 
 html[data-mira="atelier"] .app-chat {
-  max-width: min(980px, 100%);
+  max-width: min(1280px, 100%);
   background: var(--surface);
   box-shadow: 0 0 0 1px var(--border);
 }
@@ -5906,6 +5918,18 @@ html[data-mira="atelier"] .look-progress-cta,
 html[data-mira="atelier"] .finish-nudge,
 html[data-mira="atelier"] .finish-nudge-primary {
   border-radius: 0;
+}
+
+@media (min-width: 900px) {
+  html[data-mira="atelier"] .cf-categories {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+  html[data-mira="atelier"] .cf-wrap:not(.cf-wrap--calm) .cf-pills,
+  html[data-mira="atelier"] .cf-wrap--calm .cf-pills:focus-within {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
 }
 
 @keyframes cardReveal {
