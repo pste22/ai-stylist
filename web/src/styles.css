@@ -4941,6 +4941,11 @@ button.primary.stop { background: var(--accent); }
   max-width: 100%;
   width: 100%;
   align-self: stretch;
+  /* Keep Mira's face at the top of the row — flex-end parked it under tall cards */
+  align-items: flex-start;
+}
+.msg-row.mira:has(.product-grid-wrap) .msg-avatar-dot {
+  margin-top: .45rem;
 }
 .msg-row.mira:has(.product-grid-wrap) .msg-bubble {
   max-width: min(560px, 100%);
@@ -5074,14 +5079,24 @@ button.primary.stop { background: var(--accent); }
 .card:hover { transform: none; box-shadow: none; border-color: transparent; }
 .card.loved, .card.highlighted { background: transparent; border: none; box-shadow: none; transform: none; }
 
-/* Image → full-bleed; slightly less tall so faces survive cover-crop */
+/* Image → full-bleed; height is capped so a 3-up row + Mira stay on screen */
 .card-thumb { aspect-ratio: 4 / 5; border-radius: 0; background: var(--bg-alt); }
 .card:hover .card-img { transform: scale(1.03); transform-origin: center top; }
 .card:hover .card-img--contain { transform: scale(1.02); transform-origin: center center; }
-.card-img { object-position: center top; }
+.card-img { object-position: center 18%; }
 .card-img--contain { object-position: center center; }
 .card.loved .card-thumb, .card.highlighted .card-thumb {
   outline: 1.5px solid var(--ink); outline-offset: -1.5px;
+}
+
+/* Desktop: don't let 1/3 of a 1280px panel become a 500px-tall poster */
+@media (min-width: 900px) {
+  .product-rail > .card .card-thumb,
+  .product-grid > .card .card-thumb {
+    aspect-ratio: auto;
+    height: min(32vh, 260px);
+    max-height: min(32vh, 260px);
+  }
 }
 
 /* Strip noise: badges, category chip, colour pill */
