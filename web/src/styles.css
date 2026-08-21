@@ -51,6 +51,17 @@
 /* ── Reset ─────────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; }
 html, body { overflow-x: hidden; margin: 0; padding: 0; }
+html, body, #root {
+  height: 100%;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+  max-height: 100%;
+  max-height: 100dvh;
+  max-height: var(--app-height, 100dvh);
+}
+body {
+  overflow: hidden;
+}
 
 @keyframes auroraShift {
   0%   { background-position: 0% 50%;   }
@@ -64,6 +75,7 @@ body {
   color: var(--ink);
   -webkit-font-smoothing: antialiased;
   position: relative;
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Editorial: no ambient gradient/orbs — flat and still reads expensive. */
@@ -135,6 +147,8 @@ h1, h2, h3,
 .mira-home {
   position: relative;
   min-height: 100dvh;
+  height: 100%;
+  height: var(--app-height, 100dvh);
   width: 100%;
   overflow: hidden;
   background: #141414;
@@ -173,7 +187,7 @@ h1, h2, h3,
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 1.1rem 1.25rem;
+  padding: max(1.1rem, env(safe-area-inset-top, 0px)) 1.25rem 1.1rem;
 }
 .mira-home-menu {
   width: 40px;
@@ -218,7 +232,7 @@ h1, h2, h3,
   z-index: 3;
   left: 1.1rem;
   right: 1.1rem;
-  bottom: 1.4rem;
+  bottom: max(1.4rem, calc(1rem + env(safe-area-inset-bottom, 0px)));
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -275,6 +289,7 @@ h1, h2, h3,
   align-items: flex-end;
   justify-content: center;
   padding: 1rem;
+  padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
   animation: fadeUp .2s ease;
 }
 .mira-home-auth-panel {
@@ -375,8 +390,10 @@ h1, h2, h3,
    ONBOARDING
 ══════════════════════════════════════════════════════════ */
 .ob-screen {
-  min-height: 100dvh; display: flex; align-items: center; justify-content: center;
+  min-height: 100dvh; height: 100%;
+  display: flex; align-items: center; justify-content: center;
   background: var(--bg); padding: 1.5rem;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 .ob-card {
   background: var(--surface);
@@ -1219,7 +1236,7 @@ button.primary.stop { background: var(--accent); }
   display: flex; align-items: flex-end; justify-content: flex-end;
 }
 .cart-panel {
-  width: min(400px, 100vw); height: 100dvh; height: 100vh;
+  width: min(400px, 100vw); height: 100vh; height: 100dvh; height: var(--app-height, 100dvh);
   background: var(--surface);
   display: flex; flex-direction: column;
   animation: qvSlideIn .28s cubic-bezier(.32,.72,0,1) both;
@@ -1985,7 +2002,7 @@ button.primary.stop { background: var(--accent); }
 /* Mobile */
 @media (max-width: 600px) {
   .cart-panel {
-    width: 100%; height: 92dvh; height: 92vh;
+    width: 100%; height: 92vh; height: 92dvh;
     border-radius: 20px 20px 0 0;
     animation: qvSlideUp .3s cubic-bezier(.32,.72,0,1) both;
   }
@@ -1997,7 +2014,7 @@ button.primary.stop { background: var(--accent); }
 
 .qv-backdrop {
   position: fixed; inset: 0; z-index: 1460;
-  width: 100vw; height: 100dvh; height: 100vh;
+  width: 100vw; height: 100vh; height: 100dvh; height: var(--app-height, 100dvh);
   background: rgba(26,20,16,.55);
   backdrop-filter: blur(8px);
   display: flex; align-items: stretch; justify-content: center;
@@ -2861,8 +2878,10 @@ button.primary.stop { background: var(--accent); }
 }
 .event-edit-cta:hover { background: var(--accent); }
 .event-brief-screen {
-  min-height: 100dvh; padding: 2rem 1rem; display: grid; place-items: center;
+  min-height: 100dvh; height: 100%; padding: 2rem 1rem;
+  display: grid; place-items: center;
   background: radial-gradient(circle at 15% 20%, #f9e8df 0, transparent 35%), var(--bg);
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
 }
 .event-brief-card {
   position: relative; width: min(680px, 100%); padding: 2.5rem;
@@ -3864,7 +3883,7 @@ button.primary.stop { background: var(--accent); }
   /* Input */
   .chat-input-area { padding: .6rem .75rem; }
   .chat-input-bar  { padding: .45rem .45rem .45rem .9rem; }
-  .chat-input      { font-size: .9rem; }
+  .chat-input      { font-size: 16px; }
   .chat-send-btn   { width: 32px; height: 32px; font-size: 1rem; }
 
   /* Chat history */
@@ -4063,11 +4082,17 @@ button.primary.stop { background: var(--accent); }
 /* ── Chat-first app shell ────────────────────────────────────────────────────── */
 .app-chat {
   display: flex; flex-direction: column;
-  height: 100dvh; height: 100vh;
+  height: 100vh;
+  height: 100dvh;
+  height: var(--app-height, 100dvh);
+  max-height: 100vh;
+  max-height: 100dvh;
+  max-height: var(--app-height, 100dvh);
   /* Stylist console: wide enough for 3 roomy product cards, still a column not a site */
   max-width: min(1280px, 100%);
   margin: 0 auto;
   background: var(--surface);
+  overflow: hidden;
 }
 @media (max-width: 900px) {
   .app-chat { max-width: 100%; }
@@ -5953,4 +5978,116 @@ html[data-mira="atelier"] .finish-nudge-primary {
 }
 html[data-mira="atelier"] .card {
   animation: cardReveal .35s ease both;
+}
+
+/* ══════════════════════════════════════════════════════════
+   PHONE / SMALL TABLET — follow the screen, not a desktop column
+══════════════════════════════════════════════════════════ */
+@media (max-width: 720px) {
+  button, a, input, select, textarea, label {
+    touch-action: manipulation;
+  }
+
+  .app-chat {
+    width: 100%;
+    max-width: 100%;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  .chat-header {
+    padding: max(.45rem, env(safe-area-inset-top, 0px)) .75rem .45rem .85rem;
+    gap: .4rem;
+  }
+  .chat-title { font-size: .92rem; }
+  .ui-mode-toggle { display: none; }
+  .user-name, .user-chevron { display: none; }
+  .user-pill { padding: .28rem; }
+  .guest-signin-btn { padding: .32rem .7rem; font-size: .72rem; }
+  .chat-header-right { gap: .18rem; min-width: 0; }
+  .mtc-btn, .cart-icon-btn, .chat-camera-btn, .mode-switch-btn, .stop-btn-sm {
+    min-width: 40px; min-height: 40px;
+  }
+
+  .hero-welcome {
+    min-height: min(38dvh, 300px);
+    margin-bottom: .5rem;
+  }
+  .hero-brand-mark { font-size: clamp(2.2rem, 14vw, 3.2rem); }
+  .hero-heading { font-size: clamp(1.25rem, 5.5vw, 1.7rem); }
+  .hero-content { padding: 1rem .9rem 1rem; }
+  .occasion-chips { gap: .35rem; margin: .4rem 0 .3rem; }
+  .occasion-chip--editorial {
+    padding: .45rem .7rem;
+    font-size: .62rem;
+  }
+
+  .chat-thread {
+    padding: .75rem .75rem .6rem;
+    gap: .45rem;
+    -webkit-overflow-scrolling: touch;
+  }
+  .msg-row { max-width: 94%; }
+  .msg-row.mira:has(.product-grid-wrap) { max-width: 100%; }
+
+  .product-rail > .card {
+    flex: 0 0 min(72vw, 220px);
+  }
+  .product-rail > .card .card-thumb,
+  .product-grid > .card .card-thumb {
+    aspect-ratio: 3 / 4;
+    height: auto;
+    max-height: min(38dvh, 240px);
+  }
+  .card-ctas { gap: .3rem; }
+  .card-buy-btn {
+    font-size: .58rem;
+    letter-spacing: .06em;
+    padding: .42rem .35rem;
+  }
+
+  .show-more-strip { padding: .35rem .75rem; }
+  .look-progress-strip {
+    padding: .4rem .75rem .5rem;
+  }
+  .look-progress-thumb, .look-progress-empty {
+    width: 2.8rem; height: 3.4rem;
+  }
+
+  .chat-input-bar {
+    padding: .55rem .75rem max(.65rem, env(safe-area-inset-bottom, 0px));
+  }
+  .text-input-row {
+    flex-wrap: wrap;
+    gap: .35rem;
+  }
+  .text-input-row .chat-input {
+    flex: 1 1 100%;
+    width: 100%;
+    order: -1;
+    font-size: 16px; /* iOS will zoom the page if this is < 16px */
+    min-height: 44px;
+  }
+  .outfit-url-popover {
+    width: min(320px, calc(100vw - 1.5rem));
+    right: 0;
+    left: auto;
+  }
+  .outfit-url-input { font-size: 16px; }
+
+  .pin-input, .ob-pin-input, .location-bar-input { font-size: 16px; }
+  .filter-bar, .cf-categories { padding-left: .75rem; padding-right: .75rem; }
+
+  .tryon-overlay {
+    padding: max(.5rem, env(safe-area-inset-top, 0px)) .6rem max(.5rem, env(safe-area-inset-bottom, 0px));
+    align-items: flex-end;
+  }
+  .tryon-modal {
+    max-height: min(92dvh, 100%);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .event-brief-card { padding: 1.35rem 1rem 1.25rem; }
+  .mira-home-brand { font-size: clamp(3.2rem, 22vw, 5rem); }
 }
