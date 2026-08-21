@@ -5,6 +5,18 @@ import { initAnalytics } from "./analytics.js";
 
 initAnalytics();
 
+// Keep the app inside the *visible* viewport (iOS Safari chrome + keyboard).
+function syncAppHeight() {
+  const h = window.visualViewport?.height || window.innerHeight;
+  document.documentElement.style.setProperty("--app-height", `${Math.round(h)}px`);
+}
+syncAppHeight();
+window.visualViewport?.addEventListener("resize", syncAppHeight);
+window.visualViewport?.addEventListener("scroll", syncAppHeight);
+window.addEventListener("orientationchange", () => {
+  requestAnimationFrame(syncAppHeight);
+});
+
 // Premium Atelier preview — flip to classic via header toggle (localStorage).
 // Revert entirely: localStorage.removeItem('mira.uiMode') + hard refresh, or git checkout.
 try {

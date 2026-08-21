@@ -1172,7 +1172,11 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitS
       <button className="mode-switch-btn" onClick={onSwitchVoice} title="Switch to voice">🎙️</button>
       <input className="chat-input" value={draft} onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
-        placeholder={placeholder || "Message Mira…"} autoFocus />
+        placeholder={placeholder || "Message Mira…"}
+        enterKeyHint="send"
+        autoComplete="off"
+        autoCorrect="on"
+        autoFocus={typeof window !== "undefined" && window.matchMedia("(pointer: fine)").matches} />
       <button className="send-btn" onClick={send} disabled={!draft.trim()}>Send</button>
 
       {/* Visual search — single item */}
