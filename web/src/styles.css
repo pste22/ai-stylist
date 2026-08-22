@@ -3276,6 +3276,23 @@ button.primary.stop { background: var(--accent); }
 .tryon-actions {
   display: flex; flex-direction: column; gap: .55rem; align-items: center;
 }
+.tryon-file-input {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0);
+  white-space: nowrap; border: 0;
+}
+label.tryon-notify-btn,
+label.tryon-share-btn,
+label.tryon-stale-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  text-align: center;
+}
+label.tryon-stale-link { display: inline; }
 .tryon-notify-btn {
   width: 100%; max-width: 280px;
   padding: .8rem 1.5rem;

@@ -1673,6 +1673,7 @@ export default function App() {
   const inflightLookLayerRef = useRef(null);
   const lastLookStillRef = useRef(null);
   const [lookLayerHint, setLookLayerHint] = useState("");
+  const [assemblingLook, setAssemblingLook] = useState(false);
   const [vsResults, setVsResults]         = useState([]);
   const [bootReady, setBootReady]         = useState(false);
   const [vsQuery, setVsQuery]             = useState("");
@@ -1913,6 +1914,7 @@ export default function App() {
       inflightLookLayerRef.current = null;
       lastLookStillRef.current = null;
       setLookLayerHint("");
+      setAssemblingLook(false);
     }
     clearTryOn();
     setTryOnProduct(product);
@@ -1934,6 +1936,7 @@ export default function App() {
     inflightLookLayerRef.current = null;
     lastLookStillRef.current = null;
     setLookLayerHint(queue[0] ? layerHintFor(queue[0]) : "");
+    setAssemblingLook(true);
     addToLookProgress(hero);
     queue.forEach(addToLookProgress);
     setFullLook(null);
@@ -2705,6 +2708,7 @@ export default function App() {
               inflightLookLayerRef.current = null;
               lastLookStillRef.current = null;
               setLookLayerHint("");
+              setAssemblingLook(false);
               setTryOnProduct(null);
               clearTryOn();
             }}
@@ -2713,6 +2717,8 @@ export default function App() {
             loading={tryOnLoading}
             layering={tryOnLayering}
             layerHint={lookLayerHint}
+            assemblingLook={assemblingLook}
+            connected={connected}
             error={tryOnError}
             onVideo={sendTryOnVideo}
             video={tryOnVideo}
