@@ -620,9 +620,36 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
   );
 }
 
-// ─── Shop-the-look outfit panel (docked on the right) ─────────────────────────
+// ─── Style the Look — pinned top + sliding pairing rail ──────────────────────
 function lookCategory(p) {
   return String(p?.category || "").toLowerCase();
+}
+
+function lookHaystack(p) {
+  return [
+    p?.name, p?.color, p?.category, p?.brand, p?.fabric,
+    Array.isArray(p?.style) ? p.style.join(" ") : p?.style,
+  ].filter(Boolean).join(" ").toLowerCase();
+}
+
+function isLookBottom(p) {
+  return lookCategory(p) === "bottoms";
+}
+
+function isLookShoe(p) {
+  const cat = lookCategory(p);
+  if (cat === "shoes") return true;
+  return /shoe|sneaker|sandal|heel|mule|loafer|boot|espadrille|wedge|slip-?on/.test(lookHaystack(p));
+}
+
+function lookCategoryLabel(p) {
+  if (isLookBottom(p)) return "Bottoms";
+  if (isLookShoe(p)) return "Shoes";
+  const cat = lookCategory(p);
+  if (cat === "bags") return "Bags";
+  if (cat === "tops" || cat === "outerwear") return "Tops";
+  if (!cat) return "Piece";
+  return cat.charAt(0).toUpperCase() + cat.slice(1);
 }
 
 function deriveShopLook(look) {
@@ -635,10 +662,10 @@ function deriveShopLook(look) {
     || (look.hero && ["tops", "outerwear"].includes(lookCategory(look.hero)) ? look.hero : null);
   const bottoms = (look.bottoms && look.bottoms.length)
     ? look.bottoms
-    : items.filter((p) => lookCategory(p) === "bottoms" && p.id !== pinned?.id);
+    : items.filter((p) => isLookBottom(p) && p.id !== pinned?.id);
   const accents = (look.accents && look.accents.length)
     ? look.accents
-    : items.filter((p) => ["bags", "shoes"].includes(lookCategory(p)));
+    : items.filter((p) => ["bags", "shoes"].includes(lookCategory(p)) || isLookShoe(p));
   return { pinned, bottoms, accents, items };
 }
 
@@ -655,19 +682,43 @@ function lookPrice(p) {
   return `${cur}${Number(p.price).toLocaleString("en-IN")}`;
 }
 
+function titleCaseWord(raw) {
+  const t = String(raw || "").trim();
+  if (!t) return "";
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+
 function stylePills(p) {
   const out = [];
   const seen = new Set();
   const add = (raw) => {
-    const t = String(raw || "").trim();
+    const t = String(raw || "").trim().split(/[/,|]/)[0].trim();
     if (!t) return;
     const key = t.toLowerCase();
     if (seen.has(key) || key === "multi" || key === "multicolor") return;
     seen.add(key);
-    out.push(t);
+    out.push(t.length > 14 ? `${t.slice(0, 13)}…` : t);
   };
-  (Array.isArray(p?.style) ? p.style : []).forEach(add);
-  add(p?.color);
+  const hay = lookHaystack(p);
+  const styles = Array.isArray(p?.style) ? p.style : (p?.style ? [p.style] : []);
+  styles.forEach(add);
+  if (!out.length) {
+    if (/formal|office|workwear|blazer/.test(hay)) add("Work");
+    else if (/party|evening|cocktail/.test(hay)) add("Evening");
+    else add("Casual");
+  }
+  if (/linen|cotton|summer|sundress|resort|chambray/.test(hay)) add("Summer");
+  else if (/wool|knit|turtleneck|sweater|winter|cashmere/.test(hay)) add("Layered");
+  else if (/silk|satin|chiffon/.test(hay)) add("Soft");
+  if (/white|cream|beige|ivory|neutral|taupe|oat|sand|ecru|off[-\s]?white|grey|gray|black|navy|charcoal|slate/.test(hay)) {
+    add("Neutral");
+  } else if (p?.color && !/multi/.test(String(p.color).toLowerCase())) {
+    add(titleCaseWord(String(p.color).split(/[/,]/)[0]));
+  } else if (/print|check|plaid|stripe|floral/.test(hay)) {
+    add("Print");
+  }
+  if (out.length < 3 && /relaxed|loose|oversized/.test(hay)) add("Relaxed");
+  if (out.length < 3 && /slim|skinny|fitted/.test(hay)) add("Fitted");
   return out.slice(0, 3);
 }
 
@@ -687,7 +738,7 @@ function lookShot(p, longest = 720) {
 function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onTryOn }) {
   const src = lookShot(p, 480);
   const isLoved = !!(loved && loved.has(p.id));
-  const cat = lookCategory(p);
+  const price = lookPrice(p);
   return (
     <article className={`flp-row${selected ? " is-chosen" : ""}`}>
       <button type="button" className="flp-row-thumb" onClick={() => (onChoose ? onChoose(p) : onSelect?.(p))}>
@@ -697,22 +748,23 @@ function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onT
         {selected ? <span className="flp-using">Using this</span> : null}
       </button>
       <div className="flp-row-body">
-        <button type="button" className="flp-row-open" onClick={() => onSelect?.(p)}>
-          <p className="flp-row-name">{shortLookName(p)}</p>
-          <p className="flp-row-cat">{cat || "piece"} · {lookPrice(p)}</p>
-        </button>
-        <div className="flp-row-meta">
+        <div className="flp-row-top">
+          <button type="button" className="flp-row-open" onClick={() => onSelect?.(p)}>
+            <p className="flp-row-name">{shortLookName(p)}</p>
+            <p className="flp-row-cat">{lookCategoryLabel(p)}</p>
+            {price ? <p className="flp-row-price">{price}</p> : null}
+          </button>
           <span className="flp-match">{matchPct(p, index)}% match</span>
-          <div className="flp-row-actions">
-            {onTryOn && (
-              <button type="button" className="flp-chip-btn" onClick={() => onTryOn(p)}>Try on</button>
-            )}
-            {onLove && (
-              <button type="button" className={`flp-chip-btn${isLoved ? " is-loved" : ""}`} onClick={() => onLove(p)}>
-                {isLoved ? "Saved" : "Save"}
-              </button>
-            )}
-          </div>
+        </div>
+        <div className="flp-row-actions">
+          {onTryOn && (
+            <button type="button" className="flp-chip-btn" onClick={() => onTryOn(p)}>Try on</button>
+          )}
+          {onLove && (
+            <button type="button" className={`flp-chip-btn${isLoved ? " is-loved" : ""}`} onClick={() => onLove(p)}>
+              {isLoved ? "Saved" : "Save"}
+            </button>
+          )}
         </div>
       </div>
     </article>
@@ -723,25 +775,30 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
   const derived = look ? deriveShopLook(look) : { pinned: null, bottoms: [], accents: [], items: [] };
   const { pinned, bottoms, accents, items } = derived;
   const bottomKey = bottoms.map((p) => p.id).join(",");
+  const shoeKey = accents.filter(isLookShoe).map((p) => p.id).join(",");
   const [chosenId, setChosenId] = useState(null);
+  const [chosenShoeId, setChosenShoeId] = useState(null);
   const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     setChosenId(bottoms[0]?.id || null);
+    setChosenShoeId(accents.find(isLookShoe)?.id || null);
     setShowAll(false);
-  }, [bottomKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bottomKey, shoeKey]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!look) return null;
   if (!items.length && !pinned && !bottoms.length) return null;
 
   const chosen = bottoms.find((p) => p.id === chosenId) || bottoms[0] || null;
+  const chosenShoe = accents.find((p) => p.id === chosenShoeId && isLookShoe(p))
+    || accents.find(isLookShoe)
+    || null;
   const outfit = [];
   const addPiece = (p) => {
     if (p?.id && !outfit.some((x) => x.id === p.id)) outfit.push(p);
   };
   addPiece(pinned);
   addPiece(chosen);
-  const shoes = accents.find((p) => lookCategory(p) === "shoes") || null;
   const bag = accents.find((p) => lookCategory(p) === "bags") || null;
-  addPiece(shoes);
+  addPiece(chosenShoe);
   if (look.hero && !["tops", "outerwear", "bottoms"].includes(lookCategory(look.hero))) {
     addPiece(look.hero);
   }
@@ -764,18 +821,23 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
   const slots = [
     { key: "top", label: "Top", product: heroProduct },
     { key: "bottom", label: "Bottom", product: chosen },
-    { key: "shoes", label: "Shoes", product: shoes || bag },
+    { key: "shoes", label: "Shoes", product: chosenShoe || bag },
   ];
   const choose = (p) => {
-    if (lookCategory(p) === "bottoms") setChosenId(p.id);
+    if (isLookBottom(p)) setChosenId(p.id);
+    else if (isLookShoe(p)) setChosenShoeId(p.id);
   };
+  const rowSelected = (p) => (
+    (isLookBottom(p) && chosen?.id === p.id) ||
+    (isLookShoe(p) && chosenShoe?.id === p.id)
+  );
 
   return (
-    <aside className="full-look-panel is-complete" role="complementary" aria-label="Complete the look">
+    <aside className="full-look-panel is-page" role="dialog" aria-label="Style the Look">
       <div className="flp-sheet">
         <div className="flp-col flp-col-pin">
           <div className="flp-head">
-            <p className="flp-eyebrow">✦ Styled by Mira</p>
+            <p className="flp-eyebrow">Style the Look</p>
             <button className="flp-close" aria-label="Close" onClick={onClose}>✕</button>
           </div>
           {heroProduct && (
@@ -797,12 +859,12 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
                 <button type="button" className={`flp-chip-btn${loved.has(heroProduct.id) ? " is-loved" : ""}`} onClick={() => onLove(heroProduct)}>
                   {loved.has(heroProduct.id) ? "Saved" : "Save"}
                 </button>
-                <button type="button" className="flp-chip-btn" onClick={() => onSelect?.(heroProduct)}>View</button>
+                <button type="button" className="flp-chip-btn" onClick={() => onSelect?.(heroProduct)}>Compare</button>
               </div>
             </article>
           )}
           <div className="flp-summary">
-            <p className="flp-summary-title">Complete the look</p>
+            <p className="flp-summary-title">Complete the Look</p>
             <div className="flp-slots">
               {slots.map((s) => {
                 const src = lookShot(s.product, 240);
@@ -820,17 +882,17 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
         </div>
 
         <div className="flp-col flp-col-recs">
-          <h3 className="flp-recs-title">{mixMode ? "Pick a bottom for this top" : (look.title || "Complete the look")}</h3>
-          <p className="flp-recs-sub">AI-curated from style, colour and occasion — tap a pair to use it.</p>
+          <h3 className="flp-recs-title">{mixMode ? "Pick a bottom for this top" : (look.title || "Complete the Look")}</h3>
+          <p className="flp-recs-sub">AI-curated recommendations based on style, color &amp; occasion.</p>
           <div className="flp-rows" role="list">
             {visibleRail.map((p, i) => (
               <FlpRecoRow
                 key={p.id}
                 p={p}
                 index={i}
-                selected={mixMode && lookCategory(p) === "bottoms" && chosen?.id === p.id}
+                selected={mixMode && rowSelected(p)}
                 loved={loved}
-                onChoose={mixMode && lookCategory(p) === "bottoms" ? choose : null}
+                onChoose={mixMode ? choose : null}
                 onSelect={onSelect}
                 onLove={onLove}
                 onTryOn={onTryOn}
@@ -2062,26 +2124,6 @@ export default function App() {
 
         <div className="chat-canvas">
           <ChatSketchWallpaper />
-          {fullLook && (
-            <FullLookPanel
-              look={fullLook}
-              loved={loved}
-              onLove={handleLove}
-              onBuy={buyClick}
-              inCart={inCart}
-              onAddToCart={toggleCart}
-              onAddAllToCart={toggleAllInCart}
-              onSelect={setQuickViewProduct}
-              onClose={() => setFullLook(null)}
-              onTryOn={(p) => { setFullLook(null); if (p) openTryOn(p); }}
-              heroStill={(() => {
-                const ids = new Set([fullLook.hero?.id, fullLook.pinned?.id].filter(Boolean));
-                if (!tryOnProduct?.id || !ids.has(tryOnProduct.id)) return null;
-                const views = tryOnResult?.productId === tryOnProduct.id ? tryOnResult.views : null;
-                return views?.look || views?.front || null;
-              })()}
-            />
-          )}
           <div className="chat-thread" ref={threadRef}>
           {finishNudgeVisible && isLookIncomplete(lookProgress) && (
             <FinishLookNudge
@@ -2350,6 +2392,26 @@ export default function App() {
           {error && <ConnectionError retryCount={retryCount} onRetry={retry} />}
         </div>
         </div>{/* /.chat-canvas */}
+        {fullLook && (
+          <FullLookPanel
+            look={fullLook}
+            loved={loved}
+            onLove={handleLove}
+            onBuy={buyClick}
+            inCart={inCart}
+            onAddToCart={toggleCart}
+            onAddAllToCart={toggleAllInCart}
+            onSelect={setQuickViewProduct}
+            onClose={() => setFullLook(null)}
+            onTryOn={(p) => { setFullLook(null); if (p) openTryOn(p); }}
+            heroStill={(() => {
+              const ids = new Set([fullLook.hero?.id, fullLook.pinned?.id].filter(Boolean));
+              if (!tryOnProduct?.id || !ids.has(tryOnProduct.id)) return null;
+              const views = tryOnResult?.productId === tryOnProduct.id ? tryOnResult.views : null;
+              return views?.look || views?.front || null;
+            })()}
+          />
+        )}
       </div>
 
       {networkToast && (
