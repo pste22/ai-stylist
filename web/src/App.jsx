@@ -655,51 +655,79 @@ function lookPrice(p) {
   return `${cur}${Number(p.price).toLocaleString("en-IN")}`;
 }
 
-function FlpRecoCard({ p, tag, selected, loved, onChoose, onSelect, onLove }) {
-  const usePhoto = isProductPhotoUrl(p.image_url);
+function stylePills(p) {
+  const out = [];
+  const seen = new Set();
+  const add = (raw) => {
+    const t = String(raw || "").trim();
+    if (!t) return;
+    const key = t.toLowerCase();
+    if (seen.has(key) || key === "multi" || key === "multicolor") return;
+    seen.add(key);
+    out.push(t);
+  };
+  (Array.isArray(p?.style) ? p.style : []).forEach(add);
+  add(p?.color);
+  return out.slice(0, 3);
+}
+
+function matchPct(p, index) {
+  const n = Number(p?.match_score);
+  if (n > 0) return Math.round(n);
+  return Math.max(76, 94 - index * 4);
+}
+
+function lookShot(p, longest = 720) {
+  if (!p) return null;
+  return isProductPhotoUrl(p.image_url)
+    ? hdProductImageUrl(p.image_url, { longest })
+    : p.image_url;
+}
+
+function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onTryOn }) {
+  const src = lookShot(p, 480);
   const isLoved = !!(loved && loved.has(p.id));
+  const cat = lookCategory(p);
   return (
-    <article className={`flp-reco${selected ? " is-chosen" : ""}`}>
-      <div className="flp-reco-shot">
-        <button
-          type="button"
-          className="flp-reco-hit"
-          onClick={() => (onChoose ? onChoose(p) : onSelect?.(p))}
-          aria-label={onChoose ? `Pair ${p.name}` : `View ${p.name}`}
-          aria-pressed={onChoose ? !!selected : undefined}
-        >
-          {usePhoto
-            ? <img src={hdProductImageUrl(p.image_url, { longest: 720 })} alt="" loading="lazy" decoding="async" />
-            : <span className="flp-thumb-emoji" style={{ "--swatch": swatchColor(p.color) }}>{CATEGORY_EMOJI[p.category] || "🛍️"}</span>}
-        </button>
-        {tag ? <span className="flp-reco-tag">{tag}</span> : null}
-        {selected ? <span className="flp-reco-on">On look</span> : null}
-        {onLove && (
-          <button
-            type="button"
-            className={`flp-reco-heart${isLoved ? " is-loved" : ""}`}
-            onClick={() => onLove(p)}
-            aria-label={isLoved ? "Remove from saved" : "Save"}
-          >
-            {isLoved ? "♥" : "♡"}
-          </button>
-        )}
-      </div>
-      <button type="button" className="flp-reco-meta" onClick={() => onSelect?.(p)}>
-        <span className="flp-reco-name">{shortLookName(p)}</span>
-        <span className="flp-reco-price">{lookPrice(p)}</span>
+    <article className={`flp-row${selected ? " is-chosen" : ""}`}>
+      <button type="button" className="flp-row-thumb" onClick={() => (onChoose ? onChoose(p) : onSelect?.(p))}>
+        {src
+          ? <img src={src} alt="" loading="lazy" decoding="async" />
+          : <span className="flp-thumb-emoji" style={{ "--swatch": swatchColor(p.color) }}>{CATEGORY_EMOJI[p.category] || "🛍️"}</span>}
+        {selected ? <span className="flp-using">Using this</span> : null}
       </button>
+      <div className="flp-row-body">
+        <button type="button" className="flp-row-open" onClick={() => onSelect?.(p)}>
+          <p className="flp-row-name">{shortLookName(p)}</p>
+          <p className="flp-row-cat">{cat || "piece"} · {lookPrice(p)}</p>
+        </button>
+        <div className="flp-row-meta">
+          <span className="flp-match">{matchPct(p, index)}% match</span>
+          <div className="flp-row-actions">
+            {onTryOn && (
+              <button type="button" className="flp-chip-btn" onClick={() => onTryOn(p)}>Try on</button>
+            )}
+            {onLove && (
+              <button type="button" className={`flp-chip-btn${isLoved ? " is-loved" : ""}`} onClick={() => onLove(p)}>
+                {isLoved ? "Saved" : "Save"}
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
     </article>
   );
 }
 
-function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddAllToCart, onSelect, onClose, heroStill }) {
+function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddAllToCart, onSelect, onClose, onTryOn, heroStill }) {
   const derived = look ? deriveShopLook(look) : { pinned: null, bottoms: [], accents: [], items: [] };
   const { pinned, bottoms, accents, items } = derived;
   const bottomKey = bottoms.map((p) => p.id).join(",");
   const [chosenId, setChosenId] = useState(null);
+  const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     setChosenId(bottoms[0]?.id || null);
+    setShowAll(false);
   }, [bottomKey]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!look) return null;
   if (!items.length && !pinned && !bottoms.length) return null;
@@ -711,7 +739,9 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
   };
   addPiece(pinned);
   addPiece(chosen);
-  accents.forEach(addPiece);
+  const shoes = accents.find((p) => lookCategory(p) === "shoes") || null;
+  const bag = accents.find((p) => lookCategory(p) === "bags") || null;
+  addPiece(shoes);
   if (look.hero && !["tops", "outerwear", "bottoms"].includes(lookCategory(look.hero))) {
     addPiece(look.hero);
   }
@@ -725,63 +755,93 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
   const rail = mixMode
     ? [...bottoms, ...accents]
     : items.filter((p) => p.id !== heroProduct?.id);
-  const heroPhoto = heroProduct && isProductPhotoUrl(heroProduct.image_url)
-    ? hdProductImageUrl(heroProduct.image_url, { longest: 1400 })
-    : heroProduct?.image_url;
+  const visibleRail = showAll ? rail : rail.slice(0, 4);
+  const heroPhoto = lookShot(heroProduct, 1200);
   const heroSrc = heroStill?.image
     ? `data:${heroStill.mime || "image/png"};base64,${heroStill.image}`
     : heroPhoto;
-  const recoTag = (p) => {
-    if (p.badge === "trending") return "Trending";
-    if (lookCategory(p) === "bottoms") return "Bottom";
-    if (lookCategory(p) === "bags") return "Bag";
-    if (lookCategory(p) === "shoes") return "Shoes";
-    return p.category || null;
+  const pills = stylePills(heroProduct);
+  const slots = [
+    { key: "top", label: "Top", product: heroProduct },
+    { key: "bottom", label: "Bottom", product: chosen },
+    { key: "shoes", label: "Shoes", product: shoes || bag },
+  ];
+  const choose = (p) => {
+    if (lookCategory(p) === "bottoms") setChosenId(p.id);
   };
 
   return (
-    <aside className="full-look-panel is-editorial" role="complementary" aria-label="Shop the full look">
-      <div className="flp-hero">
-        {heroSrc ? (
-          <img className="flp-hero-img" src={heroSrc} alt={heroProduct?.name || "Your look"} />
-        ) : (
-          <div className="flp-hero-fallback" style={{ "--swatch": swatchColor(heroProduct?.color) }}>
-            {CATEGORY_EMOJI[heroProduct?.category] || "✦"}
-          </div>
-        )}
-        <div className="flp-hero-bar">
-          <div>
+    <aside className="full-look-panel is-complete" role="complementary" aria-label="Complete the look">
+      <div className="flp-sheet">
+        <div className="flp-col flp-col-pin">
+          <div className="flp-head">
             <p className="flp-eyebrow">✦ Styled by Mira</p>
-            <h3 className="flp-title">{mixMode ? "Your look" : (look.title || "Shop the full look")}</h3>
+            <button className="flp-close" aria-label="Close" onClick={onClose}>✕</button>
           </div>
-          <button className="flp-close" aria-label="Close" onClick={onClose}>✕</button>
+          {heroProduct && (
+            <article className="flp-using-card">
+              <div className="flp-using-shot">
+                <span className="flp-using">Using this</span>
+                {heroSrc
+                  ? <img src={heroSrc} alt={heroProduct.name} />
+                  : <span className="flp-thumb-emoji" style={{ "--swatch": swatchColor(heroProduct.color) }}>{CATEGORY_EMOJI[heroProduct.category] || "🛍️"}</span>}
+              </div>
+              <h3 className="flp-using-name">{shortLookName(heroProduct)}</h3>
+              {pills.length > 0 && (
+                <div className="flp-pills">
+                  {pills.map((t) => <span key={t}>{t}</span>)}
+                </div>
+              )}
+              <div className="flp-using-actions">
+                {onTryOn && <button type="button" className="flp-chip-btn" onClick={() => onTryOn(heroProduct)}>Try on</button>}
+                <button type="button" className={`flp-chip-btn${loved.has(heroProduct.id) ? " is-loved" : ""}`} onClick={() => onLove(heroProduct)}>
+                  {loved.has(heroProduct.id) ? "Saved" : "Save"}
+                </button>
+                <button type="button" className="flp-chip-btn" onClick={() => onSelect?.(heroProduct)}>View</button>
+              </div>
+            </article>
+          )}
+          <div className="flp-summary">
+            <p className="flp-summary-title">Complete the look</p>
+            <div className="flp-slots">
+              {slots.map((s) => {
+                const src = lookShot(s.product, 240);
+                return (
+                  <button key={s.key} type="button" className={`flp-slot${s.product ? " is-filled" : ""}`} onClick={() => s.product && onSelect?.(s.product)}>
+                    {src
+                      ? <img src={src} alt="" />
+                      : <span className="flp-slot-empty" />}
+                    <span>{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         </div>
-        {heroProduct && (
-          <button type="button" className="flp-hero-caption" onClick={() => onSelect?.(heroProduct)}>
-            <span>{heroProduct.id === look.hero?.id ? "Your pick" : "Top"}</span>
-            <strong>{shortLookName(heroProduct)}</strong>
-          </button>
-        )}
-      </div>
 
-      <div className="flp-recs">
-        <p className="flp-recs-kicker">View recommendations</p>
-        <p className="flp-recs-sub">
-          {mixMode ? "Tap a bottom to pair it with this top." : "Pieces to finish the look."}
-        </p>
-        <div className="flp-rail" role="list">
-          {rail.map((p) => (
-            <FlpRecoCard
-              key={p.id}
-              p={p}
-              tag={recoTag(p)}
-              loved={loved}
-              selected={mixMode && lookCategory(p) === "bottoms" && chosen?.id === p.id}
-              onChoose={mixMode && lookCategory(p) === "bottoms" ? (item) => setChosenId(item.id) : null}
-              onSelect={onSelect}
-              onLove={onLove}
-            />
-          ))}
+        <div className="flp-col flp-col-recs">
+          <h3 className="flp-recs-title">{mixMode ? "Pick a bottom for this top" : (look.title || "Complete the look")}</h3>
+          <p className="flp-recs-sub">AI-curated from style, colour and occasion — tap a pair to use it.</p>
+          <div className="flp-rows" role="list">
+            {visibleRail.map((p, i) => (
+              <FlpRecoRow
+                key={p.id}
+                p={p}
+                index={i}
+                selected={mixMode && lookCategory(p) === "bottoms" && chosen?.id === p.id}
+                loved={loved}
+                onChoose={mixMode && lookCategory(p) === "bottoms" ? choose : null}
+                onSelect={onSelect}
+                onLove={onLove}
+                onTryOn={onTryOn}
+              />
+            ))}
+          </div>
+          {rail.length > visibleRail.length && (
+            <button type="button" className="flp-more" onClick={() => setShowAll(true)}>
+              ↓ More recommendations
+            </button>
+          )}
         </div>
       </div>
 
@@ -2013,6 +2073,7 @@ export default function App() {
               onAddAllToCart={toggleAllInCart}
               onSelect={setQuickViewProduct}
               onClose={() => setFullLook(null)}
+              onTryOn={(p) => { setFullLook(null); if (p) openTryOn(p); }}
               heroStill={(() => {
                 const ids = new Set([fullLook.hero?.id, fullLook.pinned?.id].filter(Boolean));
                 if (!tryOnProduct?.id || !ids.has(tryOnProduct.id)) return null;
