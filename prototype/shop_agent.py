@@ -51,6 +51,8 @@ from curation_mix import (
     detect_brand,
     detect_category,
     detect_color_key,
+    detect_pattern,
+    pattern_matches,
     photo_quality,
 )
 
@@ -315,13 +317,16 @@ def _matched_category_terms(text: str) -> list[str]:
     return sorted(terms, key=len, reverse=True)
 
 
-def _label(brand, color, category, sort, sort_explicit, price_max, mode, term=None) -> str:
+def _label(brand, color, category, sort, sort_explicit, price_max, mode, term=None,
+           pattern=None) -> str:
     """UI header describing what was ACTUALLY matched — never a relaxed facet."""
     bits = []
     if brand and "brand" in mode:
         bits.append(brand)
     if color and "color" in mode:
         bits.append(color.title())
+    if pattern and "pattern" in mode:
+        bits.append(pattern.title())
     if mode == "name_match" and term:
         bits.append(term.rstrip("s").title() + "s")
     elif category and ("cat" in mode or mode == "category"):
@@ -483,13 +488,18 @@ def answer(
     brand = detect_brand(text, base or catalog)
     category = detect_category(text)
     color = detect_color_key(text)
+    pattern = detect_pattern(text)
+    # "floral"/"striped" are also multicolor cues, and that bucket matches any
+    # print — so a striped ask returned floral items. The pattern is the real ask.
+    if pattern and color == "multicolor":
+        color = None
 
     has_price = price_min is not None or price_max is not None
-    actionable = bool(brand or category or color or sort_explicit
+    actionable = bool(brand or category or color or pattern or sort_explicit
                       or parsed["count"] or has_price or parsed["recommend"])
 
     result: dict[str, Any] = {
-        "brand": brand, "category": category, "color": color,
+        "brand": brand, "category": category, "color": color, "pattern": pattern,
         "count": n, "sort": sort, "price_min": price_min, "price_max": price_max,
         "recommend": parsed["recommend"],
         "mode": "none", "notes": [], "message": None, "label": None,
@@ -523,6 +533,8 @@ def answer(
                 continue
             if want.get("color") and not _color_matches(p, want["color"]):
                 continue
+            if want.get("pattern") and not pattern_matches(p, want["pattern"]):
+                continue
             out.append(p)
         return out
 
@@ -531,10 +543,18 @@ def answer(
         attempts.append(("brand_cat_color", {"brand": brand, "category": category, "color": color}))
     if brand and category:
         attempts.append(("brand_cat", {"brand": brand, "category": category}))
+    if category and color and pattern:
+        attempts.append(("cat_color_pattern", {"category": category, "color": color, "pattern": pattern}))
+    if category and pattern:
+        attempts.append(("cat_pattern", {"category": category, "pattern": pattern}))
     if category and color:
         attempts.append(("cat_color", {"category": category, "color": color}))
     if brand and color:
         attempts.append(("brand_color", {"brand": brand, "color": color}))
+    if brand and pattern:
+        attempts.append(("brand_pattern", {"brand": brand, "pattern": pattern}))
+    if pattern:
+        attempts.append(("pattern", {"pattern": pattern}))
     if category:
         attempts.append(("category", {"category": category}))
     if brand:
@@ -602,6 +622,10 @@ def answer(
             )
         elif color and category and mode == "category":
             notes.append(f"No {color} {category} right now — showing our {category}.")
+        elif pattern and category and "pattern" not in mode:
+            notes.append(f"No {pattern} {category} right now — showing our {category}.")
+        elif pattern and "pattern" not in mode:
+            notes.append(f"No {pattern} pieces right now — showing the closest matches.")
         elif color and mode == "name_match" and not any(
             _color_matches(p, color) for p in matched[:20]
         ):
@@ -626,7 +650,7 @@ def answer(
     else:
         result["label"] = _label(
             brand, color, category, sort, sort_explicit, price_max, mode,
-            term=matched_term,
+            term=matched_term, pattern=pattern,
         )
 
     result.update({"mode": mode, "notes": notes, "products": products})

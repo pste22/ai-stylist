@@ -40,6 +40,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
   const [editorialLooks, setEditorialLooks] = useState([]);
   const [trendingProducts, setTrendingProducts] = useState([]);
   const [youMightLike, setYouMightLike] = useState(null); // {anchorId, items}
+  const [fullLook, setFullLook] = useState(null); // {hero, items, all_items, total, currency, title}
 
   // Full chat history — always built regardless of voice/text mode
   const [messages, setMessages] = useState([]);
@@ -448,6 +449,17 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
             setLooks(msg.items || []);
             break;
 
+          case "full_look":
+            setFullLook({
+              hero: msg.hero || null,
+              items: msg.items || [],
+              all_items: msg.all_items || (msg.hero ? [msg.hero, ...(msg.items || [])] : (msg.items || [])),
+              total: msg.total ?? null,
+              currency: msg.currency || "USD",
+              title: msg.title || "Shop the full look",
+            });
+            if (msg.hero?.id) setHighlightedId(msg.hero.id);
+            break;
           case "trending":
             setTrendingProducts(msg.items || []);
             break;
@@ -699,6 +711,17 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     setTimeout(() => setOutfitLoading(false), 60000);
   }, []);
 
+  const styleFullLook = useCallback((heroId) => {
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+    miraBubbleId.current = null;
+    _addMsg("you", "Style a full look around this");
+    ws.send(JSON.stringify({ type: "complete_look", hero_id: heroId || null }));
+    setState(AvatarState.THINKING);
+    return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const browseCategory = useCallback(async (cat) => {
     if (!cat) return;
     const ws = wsRef.current;
@@ -861,7 +884,8 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, browseCategory,
     sendVisualSearch, vsLoading, setVsLoading,
-    sendLikeReason, quickReplies, dismissQuickReplies,
+    sendLikeReason, quickReplies, dismissQuickReplies, styleFullLook,
+    fullLook, setFullLook,
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,

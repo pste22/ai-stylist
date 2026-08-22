@@ -10,6 +10,8 @@ from collections.abc import Iterable
 from functools import lru_cache
 from typing import Any
 
+from product_facets import PATTERNS
+
 
 # Everyday words → catalog category (aligned with stylist / live_server intent).
 _CATEGORY_SYNONYMS: dict[str, tuple[str, ...]] = {
@@ -28,6 +30,12 @@ _CATEGORY_SYNONYMS: dict[str, tuple[str, ...]] = {
     "ethnic": ("ethnic", "kurti", "kurta", "saree", "lehenga", "anarkali", "salwar"),
     "activewear": ("activewear", "athletic", "gym", "workout", "sports"),
 }
+
+# Words that open a request ("show me some …") rather than name the item wanted.
+_LEAD_IN_WORDS: tuple[str, ...] = (
+    "show", "find", "get", "see", "want", "need", "looking", "gimme", "give",
+    "me", "some", "any", "browse", "search",
+)
 
 _COLOR_ALIASES: dict[str, tuple[str, ...]] = {
     # Listed first so a mixed-print ask never falls through to a single hue.
@@ -85,14 +93,41 @@ def detect_category(text: str) -> str | None:
     "Complete the look — fill what's missing" used to return accessories.
     """
     t = (text or "").lower()
-    ranked = sorted(
-        ((cat, word) for cat, words in _CATEGORY_SYNONYMS.items() for word in words),
-        key=lambda item: -len(item[1]),
-    )
-    for cat, word in ranked:
-        if _alias_re(word).search(t):
-            return cat
+    matches = [
+        (m.start(), len(word), cat)
+        for cat, words in _CATEGORY_SYNONYMS.items()
+        for word in words
+        if (m := _alias_re(word).search(t))
+    ]
+    if not matches:
+        return None
+    # A typo can drop a category word inside the command phrase ("shoe mw some
+    # tops" for "show me some tops"), so prefer what is asked for after it.
+    lead_end = 0
+    for lead in _LEAD_IN_WORDS:
+        for m in _alias_re(lead).finditer(t):
+            lead_end = max(lead_end, m.end())
+    after = [item for item in matches if item[0] >= lead_end]
+    ranked = sorted(after or matches, key=lambda item: (item[0], -item[1]))
+    return ranked[0][2]
+
+
+def detect_pattern(text: str) -> str | None:
+    """Map free text onto a print/pattern facet ("floral", "striped")."""
+    t = (text or "").lower()
+    for key, aliases in PATTERNS.items():
+        if _mentions(t, aliases):
+            return key
     return None
+
+
+def pattern_matches(product: dict, pattern_key: str | None) -> bool:
+    if not pattern_key:
+        return False
+    facets = product.get("facets") or {}
+    if (facets.get("pattern") or "").strip().lower() == pattern_key:
+        return True
+    return _mentions((product.get("name") or "").lower(), PATTERNS.get(pattern_key, ()))
 
 
 @lru_cache(maxsize=1024)

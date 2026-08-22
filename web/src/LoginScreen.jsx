@@ -43,16 +43,13 @@ export function AuthButtons({ onGoogle, onFacebook, onGithub, authError }) {
   );
 }
 
-/**
- * Zara-inspired first screen: full-bleed editorial photo + oversized brand.
- * Auth is a secondary sheet so the hero stays one clean composition.
- */
 export default function LoginScreen({
   onGoogle, onFacebook, onGithub, onGuest,
   autoOpen = false, authError = null, onDismissError,
 }) {
   const [showAuth, setShowAuth] = useState(autoOpen);
   const [showBrands, setShowBrands] = useState(false);
+  const [prompt, setPrompt] = useState("");
 
   // An error only makes sense next to the buttons that produced it.
   useEffect(() => { if (authError) setShowAuth(true); }, [authError]);
@@ -66,52 +63,78 @@ export default function LoginScreen({
     return () => document.removeEventListener("keydown", onKey);
   }, [showAuth]);
 
+  const submitPrompt = (event) => {
+    event.preventDefault();
+    onGuest();
+  };
+
+  const quickPrompts = ["Try on a dress", "Build my look", "Show full outfit"];
+
   return (
     <div className="mira-home">
-      <picture className="mira-home-media">
-        <source media="(max-width: 720px)" srcSet="/hero-home-sm.jpg" />
-        <img
-          className="mira-home-img"
-          src="/hero-home.jpg"
-          alt=""
-          width={1600}
-          height={900}
-          fetchPriority="high"
-          decoding="async"
-        />
-      </picture>
-
-      <header className="mira-home-bar">
-        <button
-          type="button"
-          className="mira-home-menu"
-          aria-label="Menu"
-          onClick={() => setShowAuth(true)}
-        >
-          <span />
-          <span />
-        </button>
-        <nav className="mira-home-nav" aria-label="Account">
-          <button type="button" className="mira-home-nav-link" onClick={() => setShowBrands(true)}>
-            For brands
-          </button>
-          <button type="button" className="mira-home-nav-link" onClick={() => setShowAuth(true)}>
-            Log in
-          </button>
-          <button type="button" className="mira-home-nav-link" onClick={onGuest}>
-            Enter
-          </button>
+      <header className="mira-dashboard-header">
+        <div className="mira-dashboard-brand"><span className="mira-brand-dot" /> MIRA</div>
+        <div className="mira-location"><span>⌖</span> Sahibganj <small>· 816101</small></div>
+        <nav className="mira-dashboard-actions" aria-label="Account">
+          <button type="button" className="mira-atelier-btn" onClick={() => setShowBrands(true)}>Atelier</button>
+          <button type="button" className="mira-icon-btn" aria-label="Shopping bag" onClick={() => setShowAuth(true)}>▱</button>
+          <button type="button" className="mira-avatar-btn" aria-label="Log in" onClick={() => setShowAuth(true)}>P</button>
         </nav>
       </header>
 
-      <div className="mira-home-stage">
-        <p className="mira-home-line">Your AI stylist</p>
-        <h1 className="mira-home-brand" aria-label="Mira">MIRA</h1>
-        <div className="mira-home-cta">
-          <button type="button" className="mira-home-enter" onClick={onGuest}>
-            Start styling
-          </button>
+      <nav className="mira-category-nav" aria-label="Shop categories">
+        {['Dresses', 'Tops', 'Bottoms', 'Bags', 'Shoes', 'Outerwear'].map((category, index) => (
+          <button key={category} type="button" className={index === 0 ? 'is-active' : ''} onClick={onGuest}>{category}</button>
+        ))}
+        <span className="mira-category-spacer" />
+        <button type="button" onClick={onGuest}>Filters</button>
+        <button type="button" onClick={() => setShowBrands(true)}>Brands</button>
+      </nav>
+
+      <main className="mira-dashboard-main">
+        <section className="mira-dashboard-grid" aria-label="Mira styling studio">
+          <article className="mira-style-hero">
+            <img src="/hero-home.jpg" alt="A woman relaxing in a cream outfit" />
+            <div className="mira-style-hero-shade" />
+            <div className="mira-style-hero-top"><span>MIRA</span><b>✦ Featured</b></div>
+            <button type="button" className="mira-hero-arrow mira-hero-arrow--left" aria-label="Previous look" onClick={onGuest}>‹</button>
+            <button type="button" className="mira-hero-arrow" aria-label="Next look" onClick={onGuest}>›</button>
+            <div className="mira-style-hero-copy">
+              <p>Today’s edit</p>
+              <h1>Soft tailoring,<br />made personal.</h1>
+              <button type="button" onClick={onGuest}>Explore the look <span>→</span></button>
+            </div>
+          </article>
+
+          <article className="mira-tryon-card">
+            <div className="mira-panel-heading"><div><span className="mira-panel-avatar">✦</span> Virtual try-on <em>Preview</em></div><button type="button" aria-label="Open try-on" onClick={onGuest}>↗</button></div>
+            <div className="mira-tryon-preview"><img src="/hero-home-sm.jpg" alt="Virtual try-on preview" /><span className="mira-tryon-spark">✦</span></div>
+            <div className="mira-tryon-copy"><h2>See it on you</h2><p>Upload a photo and discover your next favourite look.</p><button type="button" onClick={onGuest}>Start a try-on <span>→</span></button></div>
+          </article>
+        </section>
+
+        <section className="mira-recommendations" aria-labelledby="mira-recommendations-title">
+          <div className="mira-section-heading"><div><p>Curated for you</p><h2 id="mira-recommendations-title">Fresh looks to explore</h2></div><button type="button" onClick={onGuest}>See all <span>→</span></button></div>
+          <div className="mira-look-row">
+            {['The polished set', 'Weekend ease', 'A little after-dark', 'Finishing touches'].map((look, index) => (
+              <button type="button" className={`mira-look-card mira-look-card--${index + 1}`} key={look} onClick={onGuest}>
+                <span className="mira-look-card-image"><img src={index === 2 ? '/hero-home-sm.jpg' : '/hero-home.jpg'} alt="" /></span>
+                <span><b>{look}</b><small>{['4 pieces', '5 pieces', '3 pieces', 'Accessories'][index]}</small></span>
+              </button>
+            ))}
+          </div>
+        </section>
+      </main>
+
+      <div className="mira-prompt-dock">
+        <div className="mira-prompt-orb">✦</div>
+        <div className="mira-prompt-chips">
+          {quickPrompts.map((quickPrompt) => <button key={quickPrompt} type="button" onClick={onGuest}>{quickPrompt}</button>)}
         </div>
+        <form className="mira-prompt-form" onSubmit={submitPrompt}>
+          <input value={prompt} onChange={(event) => setPrompt(event.target.value)} placeholder="Ask Mira anything — e.g. purple dresses" aria-label="Ask Mira anything" />
+          <button type="submit">Send <span>→</span></button>
+        </form>
       </div>
 
       {showAuth && (

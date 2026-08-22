@@ -2,11 +2,16 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 
+// Codespaces terminates TLS at the *.app.github.dev edge and proxies plain HTTP
+// upstream, so serving TLS here makes the forwarded URL 502. The browser still
+// gets HTTPS (and a secure context) either way.
+const inCodespaces = process.env.CODESPACES === "true";
+
 // Dev server for the Mira web shell. The Python brain will run as a separate API
 // (see docs/14-ui-strategy.md) — UI and backend stay independent in the monorepo.
 // basicSsl enables https://127.0.0.1:5173 for local OAuth / secure-context APIs.
 export default defineConfig({
-  plugins: [react(), basicSsl()],
+  plugins: [react(), ...(inCodespaces ? [] : [basicSsl()])],
   build: {
     rollupOptions: {
       output: {
@@ -24,7 +29,7 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    https: true,
+    https: !inCodespaces,
     headers: {
       "Cache-Control": "no-store, max-age=0",
     },
@@ -43,7 +48,9 @@ export default defineConfig({
           clientPort: Number(process.env.VITE_HMR_CLIENT_PORT),
           protocol: process.env.VITE_HMR_PROTOCOL || "wss",
         }
-      : true,
+      : inCodespaces
+        ? { clientPort: 443, protocol: "wss" }
+        : true,
     // Proxy the voice bridge so the browser connects SAME-ORIGIN (wss://<5173 host>/mira-ws).
     // In Codespaces a separate forwarded port lives on a different *.app.github.dev
     // subdomain whose tunnel relay rejects cross-origin WS upgrades (HTTP 426 + auth

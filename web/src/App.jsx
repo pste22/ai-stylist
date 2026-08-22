@@ -258,18 +258,19 @@ function MiraBubbleContent({ text }) {
 
 // Unified product display — grid for browse, snap-rail for chat.
 const PRODUCTS_PER_TURN = 3;
-function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll, userSize, onTryOn, rail }) {
+function ProductGrid({ products, loved, onLove, onBuy, highlightedId, onSelect, inCart, onAddToCart, showAll, label, onShopAll, userSize, onTryOn, rail, variant, onViewSimilar }) {
   if (!products?.length) return null;
   const shown = showAll ? products : products.slice(0, PRODUCTS_PER_TURN);
   const allInCart = products.every((p) => inCart?.(p.id));
   return (
     <div className={`product-grid-wrap${rail ? " product-grid-wrap--rail" : ""}`}>
       {label && <div className="product-grid-label"><span>{label}</span></div>}
-      <div className={rail ? "product-rail" : "product-grid"}>
+      <div className={rail ? "product-rail" : (variant === "catalog" ? "pc-grid" : "product-grid")}>
         {shown.map((p) => (
           <ProductCard key={p.id} product={p} loved={loved.has(p.id)}
             onLove={onLove} onBuy={onBuy} highlight={p.id === highlightedId} onSelect={onSelect}
-            inCart={inCart?.(p.id)} onAddToCart={onAddToCart} userSize={userSize} onTryOn={onTryOn} />
+            inCart={inCart?.(p.id)} onAddToCart={onAddToCart} userSize={userSize} onTryOn={onTryOn}
+            variant={variant} onViewSimilar={onViewSimilar} />
         ))}
       </div>
       {onShopAll && (
@@ -616,6 +617,65 @@ function FeaturedProduct({ product, loved, onLove, onBuy, reason, onSendPrompt }
         <p className="fp-disclosure">Affiliate link · Mira earns a small commission</p>
       </div>
     </div>
+  );
+}
+
+// ─── Shop-the-look outfit panel (docked on the right) ─────────────────────────
+function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddAllToCart, onSelect, onClose }) {
+  if (!look) return null;
+  const items = look.all_items && look.all_items.length ? look.all_items : [look.hero, ...(look.items || [])].filter(Boolean);
+  if (!items.length) return null;
+  const cur = look.currency === "INR" ? "₹" : "$";
+  const total = look.total != null ? look.total : items.reduce((s, p) => s + Number(p?.price || 0), 0);
+  const allInCart = items.every((p) => inCart(p.id));
+
+  return (
+    <aside className="full-look-panel" role="complementary" aria-label="Shop the full look">
+      <div className="flp-head">
+        <div>
+          <p className="flp-eyebrow">✦ Styled by Mira</p>
+          <h3 className="flp-title">{look.title || "Shop the full look"}</h3>
+        </div>
+        <button className="flp-close" aria-label="Close" onClick={onClose}>✕</button>
+      </div>
+
+      <div className="flp-items">
+        {items.map((p) => {
+          const usePhoto = isProductPhotoUrl(p.image_url);
+          const isLoved = loved.has(p.id);
+          const isHero = p.mix_role === "hero";
+          return (
+            <div key={p.id} className={`flp-item${isHero ? " is-hero" : ""}`}>
+              <button className="flp-thumb" onClick={() => onSelect?.(p)} aria-label={`View ${p.name}`}>
+                {usePhoto
+                  ? <img src={hdProductImageUrl(p.image_url, { longest: 400 })} alt={p.name} loading="lazy" decoding="async" />
+                  : <span className="flp-thumb-emoji" style={{ "--swatch": swatchColor(p.color) }}>{CATEGORY_EMOJI[p.category] || "🛍️"}</span>}
+                <span className="flp-slot-tag">{isHero ? "Your pick" : (p.category || "piece")}</span>
+              </button>
+              <div className="flp-item-info">
+                <p className="flp-item-name">{p.name}</p>
+                <p className="flp-item-price">{cur}{p.price}</p>
+                <div className="flp-item-actions">
+                  <button className={`flp-heart${isLoved ? " is-loved" : ""}`} onClick={() => onLove(p)} aria-label={isLoved ? "Remove from saved" : "Save"}>{isLoved ? "♥" : "♡"}</button>
+                  <button className={`flp-add${inCart(p.id) ? " is-in" : ""}`} onClick={() => onAddToCart(p)}>{inCart(p.id) ? "✓ In bag" : "Add"}</button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="flp-foot">
+        <div className="flp-total">
+          <span>Complete the outfit</span>
+          <strong>{cur}{Math.round(total).toLocaleString("en-IN")}</strong>
+        </div>
+        <button className="flp-shop-all" onClick={() => onAddAllToCart(items)} disabled={allInCart}>
+          {allInCart ? "✓ Whole look in your bag" : "Add the whole look to bag →"}
+        </button>
+        <p className="flp-disclosure">Affiliate links · Mira earns a small commission</p>
+      </div>
+    </aside>
   );
 }
 
@@ -1377,7 +1437,8 @@ export default function App() {
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, browseCategory, sendVisualSearch, vsLoading, setVsLoading,
-    sendLikeReason, quickReplies, dismissQuickReplies,
+    sendLikeReason, quickReplies, dismissQuickReplies, styleFullLook,
+    fullLook, setFullLook,
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat, askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
     sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn, tryOnLookItems,
@@ -1822,6 +1883,19 @@ export default function App() {
 
         <div className="chat-canvas">
           <ChatSketchWallpaper />
+          {fullLook && (
+            <FullLookPanel
+              look={fullLook}
+              loved={loved}
+              onLove={handleLove}
+              onBuy={buyClick}
+              inCart={inCart}
+              onAddToCart={toggleCart}
+              onAddAllToCart={toggleAllInCart}
+              onSelect={setQuickViewProduct}
+              onClose={() => setFullLook(null)}
+            />
+          )}
           <div className="chat-thread" ref={threadRef}>
           {finishNudgeVisible && isLookIncomplete(lookProgress) && (
             <FinishLookNudge
@@ -1835,23 +1909,56 @@ export default function App() {
           )}
 
           {filterResults && (
-            <div className="cf-results" id="cf-results-panel">
-              <div className="cf-results-head">
-                <div>
-                  <p className="cf-results-title">
-                    Showing {filterResults.products.length.toLocaleString("en-IN")}
-                    {filterResults.total != null ? ` of ${filterResults.total.toLocaleString("en-IN")}` : ""} matching items
+            <div className="cf-results cat-results" id="cf-results-panel">
+              <div className="cat-head">
+                <div className="cat-head-copy">
+                  <p className="cat-eyebrow">✦ Styled by Mira</p>
+                  <h2 className="cat-title">
+                    {activeFilter && activeFilter !== "all"
+                      ? activeFilter.charAt(0).toUpperCase() + activeFilter.slice(1)
+                      : "Your edit"}
+                  </h2>
+                  <p className="cat-count">
+                    {filterResults.products.length.toLocaleString("en-IN")}
+                    {filterResults.total != null ? ` of ${filterResults.total.toLocaleString("en-IN")}` : ""} pieces
+                    {filterResults.summary ? ` · ${filterResults.summary}` : ""}
                   </p>
-                  {filterResults.summary && (
-                    <p className="cf-results-summary">{filterResults.summary}</p>
-                  )}
                 </div>
                 <button
                   type="button"
-                  className="cf-results-close"
+                  className="cat-close"
+                  aria-label="Close results"
                   onClick={() => { setFilterResults(null); setActiveFilter("all"); }}
                 >✕</button>
               </div>
+
+              {filterResults.products.length > 0 && (
+                <div className="cat-strip">
+                  <div className="cat-strip-head">
+                    <p className="cat-strip-title">Picked for your style</p>
+                    <button type="button" className="cat-strip-link"
+                      onClick={() => {
+                        const hero = filterResults.products?.[0];
+                        if (filterResults) { setFilterResults(null); setActiveFilter("all"); }
+                        if (!connected || !styleFullLook(hero?.id)) {
+                          sendChat("Style a full look around these picks");
+                        }
+                      }}>
+                      Style the full look →
+                    </button>
+                  </div>
+                  <div className="cat-strip-rail">
+                    {filterResults.products.slice(0, 6).map((p) => (
+                      <button key={`pick-${p.id}`} type="button" className="cat-pick"
+                        onClick={() => setQuickViewProduct(p)}>
+                        <img src={hdProductImageUrl(p.image_url, { longest: 400 })} alt="" loading="lazy" />
+                        <span>{p.brand || p.name}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {filterResults.products.length > 0 ? (
                 <>
                   <ProductGrid
@@ -1863,6 +1970,8 @@ export default function App() {
                     inCart={inCart}
                     onAddToCart={toggleCart}
                     showAll
+                    variant="catalog"
+                    onViewSimilar={(p) => sendChat(`Show me pieces similar to ${p.brand ? p.brand + " " : ""}${p.name}`)}
                     userSize={effectivePrefs?.top_size || effectivePrefs?.bottom_size || null}
                     onTryOn={openTryOn}
                   />

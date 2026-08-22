@@ -67,7 +67,35 @@ export function shouldContainProductPhoto(category) {
   return CONTAIN_CATEGORIES.has(String(category || "").toLowerCase());
 }
 
-export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact, userSize, onTryOn }) {
+function titleCase(value) {
+  const s = String(value || "").replace(/_/g, " ").trim();
+  return s ? s.charAt(0).toUpperCase() + s.slice(1) : "";
+}
+
+/* Titles usually repeat the brand ("Allen Solly Women Blouse") — drop it so the
+   brand line and product line aren't saying the same thing twice. */
+function splitBrandTitle(product) {
+  const brand = product.brand || product.facets?.brand || null;
+  const name = product.name || "";
+  if (!brand) return { brand: null, title: name };
+  const stripped = name.toLowerCase().startsWith(brand.toLowerCase())
+    ? name.slice(brand.length).replace(/^[\s\-–—·,]+/, "")
+    : name;
+  return { brand, title: stripped || name };
+}
+
+/* Tags are derived only from facets the catalogue actually has, so cards never
+   claim a style the data can't back up. */
+function styleTags(product) {
+  const f = product.facets || {};
+  const tags = [];
+  if (f.new_in) tags.push("New in");
+  (Array.isArray(f.occasion) ? f.occasion : []).forEach((o) => tags.push(titleCase(o)));
+  [f.fit, f.pattern, f.material].forEach((v) => { if (v) tags.push(titleCase(v)); });
+  return [...new Set(tags.filter(Boolean))].slice(0, 3);
+}
+
+export default function ProductCard({ product, loved, highlighted, inCart, onLove, onBuy, onAddToCart, onSelect, compact, userSize, onTryOn, variant, onViewSimilar }) {
   const [imgLoaded, setImgLoaded] = useState(false);
   const [imgError, setImgError]   = useState(false);
   const [useHd, setUseHd]         = useState(true);
@@ -147,6 +175,79 @@ export default function ProductCard({ product, loved, highlighted, inCart, onLov
           </div>
         </div>
       </div>
+    );
+  }
+
+  /* ── Catalog card: premium results-grid presentation ── */
+  if (variant === "catalog") {
+    const { brand, title } = splitBrandTitle(product);
+    const tags = styleTags(product);
+    return (
+      <article
+        className={`pc${loved ? " is-loved" : ""}${highlighted ? " is-highlighted" : ""}`}
+        onClick={() => onSelect?.(product)}
+      >
+        <div className="pc-media">
+          {thumbnail}
+          {isUserSize && <span className="pc-flag">Your size</span>}
+          <button
+            className={`pc-save${loved ? " is-loved" : ""}`}
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onLove(product); }}
+            aria-label={loved ? "Remove from saved" : "Save item"}
+          >
+            {loved ? "♥" : "♡"}
+          </button>
+          <div className="pc-quick">
+            <button
+              className="pc-quick-btn pc-quick-btn--primary"
+              type="button"
+              disabled={!onTryOn}
+              onClick={(e) => { e.stopPropagation(); onTryOn?.(product); }}
+            >
+              Try on
+            </button>
+            <button
+              className="pc-quick-btn"
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onAddToCart?.(product); }}
+            >
+              {inCart ? "In bag" : "Add to bag"}
+            </button>
+            {onViewSimilar && (
+              <button
+                className="pc-quick-btn"
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onViewSimilar(product); }}
+              >
+                View similar
+              </button>
+            )}
+          </div>
+        </div>
+
+        <div className="pc-info">
+          {brand && <p className="pc-brand">{brand}</p>}
+          <h3 className="pc-title">{title}</h3>
+          {tags.length > 0 && (
+            <ul className="pc-tags">
+              {tags.map((t) => <li key={t}>{t}</li>)}
+            </ul>
+          )}
+          <div className="pc-foot">
+            <strong className="pc-price">{priceStr}</strong>
+            <a
+              className="pc-shop"
+              href={trackedAffiliateUrl(product)}
+              target="_blank"
+              rel="noopener noreferrer nofollow sponsored"
+              onClick={(e) => { e.stopPropagation(); onBuy?.(product); }}
+            >
+              {shopLabel(product, { short: true })}
+            </a>
+          </div>
+        </div>
+      </article>
     );
   }
 

@@ -909,6 +909,24 @@ def _log_session_cost(
         print(f"  ! cost log failed (non-fatal): {exc}")
 
 
+# Quota/billing/auth rejections are permanent — reconnecting can never clear them.
+_UNRECOVERABLE_LIVE_ERRORS = (
+    "spend cap",
+    "quota",
+    "billing",
+    "resource_exhausted",
+    "permission_denied",
+    "unauthenticated",
+    "api key not valid",
+    "api_key_invalid",
+)
+
+
+def _is_unrecoverable_live_error(exc: Exception) -> bool:
+    text = str(exc).lower()
+    return any(marker in text for marker in _UNRECOVERABLE_LIVE_ERRORS)
+
+
 async def handle(ws) -> None:
     """One browser connection ⇆ a Gemini Live session that auto-reconnects on drop.
 
@@ -1202,7 +1220,9 @@ async def handle(ws) -> None:
         return True
 
     _COMPLETE_LOOK_RE = re.compile(
-        r"complete the look|fill what.?s missing|finish (the |this )?look|what.?s missing",
+        r"complete (the|my|this) look|fill what.?s missing"
+        r"|finish (the |this |my )?look|what.?s (still |left )?missing"
+        r"|style (a |the )?(full |complete )?look around",
         re.I,
     )
 
@@ -1248,12 +1268,15 @@ async def handle(ws) -> None:
             await _send_json(ws, type="state", state="idle", mood="neutral")
         return False
 
-    async def _maybe_complete_look(text: str) -> bool:
+    async def _maybe_complete_look(text: str, hero_id: str | None = None) -> bool:
         """Fill empty outfit slots around the last shown/saved piece — not a random accessory dump."""
-        if not _COMPLETE_LOOK_RE.search(text or ""):
+        if hero_id is None and not _COMPLETE_LOOK_RE.search(text or ""):
             return False
         hero = None
-        if session_saved:
+        # An explicit hero (the piece the user is looking at) wins over session guesses.
+        if hero_id:
+            hero = _BY_ID.get(hero_id)
+        if not hero and session_saved:
             last_id = next(reversed(session_saved))
             hero = _BY_ID.get(last_id)
         if not hero:
@@ -1284,23 +1307,35 @@ async def handle(ws) -> None:
                 text="I've already shown the companions I have for that piece. Want a different category?",
             )
             return True
-        batch = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in pieces]
-        last_shown_ids[:] = [p["id"] for p in batch]
-        for p in batch:
+        # Pin the hero first so the row reads as one coordinated outfit (VTO-style).
+        hero_card = _mix_card(hero, affiliate_url=_affiliate_url(hero))
+        hero_card["mix_role"] = "hero"
+        slot_cards = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in pieces]
+        batch = [hero_card, *slot_cards]
+        last_shown_ids[:] = [p["id"] for p in slot_cards]
+        for p in slot_cards:
             session_shown_ids.add(p["id"])
             catalog_fulfilled_ids.add(p["id"])
-        cats = [p.get("category") for p in batch if p.get("category")]
+        cats = [p.get("category") for p in slot_cards if p.get("category")]
         if cats:
             session_last_categories[:] = cats
+        slot_names = [p.get("category") for p in slot_cards if p.get("category")]
+        pretty = ", ".join(slot_names[:-1]) + (" and " + slot_names[-1] if len(slot_names) > 1 else (slot_names[0] if slot_names else "pieces"))
+        hero_name = (hero.get("name") or "that piece").strip()
+        total = sum(float(p.get("price") or 0) for p in batch)
+        currency = hero.get("currency") or (batch[0].get("currency") if batch else None) or "USD"
+        # Dedicated outfit panel (renders separately on the right), not in the thread.
         await _send_json(
-            ws, type="products", items=batch, show_more=True,
-            label="To complete the look", paged=True,
+            ws, type="full_look",
+            hero=hero_card, items=slot_cards, all_items=batch,
+            total=round(total, 2), currency=currency,
+            title=f"The full look around your {(hero.get('category') or 'pick').rstrip('s')}",
         )
         await _send_json(
             ws, type="transcript", who="mira",
-            text="Here's what I'd add to finish the look ✦",
+            text=f"Styled a full look around the {hero_name} — matched a {pretty} from our shelves. Shop the whole outfit on the right ✦",
         )
-        print(f"  complete_look → hero={hero.get('name')!r} slots={[p.get('category') for p in batch]}")
+        print(f"  complete_look → hero={hero.get('name')!r} slots={[p.get('category') for p in slot_cards]}")
         return True
 
     _BUDGET_RE = re.compile(
@@ -1345,6 +1380,15 @@ async def handle(ws) -> None:
         if looks:
             await _send_json(ws, type="looks", items=looks)
             label = f"₹{int(budget_max):,}" if budget_max else "any budget"
+            # Speak for ourselves: Gemini may be unavailable, and a silent deck
+            # reads as the bot ignoring the tap.
+            bound = f" under ₹{int(budget_max):,}" if budget_max else ""
+            await _send_json(
+                ws, type="transcript", who="mira",
+                text=f"Here {'is' if len(looks) == 1 else 'are'} {len(looks)} "
+                     f"{occ} look{'' if len(looks) == 1 else 's'}{bound} I'd put together ✦",
+            )
+            await _send_json(ws, type="state", state="idle", mood="neutral")
             print(f"  💰 budget look: {occ}, {label} → {len(looks)} looks")
         return bool(looks)
 
@@ -2323,6 +2367,14 @@ async def handle(ws) -> None:
                                 )
                             except Exception as exc:
                                 print(f"  ! like_reason session inject failed: {exc}")
+                    elif data.get("type") == "complete_look":
+                        # Explicit "Style a full look" around the piece on screen.
+                        hero_id = (data.get("hero_id") or "").strip() or None
+                        catalog_fulfilled_ids.clear()
+                        await _send_json(ws, type="transcript", who="you",
+                                         text="Style a full look around this")
+                        await _maybe_complete_look("", hero_id=hero_id)
+
                     elif data.get("type") == "text_input":
                         text = (data.get("text") or "").strip()
                         if text:
@@ -3159,12 +3211,29 @@ async def handle(ws) -> None:
                 break  # browser gone
             except Exception as exc:
                 dur = asyncio.get_event_loop().time() - t0
-                print(f"  ! Live session dropped after {dur:.1f}s ({exc}) — reconnecting")
+                fatal = _is_unrecoverable_live_error(exc)
+                print(
+                    f"  ! Live session dropped after {dur:.1f}s ({exc})"
+                    + (" — not retrying" if fatal else " — reconnecting")
+                )
                 await asyncio.to_thread(
                     _log_session_cost,
                     session_id, user_id,
                     session_prompt_tokens, session_response_tokens, dur,
                 )
+                if fatal:
+                    # Retrying a quota/billing/auth rejection can never succeed and
+                    # just hammers the API, so surface it and stop.
+                    try:
+                        await _send_json(
+                            ws,
+                            type="error",
+                            message="Mira's AI service is unavailable right now "
+                                    "(usage limit reached). Please try again later.",
+                        )
+                    except Exception:
+                        pass
+                    break
             finally:
                 current["session"] = None
             if stop.is_set():
