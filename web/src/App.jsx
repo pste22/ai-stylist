@@ -10,7 +10,7 @@ import { useCart } from "./useCart.js";
 import { usePhotoProfile } from "./usePhotoProfile.js";
 import { saveTryOn, getTryOn, listTryOns, photoSignature } from "./tryOnDB.js";
 import { track, identify } from "./analytics.js";
-import { stashPendingTryOn, takePendingTryOn } from "./pendingTryOn.js";
+import { stashPendingTryOn, takePendingTryOn, stashPendingLookOnMe, takePendingLookOnMe } from "./pendingTryOn.js";
 import { useNetworkMode, checkNetworkNow } from "./useNetworkMode.js";
 import { ReasonPicker } from "./ReasonPicker.jsx";
 import { usePlatformPulse } from "./usePlatformPulse.js";
@@ -642,9 +642,29 @@ function isLookShoe(p) {
   return /shoe|sneaker|sandal|heel|mule|loafer|boot|espadrille|wedge|slip-?on/.test(lookHaystack(p));
 }
 
+function isLookBag(p) {
+  const cat = lookCategory(p);
+  if (cat === "bags") return true;
+  return /bag|tote|clutch|sling|handbag|purse|satchel/.test(lookHaystack(p));
+}
+
+function layerHintFor(p) {
+  if (isLookBottom(p)) return "Adding your bottom…";
+  if (isLookShoe(p)) return "Stepping into the shoes…";
+  if (isLookBag(p)) return "Finishing with a bag…";
+  return "Trying that on you with this top…";
+}
+
+function lookLayerBase(piece, views) {
+  const cat = lookCategory(piece);
+  if (cat === "bottoms" || isLookBottom(piece)) return views?.front || views?.look || null;
+  return views?.look || views?.front || null;
+}
+
 function lookCategoryLabel(p) {
   if (isLookBottom(p)) return "Bottoms";
   if (isLookShoe(p)) return "Shoes";
+  if (isLookBag(p)) return "Bags";
   const cat = lookCategory(p);
   if (cat === "bags") return "Bags";
   if (cat === "tops" || cat === "outerwear") return "Tops";
@@ -771,19 +791,22 @@ function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onT
   );
 }
 
-function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddAllToCart, onSelect, onClose, onTryOn, heroStill }) {
+function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddAllToCart, onSelect, onClose, onTryOn, onSeeOnMe, heroStill }) {
   const derived = look ? deriveShopLook(look) : { pinned: null, bottoms: [], accents: [], items: [] };
   const { pinned, bottoms, accents, items } = derived;
   const bottomKey = bottoms.map((p) => p.id).join(",");
   const shoeKey = accents.filter(isLookShoe).map((p) => p.id).join(",");
+  const bagKey = accents.filter(isLookBag).map((p) => p.id).join(",");
   const [chosenId, setChosenId] = useState(null);
   const [chosenShoeId, setChosenShoeId] = useState(null);
+  const [chosenBagId, setChosenBagId] = useState(null);
   const [showAll, setShowAll] = useState(false);
   useEffect(() => {
     setChosenId(bottoms[0]?.id || null);
     setChosenShoeId(accents.find(isLookShoe)?.id || null);
+    setChosenBagId(accents.find(isLookBag)?.id || null);
     setShowAll(false);
-  }, [bottomKey, shoeKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bottomKey, shoeKey, bagKey]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!look) return null;
   if (!items.length && !pinned && !bottoms.length) return null;
 
@@ -791,14 +814,17 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
   const chosenShoe = accents.find((p) => p.id === chosenShoeId && isLookShoe(p))
     || accents.find(isLookShoe)
     || null;
+  const chosenBag = accents.find((p) => p.id === chosenBagId && isLookBag(p))
+    || accents.find(isLookBag)
+    || null;
   const outfit = [];
   const addPiece = (p) => {
     if (p?.id && !outfit.some((x) => x.id === p.id)) outfit.push(p);
   };
   addPiece(pinned);
   addPiece(chosen);
-  const bag = accents.find((p) => lookCategory(p) === "bags") || null;
   addPiece(chosenShoe);
+  addPiece(chosenBag);
   if (look.hero && !["tops", "outerwear", "bottoms"].includes(lookCategory(look.hero))) {
     addPiece(look.hero);
   }
@@ -812,7 +838,7 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
   const rail = mixMode
     ? [...bottoms, ...accents]
     : items.filter((p) => p.id !== heroProduct?.id);
-  const visibleRail = showAll ? rail : rail.slice(0, 4);
+  const visibleRail = showAll ? rail : rail.slice(0, 5);
   const heroPhoto = lookShot(heroProduct, 1200);
   const heroSrc = heroStill?.image
     ? `data:${heroStill.mime || "image/png"};base64,${heroStill.image}`
@@ -821,16 +847,32 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
   const slots = [
     { key: "top", label: "Top", product: heroProduct },
     { key: "bottom", label: "Bottom", product: chosen },
-    { key: "shoes", label: "Shoes", product: chosenShoe || bag },
+    { key: "shoes", label: "Shoes", product: chosenShoe },
+    { key: "bag", label: "Bag", product: chosenBag },
   ];
   const choose = (p) => {
     if (isLookBottom(p)) setChosenId(p.id);
     else if (isLookShoe(p)) setChosenShoeId(p.id);
+    else if (isLookBag(p)) setChosenBagId(p.id);
   };
   const rowSelected = (p) => (
     (isLookBottom(p) && chosen?.id === p.id) ||
-    (isLookShoe(p) && chosenShoe?.id === p.id)
+    (isLookShoe(p) && chosenShoe?.id === p.id) ||
+    (isLookBag(p) && chosenBag?.id === p.id)
   );
+  const seeOnMe = (focus) => {
+    let bottom = chosen;
+    let shoe = chosenShoe;
+    let bag = chosenBag;
+    if (focus) {
+      if (isLookBottom(focus)) bottom = focus;
+      else if (isLookShoe(focus)) shoe = focus;
+      else if (isLookBag(focus)) bag = focus;
+    }
+    const pieces = [bottom, shoe, bag].filter((p) => p?.id && p.id !== heroProduct?.id);
+    if (onSeeOnMe) onSeeOnMe({ hero: heroProduct, pieces });
+    else if (onTryOn) onTryOn(focus || heroProduct);
+  };
 
   return (
     <aside className="full-look-panel is-page" role="dialog" aria-label="Style the Look">
@@ -855,7 +897,7 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
                 </div>
               )}
               <div className="flp-using-actions">
-                {onTryOn && <button type="button" className="flp-chip-btn" onClick={() => onTryOn(heroProduct)}>Try on</button>}
+                {(onSeeOnMe || onTryOn) && <button type="button" className="flp-chip-btn" onClick={() => seeOnMe(heroProduct)}>Try on</button>}
                 <button type="button" className={`flp-chip-btn${loved.has(heroProduct.id) ? " is-loved" : ""}`} onClick={() => onLove(heroProduct)}>
                   {loved.has(heroProduct.id) ? "Saved" : "Save"}
                 </button>
@@ -882,8 +924,8 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
         </div>
 
         <div className="flp-col flp-col-recs">
-          <h3 className="flp-recs-title">{mixMode ? "Pick a bottom for this top" : (look.title || "Complete the Look")}</h3>
-          <p className="flp-recs-sub">AI-curated recommendations based on style, color &amp; occasion.</p>
+          <h3 className="flp-recs-title">{mixMode ? "Pick bottoms, shoes & a bag" : (look.title || "Complete the Look")}</h3>
+          <p className="flp-recs-sub">AI-curated to pair with this top — then see the whole look on you.</p>
           <div className="flp-rows" role="list">
             {visibleRail.map((p, i) => (
               <FlpRecoRow
@@ -895,7 +937,7 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
                 onChoose={mixMode ? choose : null}
                 onSelect={onSelect}
                 onLove={onLove}
-                onTryOn={onTryOn}
+                onTryOn={(p) => seeOnMe(p)}
               />
             ))}
           </div>
@@ -912,6 +954,11 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
           <span>The look</span>
           <strong>{cur}{Math.round(total).toLocaleString("en-IN")}</strong>
         </div>
+        {(onSeeOnMe || onTryOn) && (
+          <button type="button" className="flp-on-me" onClick={() => seeOnMe()}>
+            See this look on me
+          </button>
+        )}
         <button className="flp-shop-all" onClick={() => onAddAllToCart(outfit)} disabled={allInCart || !outfit.length}>
           {allInCart ? "✓ In your bag" : "Add the look →"}
         </button>
@@ -1621,6 +1668,11 @@ export default function App() {
   const pendingOccasionStartRef = useRef(false);
   const pendingTryOnStartRef = useRef(false);
   const pendingAskRef = useRef(null); // { product, promptKey } after Quick View Ask Mira
+  const pendingLookLayersRef = useRef([]);
+  const lookLayerLockRef = useRef(false);
+  const inflightLookLayerRef = useRef(null);
+  const lastLookStillRef = useRef(null);
+  const [lookLayerHint, setLookLayerHint] = useState("");
   const [vsResults, setVsResults]         = useState([]);
   const [bootReady, setBootReady]         = useState(false);
   const [vsQuery, setVsQuery]             = useState("");
@@ -1844,16 +1896,24 @@ export default function App() {
 
   // Open the try-on modal for a product; ensure a session is running so the
   // photo upload can reach the server (text mode → no mic popup).
-  const openTryOn = (product) => {
+  const openTryOn = (product, { keepLookQueue = false } = {}) => {
     recordPulseAction("try_on");
     // Gate the paid try-on behind sign-in (guest video/image gen is a cost vector).
     if (!user) {
       stashPendingTryOn(product);
+      if (pendingLookLayersRef.current.length) stashPendingLookOnMe(pendingLookLayersRef.current);
       setSignInPrompt(true);
       track("signin_prompt_shown", { from: "try_on", product_id: product?.id });
       return;
     }
     track("try_on_opened", { product_id: product?.id, category: product?.category });
+    if (!keepLookQueue) {
+      pendingLookLayersRef.current = [];
+      lookLayerLockRef.current = false;
+      inflightLookLayerRef.current = null;
+      lastLookStillRef.current = null;
+      setLookLayerHint("");
+    }
     clearTryOn();
     setTryOnProduct(product);
     setShowFittingRoom(false);
@@ -1866,6 +1926,32 @@ export default function App() {
     }
   };
 
+  const startAssembledLook = (hero, pieces) => {
+    if (!hero) return;
+    const queue = (pieces || []).filter((p) => p?.id && p.id !== hero.id);
+    pendingLookLayersRef.current = queue;
+    lookLayerLockRef.current = false;
+    inflightLookLayerRef.current = null;
+    lastLookStillRef.current = null;
+    setLookLayerHint(queue[0] ? layerHintFor(queue[0]) : "");
+    addToLookProgress(hero);
+    queue.forEach(addToLookProgress);
+    setFullLook(null);
+    if (!user) {
+      stashPendingTryOn(hero);
+      stashPendingLookOnMe(queue);
+      setSignInPrompt(true);
+      track("signin_prompt_shown", { from: "look_on_me", product_id: hero.id });
+      return;
+    }
+    track("look_on_me_started", {
+      product_id: hero.id,
+      pieces: queue.map((p) => p.id),
+      categories: queue.map((p) => p.category),
+    });
+    openTryOn(hero, { keepLookQueue: true });
+  };
+
   // After OAuth, reopen the piece they tapped Try-On on — don't dump them on home.
   const resumedTryOnRef = useRef(false);
   useEffect(() => {
@@ -1873,8 +1959,47 @@ export default function App() {
     const pending = takePendingTryOn();
     if (!pending) return;
     resumedTryOnRef.current = true;
-    openTryOn(pending);
+    const lookPieces = takePendingLookOnMe();
+    if (lookPieces.length) startAssembledLook(pending, lookPieces);
+    else openTryOn(pending);
   }, [user, needsOnboarding]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Layer chosen bottoms / shoes / bag onto the hero try-on, one piece at a time.
+  // Wait for the look still — not side/back angles — before starting the next piece.
+  useEffect(() => {
+    const lookImg = tryOnResult?.productId === tryOnProduct?.id ? tryOnResult?.views?.look?.image : null;
+    if (lookImg && lookImg !== lastLookStillRef.current) {
+      lastLookStillRef.current = lookImg;
+      inflightLookLayerRef.current = null;
+      lookLayerLockRef.current = false;
+    }
+  }, [tryOnProduct, tryOnResult]);
+
+  useEffect(() => {
+    if (!tryOnProduct?.id) return;
+    if (inflightLookLayerRef.current || lookLayerLockRef.current) return;
+    if (tryOnError) {
+      pendingLookLayersRef.current = [];
+      inflightLookLayerRef.current = null;
+      setLookLayerHint("");
+      return;
+    }
+    const next = pendingLookLayersRef.current[0];
+    if (!next) {
+      setLookLayerHint("");
+      return;
+    }
+    const live = tryOnResult && tryOnResult.productId === tryOnProduct.id ? tryOnResult.views : {};
+    const saved = savedTryOn && savedTryOn.productId === tryOnProduct.id ? savedTryOn.views : {};
+    const views = { ...(saved || {}), ...(live || {}) };
+    const base = lookLayerBase(next, views);
+    if (!base?.image) return;
+    lookLayerLockRef.current = true;
+    inflightLookLayerRef.current = next.id;
+    pendingLookLayersRef.current = pendingLookLayersRef.current.slice(1);
+    setLookLayerHint(layerHintFor(next));
+    sendTryOnLayer(tryOnProduct.id, next, base.image, base.mime || "image/png");
+  }, [tryOnProduct, tryOnResult, savedTryOn, tryOnError, sendTryOnLayer]);
 
   // Persist a try-on to the Fitting Room (IndexedDB) as results/videos arrive.
   useEffect(() => {
@@ -2404,6 +2529,7 @@ export default function App() {
             onSelect={setQuickViewProduct}
             onClose={() => setFullLook(null)}
             onTryOn={(p) => { setFullLook(null); if (p) openTryOn(p); }}
+            onSeeOnMe={({ hero, pieces }) => startAssembledLook(hero, pieces)}
             heroStill={(() => {
               const ids = new Set([fullLook.hero?.id, fullLook.pinned?.id].filter(Boolean));
               if (!tryOnProduct?.id || !ids.has(tryOnProduct.id)) return null;
@@ -2573,11 +2699,20 @@ export default function App() {
         <Suspense fallback={null}>
           <TryOnModal
             product={tryOnProduct}
-            onClose={() => { setTryOnProduct(null); clearTryOn(); }}
+            onClose={() => {
+              pendingLookLayersRef.current = [];
+              lookLayerLockRef.current = false;
+              inflightLookLayerRef.current = null;
+              lastLookStillRef.current = null;
+              setLookLayerHint("");
+              setTryOnProduct(null);
+              clearTryOn();
+            }}
             onTryOn={sendTryOn}
             result={tryOnResult}
             loading={tryOnLoading}
             layering={tryOnLayering}
+            layerHint={lookLayerHint}
             error={tryOnError}
             onVideo={sendTryOnVideo}
             video={tryOnVideo}
@@ -2623,11 +2758,20 @@ export default function App() {
               if (!item || !tryOnProduct?.id) return;
               addToLookProgress(item);
               track("try_on_look_layer", { product_id: tryOnProduct.id, add_id: item.id, category: item.category });
+              if (inflightLookLayerRef.current || pendingLookLayersRef.current.length) {
+                pendingLookLayersRef.current = [
+                  ...pendingLookLayersRef.current.filter((p) => p.id !== item.id),
+                  item,
+                ];
+                return;
+              }
               const live = tryOnResult && tryOnResult.productId === tryOnProduct.id ? tryOnResult.views : {};
               const views = { ...(savedTryOn?.views || {}), ...live };
-              const cat = String(item.category || "").toLowerCase();
-              const base = cat === "bottoms" ? (views.front || views.look) : (views.look || views.front);
+              const base = lookLayerBase(item, views);
               if (!base?.image) return;
+              lookLayerLockRef.current = true;
+              inflightLookLayerRef.current = item.id;
+              setLookLayerHint(layerHintFor(item));
               sendTryOnLayer(tryOnProduct.id, item, base.image, base.mime || "image/png");
             }}
             onCompleteLook={(p) => {
