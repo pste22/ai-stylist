@@ -69,6 +69,7 @@ from curation_mix import (  # noqa: E402
     complements_for,
     look_slots_for,
     style_suggestions_for,
+    shop_look_for,
     card_fields as _mix_card,
     photo_quality,
 )
@@ -1298,21 +1299,44 @@ async def handle(ws) -> None:
                 text="Tap a piece you like first — then I'll fill in the rest of the look.",
             )
             return True
-        pieces = look_slots_for(hero, _CATALOG, exclude_ids=session_shown_ids)
-        if not pieces:
-            pieces = complements_for(hero, _CATALOG, n=4, exclude_ids=session_shown_ids)
-        if not pieces:
+        look = shop_look_for(hero, _CATALOG, shopper="women", exclude_ids=session_shown_ids)
+        pinned = look.get("pinned")
+        bottoms = look.get("bottoms") or []
+        accents = look.get("accents") or []
+        pieces = [p for p in [pinned, *bottoms, *accents] if p and p.get("id") and p.get("id") != hero.get("id")]
+        # Deduplicate while keeping order (hero may also be the pinned top).
+        seen_ids: set[str] = {hero["id"]} if hero.get("id") else set()
+        unique_pieces: list[dict] = []
+        for p in pieces:
+            pid = p.get("id")
+            if not pid or pid in seen_ids:
+                continue
+            seen_ids.add(pid)
+            unique_pieces.append(p)
+        if not unique_pieces:
+            unique_pieces = look_slots_for(hero, _CATALOG, exclude_ids=session_shown_ids)
+        if not unique_pieces:
+            unique_pieces = complements_for(hero, _CATALOG, n=4, exclude_ids=session_shown_ids)
+        if not unique_pieces and not bottoms:
             catalog_fulfilled_ids.add("complete_look")
             await _send_json(
                 ws, type="transcript", who="mira",
                 text="I've already shown the companions I have for that piece. Want a different category?",
             )
             return True
-        # Pin the hero first so the row reads as one coordinated outfit (VTO-style).
         hero_card = _mix_card(hero, affiliate_url=_affiliate_url(hero))
         hero_card["mix_role"] = "hero"
-        slot_cards = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in pieces]
-        batch = [hero_card, *slot_cards]
+        pinned_card = _mix_card(pinned, affiliate_url=_affiliate_url(pinned)) if pinned else None
+        if pinned_card:
+            pinned_card["mix_role"] = "pinned_top" if pinned.get("id") != hero.get("id") else "hero"
+        bottom_cards = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in bottoms]
+        accent_cards = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in accents]
+        slot_cards = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in unique_pieces]
+        chosen = bottom_cards[0] if bottom_cards else None
+        outfit = []
+        for p in (hero_card, pinned_card, chosen, *accent_cards):
+            if p and p.get("id") and p["id"] not in {x["id"] for x in outfit}:
+                outfit.append(p)
         last_shown_ids[:] = [p["id"] for p in slot_cards]
         for p in slot_cards:
             session_shown_ids.add(p["id"])
@@ -1320,23 +1344,41 @@ async def handle(ws) -> None:
         cats = [p.get("category") for p in slot_cards if p.get("category")]
         if cats:
             session_last_categories[:] = cats
-        slot_names = [p.get("category") for p in slot_cards if p.get("category")]
-        pretty = ", ".join(slot_names[:-1]) + (" and " + slot_names[-1] if len(slot_names) > 1 else (slot_names[0] if slot_names else "pieces"))
+        n_bottoms = len(bottom_cards)
+        pretty = (
+            f"{n_bottoms} bottoms to try with a pinned top"
+            if n_bottoms else
+            ", ".join([c for c in cats if c][:4]) or "pieces"
+        )
         hero_name = (hero.get("name") or "that piece").strip()
-        total = sum(float(p.get("price") or 0) for p in batch)
-        currency = hero.get("currency") or (batch[0].get("currency") if batch else None) or "USD"
-        # Dedicated outfit panel (renders separately on the right), not in the thread.
+        total = sum(float(p.get("price") or 0) for p in outfit)
+        currency = hero.get("currency") or (outfit[0].get("currency") if outfit else None) or "USD"
+        title = (
+            "Pick a bottom for this top"
+            if bottom_cards and pinned_card
+            else f"The full look around your {(hero.get('category') or 'pick').rstrip('s')}"
+        )
         await _send_json(
             ws, type="full_look",
-            hero=hero_card, items=slot_cards, all_items=batch,
+            hero=hero_card, items=slot_cards, all_items=outfit,
+            pinned=pinned_card, bottoms=bottom_cards, accents=accent_cards,
             total=round(total, 2), currency=currency,
-            title=f"The full look around your {(hero.get('category') or 'pick').rstrip('s')}",
+            title=title,
         )
         await _send_json(
             ws, type="transcript", who="mira",
-            text=f"Styled a full look around the {hero_name} — matched a {pretty} from our shelves. Shop the whole outfit on the right ✦",
+            text=(
+                f"Pinned a top next to the {hero_name} and lined up {n_bottoms} bottoms on the right — "
+                f"tap the pair you like. Shop the look on the right ✦"
+                if n_bottoms else
+                f"Styled a full look around the {hero_name} — matched {pretty} from our shelves. Shop the whole outfit on the right ✦"
+            ),
         )
-        print(f"  complete_look → hero={hero.get('name')!r} slots={[p.get('category') for p in slot_cards]}")
+        print(
+            f"  complete_look → hero={hero.get('name')!r} "
+            f"pinned={(pinned or {}).get('name')!r} bottoms={n_bottoms} "
+            f"accents={[p.get('category') for p in accent_cards]}"
+        )
         return True
 
     _BUDGET_RE = re.compile(
