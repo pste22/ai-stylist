@@ -727,6 +727,36 @@ def companion_top_for(
     return _tag(max(cands, key=_score), "pinned_top")
 
 
+def look_match_pct(hero: dict | None, piece: dict, shopper: str = "women") -> int:
+    """Deterministic pairing score from colour, style, photo and price — not invented social proof."""
+    if not piece:
+        return 0
+    score = 76
+    score += gender_rank(piece, shopper) * 4
+    score += photo_quality(piece) * 3
+    hero_color = ((hero or {}).get("color") or "").strip().lower()
+    if hero_color in _UNKNOWN_COLOR_VALUES:
+        hero_color = None
+    piece_color = (piece.get("color") or "").strip().lower()
+    if hero_color and _color_matches(piece, hero_color):
+        score += 5
+    elif hero_color and piece_color and piece_color != hero_color and piece_color not in _UNKNOWN_COLOR_VALUES:
+        score += 8
+    hero_styles = {str(s).strip().lower() for s in ((hero or {}).get("style") or []) if s}
+    piece_styles = {str(s).strip().lower() for s in (piece.get("style") or []) if s}
+    if hero_styles and piece_styles and hero_styles & piece_styles:
+        score += 6
+    if has_shopper_signal(piece):
+        score += 3
+    hero_price = _as_price(hero or {})
+    pp = _as_price(piece)
+    if hero_price and pp:
+        ratio = pp / hero_price
+        if 0.4 <= ratio <= 2.2:
+            score += 3
+    return int(min(96, max(76, score)))
+
+
 def shop_look_for(
     hero: dict,
     catalog: Iterable[dict],
@@ -769,6 +799,11 @@ def shop_look_for(
         same = [p for p in accents if (p.get("category") or "").lower() == hero_cat]
         other = [p for p in accents if (p.get("category") or "").lower() != hero_cat]
         accents = [tagged, *same, *other]
+    anchor = pinned or hero
+    for p in bottoms:
+        p["match_score"] = look_match_pct(anchor, p, shopper)
+    for p in accents:
+        p["match_score"] = look_match_pct(anchor, p, shopper)
     return {"pinned": pinned, "bottoms": bottoms, "accents": accents}
 
 
@@ -824,6 +859,15 @@ def card_fields(p: dict, affiliate_url: str | None = None) -> dict[str, Any]:
     if rating not in (None, "", 0, 0.0, "0"):
         out["rating"] = rating
         out["ratings_total"] = p.get("ratings_total") or 0
+    styles = p.get("style")
+    if isinstance(styles, list) and styles:
+        out["style"] = styles
+    try:
+        match = int(p.get("match_score") or 0)
+    except (TypeError, ValueError):
+        match = 0
+    if match:
+        out["match_score"] = match
     return out
 
 

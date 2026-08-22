@@ -263,6 +263,19 @@ def test_shop_look_for_top_offers_several_bottoms():
     assert all(p["category"] == "bottoms" for p in look["bottoms"])
     assert {p["category"] for p in look["accents"]} <= {"bags", "shoes"}
     assert all(p["id"] != "hero-top" for p in look["bottoms"])
+    assert all(76 <= p.get("match_score", 0) <= 96 for p in look["bottoms"])
+
+
+def test_look_match_pct_rewards_contrast_and_reviews():
+    from curation_mix import look_match_pct
+    hero = _p("hero-top", "tops", "white", 1200, style=["casual"])
+    pair = _p("b-jean", "bottoms", "navy", 1800, style=["casual"],
+              rating=4.6, ratings_total=400,
+              image_url="https://m.media-amazon.com/jean.jpg")
+    clash = _p("b-x", "bottoms", "white", 8000, gender="men",
+               image_url="https://images.pexels.com/x.jpg")
+    assert look_match_pct(hero, pair) > look_match_pct(hero, clash)
+    assert 76 <= look_match_pct(hero, pair) <= 96
 
 
 def test_render_tags_curiosity():
