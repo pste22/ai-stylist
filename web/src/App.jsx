@@ -1025,8 +1025,8 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
         </div>
         {lookError && <p className="flp-look-error">{lookError}</p>}
         {(onSeeOnMe || onTryOn) && (
-          <button type="button" className="flp-on-me" onClick={() => seeOnMe()} disabled={building && hasPhoto}>
-            {building ? "Generating your look…" : (heroStill ? "Refresh look on me" : "See this look on me")}
+          <button type="button" className="flp-on-me" onClick={() => seeOnMe()}>
+            {building ? "Open look on me…" : "See this look on me"}
           </button>
         )}
         <button className="flp-shop-all" onClick={() => onAddAllToCart(outfit)} disabled={allInCart || !outfit.length}>
@@ -1989,8 +1989,10 @@ export default function App() {
       lastLookStillRef.current = null;
       setLookLayerHint("");
       setAssemblingLook(false);
-      setTryOnInline(false);
     }
+    // Always show the VTO modal when this opener is used. keepLookQueue only
+    // preserves the bottom/shoes/bag stack — it must not hide the modal.
+    setTryOnInline(false);
     clearTryOn();
     setTryOnProduct(product);
     setShowFittingRoom(false);
@@ -2003,7 +2005,7 @@ export default function App() {
     }
   };
 
-  const startAssembledLook = (hero, pieces, { stayOnPage = true } = {}) => {
+  const startAssembledLook = (hero, pieces, { stayOnPage = false } = {}) => {
     if (!hero) return;
     const queue = (pieces || []).filter((p) => p?.id && p.id !== hero.id);
     pendingLookLayersRef.current = queue;
@@ -2022,7 +2024,10 @@ export default function App() {
       return;
     }
     const inline = stayOnPage && !!fullLook;
-    if (!savedPhoto?.image && inline) {
+    const hasPhoto = !!savedPhoto?.image;
+    // In-page auto VTO only. An explicit tap must never die here — that is the
+    // dead "See this look on me" click.
+    if (!hasPhoto && inline) {
       setAssemblingLook(false);
       setLookLayerHint("");
       setTryOnInline(true);
@@ -2030,8 +2035,8 @@ export default function App() {
       return;
     }
     setLookBuildError("");
-    setLookLayerHint(queue[0] ? layerHintFor(queue[0]) : "Putting the top on you…");
-    setAssemblingLook(true);
+    setLookLayerHint(hasPhoto ? (queue[0] ? layerHintFor(queue[0]) : "Putting the top on you…") : "");
+    setAssemblingLook(hasPhoto);
     setLookKick((n) => n + 1);
     track("look_on_me_started", {
       product_id: hero.id,
@@ -2040,8 +2045,8 @@ export default function App() {
       inline,
     });
     if (!inline) {
-      setTryOnInline(false);
-      if (fullLook) setFullLook(null);
+      // Keep Style the Look underneath. The VTO modal is z-index 1400; closing
+      // it returns her to the pairing board instead of dumping her on chat.
       openTryOn(hero, { keepLookQueue: true });
       return;
     }
@@ -2088,7 +2093,7 @@ export default function App() {
     if (!pending) return;
     resumedTryOnRef.current = true;
     const lookPieces = takePendingLookOnMe();
-    if (lookPieces.length) startAssembledLook(pending, lookPieces);
+    if (lookPieces.length) startAssembledLook(pending, lookPieces, { stayOnPage: false });
     else openTryOn(pending);
   }, [user, needsOnboarding]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2693,7 +2698,7 @@ export default function App() {
             onTryOn={(p) => { setFullLook(null); setTryOnInline(false); if (p) openTryOn(p); }}
             onSeeOnMe={({ hero, pieces }) => {
               lastAutoSigRef.current = "";
-              startAssembledLook(hero, pieces, { stayOnPage: true });
+              startAssembledLook(hero, pieces, { stayOnPage: false });
             }}
             onAutoLook={requestAutoLook}
             hasPhoto={!!savedPhoto?.image}

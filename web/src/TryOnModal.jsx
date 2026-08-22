@@ -458,13 +458,15 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
     const t = setTimeout(() => {
       if (autoTriedFor.current === product.id) return;
       if (!savedPhoto?.image) return;
-      if (savedTryOn?.views?.front) return;
+      // A saved front is enough to skip a casual reopen — but "See this look
+      // on me" sets assemblingLook and must actually start generating.
+      if (savedTryOn?.views?.front && !assemblingLook) return;
       autoTriedFor.current = product.id;
       tryWithSaved();
     }, 280);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [product.id, savedPhoto, savedTryOn]);
+  }, [product.id, savedPhoto, savedTryOn, assemblingLook]);
 
   // Live result for THIS product, plus the saved (Fitting Room) fallback so a
   // previously-tried product shows instantly with no regeneration.
