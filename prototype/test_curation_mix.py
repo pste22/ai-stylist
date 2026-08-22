@@ -128,6 +128,103 @@ def test_look_slots_for_dress_skips_bottoms():
     assert "bags" in cats
 
 
+def test_bottoms_variety_offers_several_styles():
+    from curation_mix import bottom_style, bottoms_variety_for
+    cat = _catalog() + [
+        _p("b-jean", "bottoms", "blue", 1800, name="Blue Skinny Jeans",
+           image_url="https://m.media-amazon.com/jean.jpg"),
+        _p("b-skirt", "bottoms", "black", 1600, name="Black Midi Skirt",
+           image_url="https://m.media-amazon.com/skirt.jpg"),
+        _p("b-trouser", "bottoms", "beige", 2200, name="Beige Wide Trousers",
+           image_url="https://m.media-amazon.com/trouser.jpg"),
+        _p("b-short", "bottoms", "white", 900, name="White Linen Shorts",
+           image_url="https://m.media-amazon.com/short.jpg"),
+        _p("b-palazzo", "bottoms", "navy", 1900, name="Navy Palazzo Pants",
+           image_url="https://m.media-amazon.com/palazzo.jpg"),
+    ]
+    hero = _p("hero-top", "tops", "white", 1200)
+    picks = bottoms_variety_for(hero, cat, n=5)
+    assert len(picks) >= 4
+    assert all(p["category"] == "bottoms" for p in picks)
+    assert all(p.get("mix_role") == "bottoms_option" for p in picks)
+    assert "hero-top" not in {p["id"] for p in picks}
+    styles = {bottom_style(p) for p in picks}
+    assert len(styles) >= 3
+
+
+def test_bottoms_variety_skips_mens_when_womens_exist():
+    from curation_mix import bottoms_variety_for
+    cat = [
+        _p("mb1", "bottoms", "black", 1500, gender="men", name="Men Slim Jeans",
+           image_url="https://m.media-amazon.com/m.jpg"),
+        _p("wb1", "bottoms", "navy", 1600, gender="women", name="Women Navy Trousers",
+           image_url="https://m.media-amazon.com/w1.jpg"),
+        _p("wb2", "bottoms", "beige", 1700, gender="women", name="Women Beige Skirt",
+           image_url="https://m.media-amazon.com/w2.jpg"),
+        _p("wb3", "bottoms", "white", 1800, gender="unisex", name="Unisex White Shorts",
+           image_url="https://m.media-amazon.com/w3.jpg"),
+    ]
+    hero = _p("hero-top", "tops", "white", 1200, gender="women")
+    ids = {p["id"] for p in bottoms_variety_for(hero, cat, n=6)}
+    assert "mb1" not in ids
+    assert ids & {"wb1", "wb2", "wb3"}
+
+
+def test_trending_badges_need_real_reviews():
+    from curation_mix import trending_complements
+    cat = [
+        _p("bag-hot", "bags", "black", 2000, rating=4.6, ratings_total=800,
+           image_url="https://m.media-amazon.com/baghot.jpg"),
+        _p("bag-cold", "bags", "brown", 1500,
+           image_url="https://m.media-amazon.com/bagcold.jpg"),
+        _p("shoe-hot", "shoes", "black", 2500, rating=4.4, ratings_total=300,
+           image_url="https://m.media-amazon.com/shoehot.jpg"),
+        _p("shoe-cold", "shoes", "nude", 1800,
+           image_url="https://m.media-amazon.com/shoecold.jpg"),
+    ]
+    items = trending_complements(cat, n_each=2)
+    by_id = {p["id"]: p for p in items}
+    assert by_id["bag-hot"].get("badge") == "trending"
+    assert by_id["shoe-hot"].get("badge") == "trending"
+    assert by_id["bag-cold"].get("badge") != "trending"
+    assert {p["category"] for p in items} == {"bags", "shoes"}
+
+
+def test_style_suggestions_for_top_has_bottoms_and_trending():
+    from curation_mix import style_suggestions_for
+    cat = _catalog() + [
+        _p("b-jean", "bottoms", "blue", 1800, name="Blue Skinny Jeans",
+           image_url="https://m.media-amazon.com/jean.jpg"),
+        _p("b-skirt", "bottoms", "black", 1600, name="Black Midi Skirt",
+           image_url="https://m.media-amazon.com/skirt.jpg"),
+        _p("bag-hot", "bags", "tan", 2200, rating=4.7, ratings_total=1200,
+           image_url="https://m.media-amazon.com/bag.jpg"),
+        _p("shoe-hot", "shoes", "nude", 2800, rating=4.5, ratings_total=640,
+           image_url="https://m.media-amazon.com/shoe.jpg"),
+    ]
+    hero = _p("hero-top", "tops", "white", 1200)
+    items = style_suggestions_for(hero, cat, bottoms_n=4, trending_n_each=2)
+    roles = {p.get("mix_role") for p in items}
+    cats = {p["category"] for p in items}
+    assert "bottoms_option" in roles
+    assert "trending" in roles
+    assert "bottoms" in cats
+    assert "bags" in cats
+    assert "shoes" in cats
+    assert all(p["id"] != "hero-top" for p in items)
+
+
+def test_card_fields_pass_trending_badge():
+    from curation_mix import card_fields
+    p = _p("bag-hot", "bags", "black", 2000, rating=4.6, ratings_total=800,
+           mix_role="trending", badge="trending")
+    card = card_fields(p)
+    assert card["badge"] == "trending"
+    assert card["rating"] == 4.6
+    assert card["ratings_total"] == 800
+    assert card["mix_role"] == "trending"
+
+
 def test_render_tags_curiosity():
     mix = build_curation_mix(_catalog(), "purple tops", n=3)
     text = render_mix_prompt(mix)

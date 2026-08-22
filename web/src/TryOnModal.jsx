@@ -221,6 +221,84 @@ function lookHint(slots, remaining) {
   return `♥ ${article} ${noun} to pin it on your look — then keep going.`;
 }
 
+function shopperProof(item) {
+  const votes = Number(item?.ratings_total) || 0;
+  const rating = Number(item?.rating) || 0;
+  if (votes <= 0 || rating <= 0) return null;
+  return `★ ${rating.toFixed(1)} · ${votes.toLocaleString("en-IN")} shoppers`;
+}
+
+function splitStyleRail(lookItems) {
+  const items = (lookItems || []).filter((item) => item?.id);
+  const bottoms = items.filter((item) => (
+    item.mix_role === "bottoms_option"
+    || (String(item.category || "").toLowerCase() === "bottoms" && item.mix_role !== "trending")
+  ));
+  const trending = items.filter((item) => item.mix_role === "trending" || item.badge === "trending");
+  const taken = new Set([...bottoms, ...trending].map((item) => item.id));
+  const rest = items.filter((item) => !taken.has(item.id));
+  return { bottoms, trending, rest };
+}
+
+function LookChoiceCard({ item, loved, focusSlot, onYou, layering, onLike, onOpen, onTry, onShop }) {
+  const cur = item.currency === "USD" ? "$" : "₹";
+  const slot = String(item.category || "piece");
+  const isLoved = !!(loved && loved.has(item.id));
+  const isFocus = !!(focusSlot && matchesLookSlot(item, focusSlot));
+  const proof = shopperProof(item);
+  const trending = item.badge === "trending";
+  return (
+    <article
+      className={`tryon-look-card${isFocus ? " is-focus" : ""}${onYou ? " is-on-you" : ""}`}
+    >
+      {onLike && (
+        <button
+          type="button"
+          className={`tryon-look-love${isLoved ? " is-loved" : ""}`}
+          aria-label={isLoved ? `Pinned ${item.name}` : `Like and pin ${item.name}`}
+          title="Like — pin on your look"
+          onClick={() => onLike(item)}
+        >
+          {isLoved ? "♥" : "♡"}
+        </button>
+      )}
+      <button
+        type="button"
+        className="tryon-look-open"
+        onClick={() => onOpen?.(item)}
+        aria-label={`Open ${item.name} on Mira`}
+      >
+        {item.image_url
+          ? <img className="tryon-look-img" src={item.image_url} alt="" />
+          : <div className="tryon-look-img tryon-look-img--ph">🛍️</div>}
+        {trending ? <span className="tryon-look-trend">Trending</span> : <span className="tryon-look-slot">{slot}</span>}
+        <p className="tryon-look-name">{item.name}</p>
+        <p className="tryon-look-price">
+          {item.price != null ? `${cur}${Number(item.price).toLocaleString("en-IN")}` : ""}
+        </p>
+        {proof && <p className="tryon-look-social">{proof}</p>}
+      </button>
+      <div className="tryon-look-actions">
+        {onTry && (
+          <button
+            type="button"
+            className="tryon-look-btn"
+            disabled={layering && onYou}
+            onClick={() => onTry(item)}
+          >
+            {onYou ? "On you" : "Try on"}
+          </button>
+        )}
+        {onShop && (
+          <button type="button" className="tryon-look-btn primary" onClick={() => onShop(item)}>
+            Add
+          </button>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function LookSlotRail({ lookProgress, focusSlot, onFocusSlot, onOpen, onUnpin }) {
   const slots = visibleSlots(lookProgress, VTO_SLOT_LABELS);
   if (!slots.length) return null;
@@ -271,7 +349,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                                      savedPhoto, onSavePhoto, onClearPhoto,
                                      savedTryOn, savedStale, userPrefs, onSetSize,
                                      onCompleteLook, lookItems, onShopLookItem, onTryLookItem, onOpenLookItem,
-                                     lookProgress, loved, onLikeLookItem, onUnpinLookItem }) {
+                                     lookProgress, loved, onLikeLookItem, onUnpinLookItem, layering }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -387,14 +465,21 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
   const anyDone = Object.keys(views).length > 0;
   const lookSlots = visibleSlots(lookProgress, VTO_SLOT_LABELS);
   const pinnedLookIds = slotProductIds(lookProgress);
-  const remainingLookItems = (lookItems || []).filter((item) => item?.id && !pinnedLookIds.has(item.id));
-  const shownLookItems = focusSlot
-    ? [...remainingLookItems].sort((a, b) => {
-        const am = matchesLookSlot(a, focusSlot) ? 0 : 1;
-        const bm = matchesLookSlot(b, focusSlot) ? 0 : 1;
-        return am - bm;
-      })
-    : remainingLookItems;
+  const { bottoms: bottomChoices, trending: trendingChoices, rest: restLookItems } = splitStyleRail(lookItems);
+  const remainingLookItems = restLookItems.filter((item) => item?.id && !pinnedLookIds.has(item.id));
+  const prioritizeFocus = (list) => {
+    if (!focusSlot) return list;
+    return [...list].sort((a, b) => {
+      const am = matchesLookSlot(a, focusSlot) ? 0 : 1;
+      const bm = matchesLookSlot(b, focusSlot) ? 0 : 1;
+      return am - bm;
+    });
+  };
+  const shownBottoms = prioritizeFocus(bottomChoices);
+  const shownTrending = prioritizeFocus(trendingChoices);
+  const shownLookItems = prioritizeFocus(remainingLookItems);
+  const styledRail = shownBottoms.length > 0 || shownTrending.length > 0;
+  const hasTrendingBadge = shownTrending.some((item) => item.badge === "trending");
   const nextLookSlot = nextEmptySlot(lookProgress, VTO_SLOT_LABELS);
 
   // ── Videos (Veo): fashion-reel showcase + occasion clips ──
@@ -415,9 +500,12 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
     setFocusSlot(null);
   }, [product.id]);
 
-  /* Reveal angle tabs once the full-look still lands. */
+  /* Reveal the full-look still and switch to it when a chosen piece lands. */
   useEffect(() => {
-    if (views.look) setShowAngles(true);
+    if (views.look) {
+      setShowAngles(true);
+      setSelectedView("look");
+    }
   }, [views.look]);
 
   /* Keep the buffer clock running until THIS clip arrives or errors out. */
@@ -668,7 +756,83 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
               onOpen={onOpenLookItem}
               onUnpin={onUnpinLookItem}
             />
-            {shownLookItems.length === 0 ? (
+            {styledRail ? (
+              <>
+                {shownBottoms.length > 0 && (
+                  <div className="tryon-look-section">
+                    <p className="tryon-look-label">Try these bottoms</p>
+                    <p className="tryon-look-sub">
+                      Pick a pair — Mira will put them on you with this top.
+                    </p>
+                    <div className="tryon-look-rail">
+                      {shownBottoms.map((item) => (
+                        <LookChoiceCard
+                          key={item.id}
+                          item={item}
+                          loved={loved}
+                          focusSlot={focusSlot}
+                          onYou={pinnedLookIds.has(item.id)}
+                          layering={layering}
+                          onLike={onLikeLookItem ? (choice) => { onLikeLookItem(choice); setFocusSlot(null); } : null}
+                          onOpen={onOpenLookItem}
+                          onTry={onTryLookItem}
+                          onShop={onShopLookItem}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {shownTrending.length > 0 && (
+                  <div className="tryon-look-section">
+                    <p className="tryon-look-label">
+                      {hasTrendingBadge ? "Trending with shoppers" : "Bags & shoes to finish the look"}
+                    </p>
+                    <p className="tryon-look-sub">
+                      {hasTrendingBadge
+                        ? "Highest-rated bags and shoes from other shoppers' reviews — tap Try on to see them on you."
+                        : "Add a bag or shoes, then try them on with this look."}
+                    </p>
+                    <div className="tryon-look-rail">
+                      {shownTrending.map((item) => (
+                        <LookChoiceCard
+                          key={item.id}
+                          item={item}
+                          loved={loved}
+                          focusSlot={focusSlot}
+                          onYou={pinnedLookIds.has(item.id)}
+                          layering={layering}
+                          onLike={onLikeLookItem ? (choice) => { onLikeLookItem(choice); setFocusSlot(null); } : null}
+                          onOpen={onOpenLookItem}
+                          onTry={onTryLookItem}
+                          onShop={onShopLookItem}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {shownLookItems.length > 0 && (
+                  <div className="tryon-look-section">
+                    <p className="tryon-look-sub">{lookHint(lookSlots, shownLookItems)}</p>
+                    <div className="tryon-look-rail">
+                      {shownLookItems.map((item) => (
+                        <LookChoiceCard
+                          key={item.id}
+                          item={item}
+                          loved={loved}
+                          focusSlot={focusSlot}
+                          onYou={pinnedLookIds.has(item.id)}
+                          layering={layering}
+                          onLike={onLikeLookItem ? (choice) => { onLikeLookItem(choice); setFocusSlot(null); } : null}
+                          onOpen={onOpenLookItem}
+                          onTry={onTryLookItem}
+                          onShop={onShopLookItem}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : shownLookItems.length === 0 ? (
               nextLookSlot ? (
                 <p className="tryon-look-sub">Mira’s still pulling pieces for the empty slots.</p>
               ) : null
@@ -676,60 +840,20 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
               <>
                 <p className="tryon-look-sub">{lookHint(lookSlots, shownLookItems)}</p>
                 <div className="tryon-look-rail">
-                  {shownLookItems.map((item) => {
-                    const cur = item.currency === "USD" ? "$" : "₹";
-                    const slot = String(item.category || "piece");
-                    const isLoved = !!(loved && loved.has(item.id));
-                    const isFocus = !!(focusSlot && matchesLookSlot(item, focusSlot));
-                    return (
-                      <article
-                        key={item.id}
-                        className={`tryon-look-card${isFocus ? " is-focus" : ""}`}
-                      >
-                        {onLikeLookItem && (
-                          <button
-                            type="button"
-                            className={`tryon-look-love${isLoved ? " is-loved" : ""}`}
-                            aria-label={isLoved ? `Pinned ${item.name}` : `Like and pin ${item.name}`}
-                            title="Like — pin on your look"
-                            onClick={() => {
-                              onLikeLookItem(item);
-                              setFocusSlot(null);
-                            }}
-                          >
-                            {isLoved ? "♥" : "♡"}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="tryon-look-open"
-                          onClick={() => onOpenLookItem?.(item)}
-                          aria-label={`Open ${item.name} on Mira`}
-                        >
-                          {item.image_url
-                            ? <img className="tryon-look-img" src={item.image_url} alt="" />
-                            : <div className="tryon-look-img tryon-look-img--ph">🛍️</div>}
-                          <span className="tryon-look-slot">{slot}</span>
-                          <p className="tryon-look-name">{item.name}</p>
-                          <p className="tryon-look-price">
-                            {item.price != null ? `${cur}${Number(item.price).toLocaleString("en-IN")}` : ""}
-                          </p>
-                        </button>
-                        <div className="tryon-look-actions">
-                          {onTryLookItem && (
-                            <button type="button" className="tryon-look-btn" onClick={() => onTryLookItem(item)}>
-                              Try on
-                            </button>
-                          )}
-                          {onShopLookItem && (
-                            <button type="button" className="tryon-look-btn primary" onClick={() => onShopLookItem(item)}>
-                              Add
-                            </button>
-                          )}
-                        </div>
-                      </article>
-                    );
-                  })}
+                  {shownLookItems.map((item) => (
+                    <LookChoiceCard
+                      key={item.id}
+                      item={item}
+                      loved={loved}
+                      focusSlot={focusSlot}
+                      onYou={pinnedLookIds.has(item.id)}
+                      layering={layering}
+                      onLike={onLikeLookItem ? (choice) => { onLikeLookItem(choice); setFocusSlot(null); } : null}
+                      onOpen={onOpenLookItem}
+                      onTry={onTryLookItem}
+                      onShop={onShopLookItem}
+                    />
+                  ))}
                 </div>
               </>
             )}
@@ -804,7 +928,13 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
         {/* CTA copy + upload */}
         <div className="tryon-cta-area">
           {loading ? (
-            <p className="tryon-magic-text">Styling it on you… this takes a few seconds 🪄</p>
+            <p className="tryon-magic-text">
+              {layering
+                ? "Trying that on you with this top… 🪄"
+                : "Styling it on you… this takes a few seconds 🪄"}
+            </p>
+          ) : error && anyDone ? (
+            <p className="tryon-desc" style={{ color: "#c0103a" }}>{error}</p>
           ) : anyDone ? (
             videoLoadingKind === selectedView && isVideoView ? (
               <p className="tryon-magic-text">Stay with Mira — this clip keeps filming until it’s ready</p>

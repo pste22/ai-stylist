@@ -1441,7 +1441,7 @@ export default function App() {
     fullLook, setFullLook,
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat, askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
-    sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn, tryOnLookItems,
+    sendTryOn, sendTryOnLayer, tryOnResult, tryOnLoading, tryOnLayering, tryOnError, clearTryOn, tryOnLookItems,
     sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
   } = useMiraVoice({
     userId, userName, userEmail: user?.email, userPrefs: effectivePrefs, eventBrief, textMode, onAddToCart: addToCart,
@@ -2329,6 +2329,7 @@ export default function App() {
             onTryOn={sendTryOn}
             result={tryOnResult}
             loading={tryOnLoading}
+            layering={tryOnLayering}
             error={tryOnError}
             onVideo={sendTryOnVideo}
             video={tryOnVideo}
@@ -2371,12 +2372,15 @@ export default function App() {
               track("try_on_look_add", { product_id: tryOnProduct?.id, add_id: item.id, category: item.category });
             }}
             onTryLookItem={(item) => {
-              if (!item) return;
-              track("try_on_look_switch", { product_id: tryOnProduct?.id, next_id: item.id, category: item.category });
-              clearTryOn();
-              setTryOnProduct(item);
-              getTryOn(item.id).then((rec) => { if (rec) setSavedTryOn(rec); else setSavedTryOn(null); });
-              if (savedPhoto?.image) sendTryOn(item.id, savedPhoto.image, savedPhoto.mime || "image/jpeg", item.image_url);
+              if (!item || !tryOnProduct?.id) return;
+              addToLookProgress(item);
+              track("try_on_look_layer", { product_id: tryOnProduct.id, add_id: item.id, category: item.category });
+              const live = tryOnResult && tryOnResult.productId === tryOnProduct.id ? tryOnResult.views : {};
+              const views = { ...(savedTryOn?.views || {}), ...live };
+              const cat = String(item.category || "").toLowerCase();
+              const base = cat === "bottoms" ? (views.front || views.look) : (views.look || views.front);
+              if (!base?.image) return;
+              sendTryOnLayer(tryOnProduct.id, item, base.image, base.mime || "image/png");
             }}
             onCompleteLook={(p) => {
               addToLookProgress(p);

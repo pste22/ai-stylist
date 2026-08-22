@@ -163,6 +163,29 @@ def test_complete_look_prompt_keeps_hero_and_names_slots():
     assert "instagram" not in low
 
 
+def test_layer_garment_prompt_swaps_only_bottoms():
+    from tryon import layer_garment_prompt
+    p = layer_garment_prompt("Allen Solly Women Blouse", {
+        "name": "Navy Slim Trousers", "category": "bottoms",
+    })
+    low = p.lower()
+    assert "allen solly women blouse" in low
+    assert "navy slim trousers" in low
+    assert "replace only the bottoms" in low
+    assert "do not change" in low
+
+
+def test_layer_garment_prompt_keeps_bottoms_when_adding_shoes():
+    from tryon import layer_garment_prompt
+    p = layer_garment_prompt("Allen Solly Women Blouse", {
+        "name": "Block Heel Sandals", "category": "shoes",
+    })
+    low = p.lower()
+    assert "block heel sandals" in low
+    assert "do not replace" in low
+    assert "bottoms they already have on" in low
+
+
 def test_image_jpg_alias_is_jpeg():
     req = build_tryon_request(_PRODUCT, _IMG_B64, "image/jpg")
     assert req["user_mime"] == "image/jpeg"

@@ -513,6 +513,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
           case "try_on_result": {
             if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
             setTryOnLoading(false); // first angle arrived — show it immediately
+            setTryOnLayering(false);
             setTryOnError(null);
             const view = msg.view || "front";
             if (view === "front") track("try_on_result_shown", { product_id: msg.product_id }); // activation
@@ -545,6 +546,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
           case "try_on_error":
             if (tryOnTimeoutRef.current) { clearTimeout(tryOnTimeoutRef.current); tryOnTimeoutRef.current = null; }
             setTryOnLoading(false);
+            setTryOnLayering(false);
             setTryOnError(msg.message || "Try-on failed. Please try again.");
             break;
           case "try_on_video_still": {
@@ -615,6 +617,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
   const [tryOnResult, setTryOnResult] = useState(null);   // { productId, views:{}, failed:{}, total }
   const [tryOnLookItems, setTryOnLookItems] = useState([]);
   const [tryOnLoading, setTryOnLoading] = useState(false);
+  const [tryOnLayering, setTryOnLayering] = useState(false);
   const [tryOnError, setTryOnError] = useState(null);
   const tryOnTimeoutRef = useRef(null);
   // Videos keyed by kind ("spin" | scene keys). clips = finished mp4s; stills = scene
@@ -629,6 +632,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     setTryOnLookItems([]);
     setTryOnError(null);
     setTryOnLoading(false);
+    setTryOnLayering(false);
     setTryOnVideo(null);
     setTryOnVideoError(null);
     setTryOnVideoLoadingKind(null);
@@ -656,6 +660,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     setTryOnLookItems([]);
     setTryOnError(null);
     setTryOnLoading(true);
+    setTryOnLayering(false);
     let payload = imageBase64;
     let outMime = mime || "image/jpeg";
     try {
@@ -681,11 +686,52 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     tryOnTimeoutRef.current = setTimeout(() => {
       tryOnTimeoutRef.current = null;
       setTryOnLoading(false);
+      setTryOnLayering(false);
       setTryOnError((err) => err || "Try-on timed out. Please try again.");
     }, 90000);
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       pendingTryOnRef.current = packet;
+      return;
+    }
+    ws.send(JSON.stringify(packet));
+  }, []);
+
+  const sendTryOnLayer = useCallback(async (heroId, piece, imageBase64, mime = "image/png") => {
+    if (!heroId || !piece?.id || !imageBase64) return;
+    setTryOnError(null);
+    setTryOnLayering(true);
+    setTryOnLoading(true);
+    const packet = {
+      type: "try_on_layer",
+      product_id: heroId,
+      add_id: piece.id,
+      image: imageBase64,
+      mime: mime || "image/png",
+    };
+    if (piece.image_url) {
+      try {
+        const garment = await fetchProductImageBytes(piece.image_url);
+        if (garment?.base64) {
+          packet.garment = garment.base64;
+          packet.garment_mime = garment.mime || "image/jpeg";
+        }
+      } catch (e) {
+        console.warn("[try_on_layer] garment fetch skipped", e);
+      }
+    }
+    if (tryOnTimeoutRef.current) clearTimeout(tryOnTimeoutRef.current);
+    tryOnTimeoutRef.current = setTimeout(() => {
+      tryOnTimeoutRef.current = null;
+      setTryOnLoading(false);
+      setTryOnLayering(false);
+      setTryOnError((err) => err || "Try-on timed out. Please try again.");
+    }, 90000);
+    const ws = wsRef.current;
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      setTryOnLoading(false);
+      setTryOnLayering(false);
+      setTryOnError("Mira isn't connected — try again in a moment.");
       return;
     }
     ws.send(JSON.stringify(packet));
@@ -889,7 +935,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
     askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
-    sendTryOn, tryOnResult, tryOnLoading, tryOnError, clearTryOn, tryOnLookItems,
+    sendTryOn, sendTryOnLayer, tryOnResult, tryOnLoading, tryOnLayering, tryOnError, clearTryOn, tryOnLookItems,
     sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
   };
 }
