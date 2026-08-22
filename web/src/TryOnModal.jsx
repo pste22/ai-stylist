@@ -349,7 +349,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                                      savedPhoto, onSavePhoto, onClearPhoto,
                                      savedTryOn, savedStale, userPrefs, onSetSize,
                                      onCompleteLook, lookItems, onShopLookItem, onTryLookItem, onOpenLookItem,
-                                     lookProgress, loved, onLikeLookItem, onUnpinLookItem, layering }) {
+                                     lookProgress, loved, onLikeLookItem, onUnpinLookItem, layering, layerHint }) {
   const overlayRef = useRef(null);
   const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
@@ -930,7 +930,7 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           {loading ? (
             <p className="tryon-magic-text">
               {layering
-                ? "Trying that on you with this top… 🪄"
+                ? `${layerHint || "Trying that on you with this top…"} 🪄`
                 : "Styling it on you… this takes a few seconds 🪄"}
             </p>
           ) : error && anyDone ? (
