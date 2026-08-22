@@ -68,6 +68,7 @@ from curation_mix import (  # noqa: E402
     build_curation_mix,
     complements_for,
     look_slots_for,
+    style_suggestions_for,
     card_fields as _mix_card,
     photo_quality,
 )
@@ -1903,68 +1904,29 @@ async def handle(ws) -> None:
                     print(f"  [try_on] {view} failed: {_ae}")
                     await _send_json(ws, type="try_on_view_error", product_id=product_id, view=view)
 
-            async def _complete_look():
-                """Pair catalog bottoms/shoes/bag and optionally render the full getup."""
+            async def _send_style_rail():
+                """Offer a choice of bottoms plus trending bags/shoes — she picks, then we layer."""
                 try:
                     if not product:
                         return
-                    pieces = look_slots_for(product, _CATALOG)
+                    pieces = style_suggestions_for(product, _CATALOG, shopper="women")
+                    if not pieces:
+                        pieces = look_slots_for(product, _CATALOG)
                     if not pieces:
                         return
                     items = [_mix_card(p, affiliate_url=_affiliate_url(p)) for p in pieces]
                     await _send_json(ws, type="try_on_look", product_id=product_id, items=items)
-                    slot_key = "full_look:" + ",".join(p["id"] for p in pieces)
-                    key_look = _cache_key(image_b64, product_id, slot_key)
-                    hit = _cache_get(key_look)
-                    if hit:
-                        b, m = hit
-                        await _send_json(ws, type="try_on_result", product_id=product_id, view="look",
-                                         total=total, image=base64.b64encode(b).decode(), mime=m)
-                        print("  [try_on] full look — cache hit")
-                        return
-                    if _spend_check(user_id, _EST_IMAGE, user_email):
-                        print("  [try_on] full look skipped — spend cap")
-                        return
-                    contents = [
-                        _types.Part.from_bytes(data=front_bytes, mime_type=front_mime),
-                    ]
-                    used = []
-                    for p in pieces:
-                        if len(used) >= _tryon.MAX_LOOK_REF_IMAGES:
-                            break
-                        url = (p.get("image_url") or "").strip()
-                        if not url:
-                            continue
-                        try:
-                            raw, pmime = await asyncio.to_thread(fetch_catalog_image, url)
-                        except Exception as fetch_exc:
-                            print(f"  [try_on] look slot fetch failed {p.get('id')}: {fetch_exc}")
-                            continue
-                        contents.append(_types.Part.from_bytes(data=raw, mime_type=pmime))
-                        used.append(p)
-                    if not used:
-                        return
-                    contents.append(_tryon.complete_look_prompt(payload["product_name"], used))
-                    resp = await _gen_run(
-                        _client.models.generate_content,
-                        model=_TRYON_MODEL,
-                        contents=contents,
-                        config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
+                    print(
+                        "  [try_on] style rail "
+                        + ", ".join(
+                            f"{p.get('mix_role')}:{p.get('category')}" for p in pieces
+                        )
                     )
-                    b, m = _extract(resp)
-                    if not b:
-                        print("  [try_on] full look produced no image")
-                        return
-                    _cache_put(key_look, b, m)
-                    _costs.append(_img_gen_cost(resp))
-                    await _send_json(ws, type="try_on_result", product_id=product_id, view="look",
-                                     total=total, image=base64.b64encode(b).decode(), mime=m)
-                    print(f"  [try_on] full look sent ({', '.join(p.get('category','') for p in used)})")
                 except Exception as look_exc:
-                    print(f"  [try_on] full look skipped: {look_exc}")
+                    print(f"  [try_on] style rail skipped: {look_exc}")
 
             await asyncio.gather(
-                _complete_look(),
+                _send_style_rail(),
                 *[_angle(v) for v in views if v != "front"],
                 return_exceptions=True,
             )
@@ -1982,6 +1944,102 @@ async def handle(ws) -> None:
             if not locals().get("front_sent"):
                 await _send_json(ws, type="try_on_error", product_id=product_id,
                                  message=_tryon.tryon_error_message(e))
+        finally:
+            await _send_json(ws, type="state", state="idle", mood="neutral")
+
+    async def _try_on_layer(hero_id: str, add_id: str, image_b64: str, mime: str = "image/png",
+                            garment_b64: str = "", garment_mime: str = "image/jpeg") -> None:
+        """Layer a shopper-chosen piece (bottoms first) onto the existing hero try-on."""
+        import base64
+        import tryon as _tryon
+        from google import genai as _genai
+        from google.genai import types as _types
+
+        hero = _BY_ID.get(hero_id) or {}
+        piece = _BY_ID.get(add_id)
+        if not hero or not piece or not image_b64:
+            await _send_json(ws, type="try_on_error", product_id=hero_id,
+                             message="Pick a piece to try with this look.")
+            return
+        hero_name = hero.get("name") or "the piece you're wearing"
+        if mime == "image/jpg":
+            mime = "image/jpeg"
+        if mime not in _tryon.ALLOWED_MIMES:
+            mime = "image/png"
+        print(f"  [try_on_layer] {hero_name!r} + {piece.get('name')!r} ({piece.get('category')})")
+        await _send_json(ws, type="state", state="thinking", mood="focused")
+
+        def _extract(response):
+            cand = (response.candidates or [None])[0]
+            parts = getattr(getattr(cand, "content", None), "parts", None) or []
+            for p in parts:
+                inline = getattr(p, "inline_data", None)
+                if inline and inline.data:
+                    return inline.data, (inline.mime_type or "image/png")
+            return None, None
+
+        try:
+            key_look = _cache_key(image_b64, f"{hero_id}+{add_id}", "look")
+            hit = _cache_get(key_look)
+            if hit:
+                b, m = hit
+                await _send_json(ws, type="try_on_result", product_id=hero_id, view="look",
+                                 total=1, image=base64.b64encode(b).decode(), mime=m)
+                print("  [try_on_layer] cache hit")
+                return
+
+            reason = _spend_check(user_id, _EST_IMAGE, user_email)
+            if reason:
+                print(f"  [try_on_layer] blocked by guardrail: {reason}")
+                await _send_json(ws, type="try_on_error", product_id=hero_id,
+                                 message=_SPEND_MSG[reason])
+                return
+
+            if garment_b64:
+                try:
+                    add_bytes, add_mime = _tryon.decode_inline_image(garment_b64, garment_mime)
+                    seed = (piece.get("image_url") or "").strip()
+                    if seed:
+                        _garment_cache_put(seed, add_bytes, add_mime)
+                except Exception as ge:
+                    print(f"  [try_on_layer] client garment rejected: {ge}")
+                    add_bytes, add_mime = fetch_product_garment(piece)
+            else:
+                add_bytes, add_mime = fetch_product_garment(piece)
+
+            person_bytes = base64.b64decode(image_b64)
+            _client = _genai.Client(api_key=os.environ["GEMINI_API_KEY"])
+            contents = [
+                _types.Part.from_bytes(data=person_bytes, mime_type=mime),
+                _types.Part.from_bytes(data=add_bytes, mime_type=add_mime),
+                _tryon.layer_garment_prompt(hero_name, piece),
+            ]
+            resp = await _gen_run(
+                _client.models.generate_content,
+                model=_TRYON_MODEL,
+                contents=contents,
+                config=_types.GenerateContentConfig(response_modalities=["IMAGE"]),
+            )
+            b, m = _extract(resp)
+            if not b:
+                await _send_json(ws, type="try_on_error", product_id=hero_id,
+                                 message="Couldn't put that on you — try another piece?")
+                print("  [try_on_layer] produced no image")
+                return
+            _cache_put(key_look, b, m)
+            _spend_record(user_id, _img_gen_cost(resp))
+            await _send_json(ws, type="try_on_result", product_id=hero_id, view="look",
+                             total=1, image=base64.b64encode(b).decode(), mime=m)
+            print(f"  [try_on_layer] sent look ({piece.get('category')})")
+        except GenBusy:
+            await _send_json(ws, type="try_on_error", product_id=hero_id,
+                             message="Mira's studio is busy right now — please try again in a moment.")
+        except Exception as e:
+            import traceback as _tb
+            print(f"  ! try_on_layer failed: {e}")
+            _tb.print_exc()
+            await _send_json(ws, type="try_on_error", product_id=hero_id,
+                             message=_tryon.tryon_error_message(e))
         finally:
             await _send_json(ws, type="state", state="idle", mood="neutral")
 
@@ -2730,6 +2788,17 @@ async def handle(ws) -> None:
                         if img and pid:
                             asyncio.ensure_future(
                                 _try_on(pid, img, mime, garment, garment_mime)
+                            )
+                    elif data.get("type") == "try_on_layer":
+                        img = data.get("image", "")
+                        mime = data.get("mime", "image/png")
+                        hero_id = data.get("product_id") or data.get("hero_id") or ""
+                        add_id = data.get("add_id") or data.get("piece_id") or ""
+                        garment = data.get("garment") or data.get("product_image") or ""
+                        garment_mime = data.get("garment_mime") or "image/jpeg"
+                        if img and hero_id and add_id:
+                            asyncio.ensure_future(
+                                _try_on_layer(hero_id, add_id, img, mime, garment, garment_mime)
                             )
                     elif data.get("type") == "try_on_video":
                         img = data.get("image", "")

@@ -284,6 +284,31 @@ def complete_look_prompt(hero_name: str, pieces: list[dict]) -> str:
     )
 
 
+def layer_garment_prompt(hero_name: str, piece: dict) -> str:
+    """Keep the hero the shopper already has on; add or swap one chosen piece."""
+    hero = (hero_name or "the hero piece").strip() or "the hero piece"
+    cat = (piece.get("category") or "piece").lower()
+    role = _LOOK_SLOT_ROLE.get(cat, cat)
+    pname = (piece.get("name") or role).strip() or role
+    if cat == "bottoms":
+        swap = (
+            f"Replace only the bottoms they are wearing with the {pname} from the SECOND image. "
+            f"Keep the {hero} and everything else identical."
+        )
+    else:
+        swap = (
+            f"Add the {role} from the SECOND image ({pname}) onto this look. "
+            f"Do not replace the {hero} or the bottoms they already have on."
+        )
+    return (
+        f"The FIRST image is the person already wearing the {hero}. "
+        f"Keep their face, hair, body, pose and that {hero} identical. "
+        f"The SECOND image is the {role}: {pname}. {swap} "
+        f"Photorealistic, natural light, full-body outfit-check so she can see it on herself. "
+        f"Do not change the {hero}. No text, logos, watermark, or extra people."
+    )
+
+
 def view_instruction(product_name: str, view: str) -> str:
     """Prompt for re-rendering the already-generated front try-on from another angle.
 

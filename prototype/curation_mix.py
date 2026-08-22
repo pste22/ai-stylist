@@ -412,6 +412,7 @@ def look_slots_for(
         def _score(p: dict, slot: str = cat) -> tuple:
             s = 0
             s += photo_quality(p) * 8
+            s += gender_rank(p, "women") * 3
             if hero_color and _color_matches(p, hero_color):
                 s += 5
             blob = f"{p.get('color') or ''} {p.get('name') or ''}".lower()
@@ -430,6 +431,254 @@ def look_slots_for(
         picks.append(_tag(best, "look_slot"))
         exclude.add(best["id"])
     return picks
+
+
+# Women's VTO styling — a *choice* of bottoms, plus bags/shoes other shoppers
+# actually rated. Empty/unknown gender stays eligible so sparse feeds still work.
+_WOMEN_GENDERS = frozenset({
+    "", "women", "woman", "womens", "women's", "female", "unisex", "girls",
+})
+_MEN_GENDERS = frozenset({
+    "men", "man", "mens", "men's", "male", "boys",
+})
+_BOTTOM_STYLE_KEYS: tuple[tuple[str, tuple[str, ...]], ...] = (
+    ("skirt", ("skirt", "lehenga")),
+    ("shorts", ("short",)),
+    ("jeans", ("jean", "denim")),
+    ("palazzo", ("palazzo", "wide-leg", "wide leg", "flare", "culotte")),
+    ("leggings", ("legging", "jogger")),
+    ("trousers", ("trouser", "chino", "pant")),
+)
+# Amazon review volume we treat as real shopper feedback — not Mira-user claims.
+_TRENDING_MIN_VOTES = 25
+_TOP_LIKE = frozenset({"tops", "outerwear", "activewear"})
+
+
+def _gender_norm(item: dict) -> str:
+    return (item.get("gender") or "").strip().lower()
+
+
+def gender_rank(item: dict, shopper: str = "women") -> int:
+    """2 = explicit match, 1 = unisex/unknown, 0 = opposite gender."""
+    g = _gender_norm(item)
+    shopper = (shopper or "women").strip().lower() or "women"
+    if shopper == "women":
+        if g in _MEN_GENDERS:
+            return 0
+        if g in ("women", "woman", "womens", "women's", "female", "girls"):
+            return 2
+        return 1
+    if shopper == "men":
+        if g in ("women", "woman", "womens", "women's", "female", "girls"):
+            return 0
+        if g in ("men", "man", "mens", "men's", "male", "boys"):
+            return 2
+        return 1
+    return 1
+
+
+def gender_ok(item: dict, shopper: str = "women") -> bool:
+    return gender_rank(item, shopper) > 0
+
+
+def _filter_gender(cands: list[dict], shopper: str, *, min_keep: int) -> list[dict]:
+    preferred = [p for p in cands if gender_ok(p, shopper)]
+    return preferred if len(preferred) >= min_keep else cands
+
+
+def _review_votes(item: dict) -> float:
+    try:
+        return float(item.get("ratings_total") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _review_rating(item: dict) -> float:
+    try:
+        return float(item.get("rating") or 0)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def has_shopper_signal(item: dict) -> bool:
+    """True when Amazon (or similar) ratings look like real other-shopper feedback."""
+    return _review_votes(item) >= _TRENDING_MIN_VOTES and _review_rating(item) > 0
+
+
+def bottom_style(item: dict) -> str:
+    """Coarse silhouette so a VTO rail is jeans + skirt + trousers, not six skinny jeans."""
+    styles = item.get("style") or []
+    style_s = " ".join(styles) if isinstance(styles, list) else str(styles)
+    blob = f"{item.get('name') or ''} {style_s}".lower()
+    for key, toks in _BOTTOM_STYLE_KEYS:
+        if any(tok in blob for tok in toks):
+            return key
+    return "other"
+
+
+def bottoms_variety_for(
+    hero: dict,
+    catalog: Iterable[dict],
+    *,
+    n: int = 6,
+    shopper: str = "women",
+    exclude_ids: set[str] | None = None,
+) -> list[dict]:
+    """Several bottoms a woman can VTO with this top — variety of silhouette and colour."""
+    exclude = set(exclude_ids or set())
+    hid = hero.get("id")
+    if hid:
+        exclude.add(hid)
+    hero_color = (hero.get("color") or "").strip().lower()
+    if hero_color in _UNKNOWN_COLOR_VALUES:
+        hero_color = None
+    hero_price = _as_price(hero)
+
+    cands: list[dict] = []
+    for p in catalog:
+        if not p.get("id") or p["id"] in exclude:
+            continue
+        if (p.get("category") or "").lower() != "bottoms":
+            continue
+        if photo_quality(p) <= 0:
+            continue
+        cands.append(p)
+    cands = _filter_gender(cands, shopper, min_keep=max(3, n // 2))
+    if not cands:
+        return []
+
+    def _score(p: dict) -> tuple:
+        s = photo_quality(p) * 10
+        s += gender_rank(p, shopper) * 4
+        color = (p.get("color") or "").strip().lower()
+        # Contrast with the top so the pair reads as a look, not a matchy set.
+        if hero_color and color and color != hero_color and not _color_matches(p, hero_color):
+            s += 3
+        blob = f"{color} {p.get('name') or ''}".lower()
+        if any(tok in blob for tok in ("black", "navy", "white", "beige", "denim", "blue", "ivory")):
+            s += 2
+        if has_shopper_signal(p):
+            s += 2
+        pp = _as_price(p)
+        if hero_price and pp:
+            ratio = pp / hero_price
+            if 0.4 <= ratio <= 2.2:
+                s += 1
+        return (s, _review_votes(p), _review_rating(p), -abs(pp - hero_price), p.get("id") or "")
+
+    ranked = sorted(cands, key=_score, reverse=True)
+    picked: list[dict] = []
+    seen_style: set[str] = set()
+    seen_color: set[str] = set()
+    picked_ids: set[str] = set()
+
+    def _take(p: dict) -> None:
+        picked.append(p)
+        picked_ids.add(p["id"])
+        seen_style.add(bottom_style(p))
+        col = (p.get("color") or "").strip().lower()
+        if col:
+            seen_color.add(col)
+
+    for p in ranked:
+        st = bottom_style(p)
+        if st in seen_style:
+            continue
+        _take(p)
+        if len(picked) >= n:
+            return [_tag(x, "bottoms_option") for x in picked]
+
+    for p in ranked:
+        if p["id"] in picked_ids:
+            continue
+        col = (p.get("color") or "").strip().lower()
+        if col and col in seen_color:
+            continue
+        _take(p)
+        if len(picked) >= n:
+            break
+
+    if len(picked) < n:
+        for p in ranked:
+            if p["id"] in picked_ids:
+                continue
+            _take(p)
+            if len(picked) >= n:
+                break
+    return [_tag(x, "bottoms_option") for x in picked]
+
+
+def trending_complements(
+    catalog: Iterable[dict],
+    *,
+    categories: tuple[str, ...] = ("bags", "shoes"),
+    n_each: int = 3,
+    shopper: str = "women",
+    exclude_ids: set[str] | None = None,
+) -> list[dict]:
+    """Bags/shoes ranked by other shoppers' ratings — badge only when the signal is real."""
+    exclude = set(exclude_ids or set())
+    out: list[dict] = []
+    for cat in categories:
+        cands = [
+            p for p in catalog
+            if p.get("id") and p["id"] not in exclude
+            and (p.get("category") or "").lower() == cat
+            and photo_quality(p) > 0
+        ]
+        cands = _filter_gender(cands, shopper, min_keep=n_each)
+        cands.sort(
+            key=lambda p: (
+                _review_votes(p),
+                _review_rating(p),
+                photo_quality(p),
+                gender_rank(p, shopper),
+                -_as_price(p),
+            ),
+            reverse=True,
+        )
+        for p in cands[:n_each]:
+            tagged = _tag(p, "trending")
+            if has_shopper_signal(p):
+                tagged["badge"] = "trending"
+            out.append(tagged)
+            exclude.add(p["id"])
+    return out
+
+
+def style_suggestions_for(
+    hero: dict,
+    catalog: Iterable[dict],
+    *,
+    shopper: str = "women",
+    exclude_ids: set[str] | None = None,
+    bottoms_n: int = 6,
+    trending_n_each: int = 3,
+) -> list[dict]:
+    """VTO styling rail: a variety of bottoms (when the hero is a top) plus trending bags/shoes."""
+    catalog = list(catalog)
+    exclude = set(exclude_ids or set())
+    hid = hero.get("id")
+    if hid:
+        exclude.add(hid)
+    hero_cat = (hero.get("category") or "").lower()
+    items: list[dict] = []
+    if hero_cat in _TOP_LIKE:
+        bottoms = bottoms_variety_for(
+            hero, catalog, n=bottoms_n, shopper=shopper, exclude_ids=exclude,
+        )
+        items.extend(bottoms)
+        exclude.update(p["id"] for p in bottoms if p.get("id"))
+    items.extend(trending_complements(
+        catalog,
+        categories=("bags", "shoes"),
+        n_each=trending_n_each,
+        shopper=shopper,
+        exclude_ids=exclude,
+    ))
+    if not items:
+        return look_slots_for(hero, catalog, exclude_ids=exclude_ids)
+    return items
 
 
 def render_mix_prompt(products: list[dict]) -> str:
@@ -478,6 +727,12 @@ def card_fields(p: dict, affiliate_url: str | None = None) -> dict[str, Any]:
     }
     if p.get("mix_role"):
         out["mix_role"] = p["mix_role"]
+    if p.get("badge"):
+        out["badge"] = p["badge"]
+    rating = p.get("rating")
+    if rating not in (None, "", 0, 0.0, "0"):
+        out["rating"] = rating
+        out["ratings_total"] = p.get("ratings_total") or 0
     return out
 
 
