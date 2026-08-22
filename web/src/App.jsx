@@ -928,11 +928,23 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
               <div className="flp-using-shot">
                 <span className="flp-using">{heroStill ? "On you" : "Using this"}</span>
                 {heroSrc
-                  ? <img src={heroSrc} alt={heroProduct.name} />
+                  ? <img
+                      src={heroSrc}
+                      alt={heroProduct.name}
+                      onError={(e) => {
+                        const raw = heroProduct.image_url;
+                        if (raw && e.currentTarget.src !== raw) e.currentTarget.src = raw;
+                      }}
+                    />
                   : <span className="flp-thumb-emoji" style={{ "--swatch": swatchColor(heroProduct.color) }}>{CATEGORY_EMOJI[heroProduct.category] || "🛍️"}</span>}
-                {building && (
+                {building && !lookError && (
                   <div className="flp-building" role="status">
                     {buildHint || "Putting this look on you…"}
+                  </div>
+                )}
+                {lookError && (
+                  <div className="flp-building flp-building--error" role="alert">
+                    {lookError}
                   </div>
                 )}
                 {!hasPhoto && onPickPhoto && (
@@ -1735,6 +1747,7 @@ export default function App() {
   const [assemblingLook, setAssemblingLook] = useState(false);
   const [tryOnInline, setTryOnInline] = useState(false);
   const [lookKick, setLookKick] = useState(0);
+  const [lookBuildError, setLookBuildError] = useState("");
   const [vsResults, setVsResults]         = useState([]);
   const [bootReady, setBootReady]         = useState(false);
   const [vsQuery, setVsQuery]             = useState("");
@@ -1997,12 +2010,11 @@ export default function App() {
     lookLayerLockRef.current = false;
     inflightLookLayerRef.current = null;
     lastLookStillRef.current = null;
-    setLookLayerHint(queue[0] ? layerHintFor(queue[0]) : "Putting the top on you…");
-    setAssemblingLook(true);
-    setLookKick((n) => n + 1);
     addToLookProgress(hero);
     queue.forEach(addToLookProgress);
     if (!user) {
+      setAssemblingLook(false);
+      setLookLayerHint("");
       stashPendingTryOn(hero);
       stashPendingLookOnMe(queue);
       setSignInPrompt(true);
@@ -2010,6 +2022,17 @@ export default function App() {
       return;
     }
     const inline = stayOnPage && !!fullLook;
+    if (!savedPhoto?.image && inline) {
+      setAssemblingLook(false);
+      setLookLayerHint("");
+      setTryOnInline(true);
+      setTryOnProduct(hero);
+      return;
+    }
+    setLookBuildError("");
+    setLookLayerHint(queue[0] ? layerHintFor(queue[0]) : "Putting the top on you…");
+    setAssemblingLook(true);
+    setLookKick((n) => n + 1);
     track("look_on_me_started", {
       product_id: hero.id,
       pieces: queue.map((p) => p.id),
@@ -2042,6 +2065,9 @@ export default function App() {
       const hasFront = !!(live.front?.image || rec?.views?.front?.image);
       if (!hasFront && savedPhoto?.image) {
         sendTryOn(hero.id, savedPhoto.image, savedPhoto.mime || "image/jpeg", hero.image_url);
+      } else if (!hasFront) {
+        setAssemblingLook(false);
+        setLookLayerHint("");
       }
     })();
   };
@@ -2083,7 +2109,9 @@ export default function App() {
     if (tryOnError) {
       pendingLookLayersRef.current = [];
       inflightLookLayerRef.current = null;
+      lookLayerLockRef.current = false;
       setLookLayerHint("");
+      setAssemblingLook(false);
       return;
     }
     const next = pendingLookLayersRef.current[0];
@@ -2103,6 +2131,27 @@ export default function App() {
     setLookLayerHint(layerHintFor(next));
     sendTryOnLayer(tryOnProduct.id, next, base.image, base.mime || "image/png");
   }, [tryOnProduct, tryOnResult, savedTryOn, tryOnError, sendTryOnLayer, lookKick]);
+
+  useEffect(() => {
+    if (tryOnError) {
+      lastAutoSigRef.current = "";
+      setAssemblingLook(false);
+      setLookLayerHint("");
+    }
+  }, [tryOnError]);
+
+  useEffect(() => {
+    if (!assemblingLook || !tryOnInline) return;
+    const t = setTimeout(() => {
+      const hasStill = !!(tryOnResult?.views?.front || tryOnResult?.views?.look);
+      if (!hasStill && !tryOnLoading && !tryOnLayering) {
+        setAssemblingLook(false);
+        setLookLayerHint("");
+        setLookBuildError("Couldn't start the look — add your photo or tap Refresh.");
+      }
+    }, 14000);
+    return () => clearTimeout(t);
+  }, [assemblingLook, tryOnInline, tryOnLoading, tryOnLayering, tryOnResult, lookKick]);
 
   // Persist a try-on to the Fitting Room (IndexedDB) as results/videos arrive.
   useEffect(() => {
@@ -2650,8 +2699,8 @@ export default function App() {
             hasPhoto={!!savedPhoto?.image}
             onPickPhoto={(image, mime) => savePhoto(image, mime)}
             building={assemblingLook && (tryOnLoading || tryOnLayering || !!lookLayerHint)}
-            buildHint={lookLayerHint || (tryOnLoading ? "Putting the top on you…" : "")}
-            lookError={tryOnError}
+            buildHint={lookLayerHint || (tryOnLoading ? "Putting the top on you…" : (!connected && assemblingLook ? "Connecting to Mira…" : ""))}
+            lookError={tryOnError || lookBuildError}
             heroStill={(() => {
               const ids = new Set([fullLook.hero?.id, fullLook.pinned?.id].filter(Boolean));
               const pid = tryOnProduct?.id;

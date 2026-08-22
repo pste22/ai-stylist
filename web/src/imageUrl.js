@@ -38,7 +38,7 @@ export function hdProductImageUrl(url, { longest = 1500 } = {}) {
       u.searchParams.set("auto", "compress");
       u.searchParams.set("cs", "tinysrgb");
       u.searchParams.set("w", String(Math.min(longest, 1600)));
-      u.searchParams.set("dpr", "2");
+      u.searchParams.delete("dpr");
       return u.toString();
     }
   } catch {
@@ -86,14 +86,14 @@ export function proxiedProductImageUrl(url, { longest = 1200 } = {}) {
  * Pull garment bytes the browser can actually load (Amazon often 403s Fly IPs).
  * Same-origin proxy first (warms the server cache Gemini uses), then CORS proxies.
  */
-export async function fetchProductImageBytes(url, { timeoutMs = 20000 } = {}) {
+export async function fetchProductImageBytes(url, { timeoutMs = 8000 } = {}) {
   if (!url) return null;
   const hd = hdProductImageUrl(url, { longest: 1200 }) || url;
   const sources = [
     { src: proxiedProductImageUrl(url, { longest: 1200 }), timeoutMs },
-    { src: `https://wsrv.nl/?url=${encodeURIComponent(hd)}&output=jpg&w=1200&n=-1`, timeoutMs: 8000 },
-    { src: `https://images.weserv.nl/?url=${encodeURIComponent(hd)}&output=jpg&w=1200&n=-1`, timeoutMs: 8000 },
-    { src: `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&w=1200&n=-1`, timeoutMs: 8000 },
+    { src: `https://wsrv.nl/?url=${encodeURIComponent(url)}&output=jpg&w=1200&n=-1`, timeoutMs: 5000 },
+    { src: `https://wsrv.nl/?url=${encodeURIComponent(hd)}&output=jpg&w=1200&n=-1`, timeoutMs: 5000 },
+    { src: `https://images.weserv.nl/?url=${encodeURIComponent(url)}&output=jpg&w=1200&n=-1`, timeoutMs: 5000 },
   ];
   for (const { src, timeoutMs: ms } of sources) {
     const ctrl = typeof AbortController !== "undefined" ? new AbortController() : null;

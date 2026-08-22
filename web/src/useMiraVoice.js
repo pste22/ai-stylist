@@ -676,7 +676,10 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     const packet = { type: "try_on", product_id: productId, image: payload, mime: outMime };
     if (garmentUrl) {
       try {
-        const garment = await fetchProductImageBytes(garmentUrl);
+        const garment = await Promise.race([
+          fetchProductImageBytes(garmentUrl, { timeoutMs: 4000 }),
+          new Promise((resolve) => setTimeout(() => resolve(null), 4500)),
+        ]);
         if (garment?.base64) {
           packet.garment = garment.base64;
           packet.garment_mime = garment.mime || "image/jpeg";

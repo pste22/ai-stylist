@@ -4711,6 +4711,7 @@ label.tryon-stale-link { display: inline; }
   padding: 0.45rem 0.65rem;
   text-align: center;
 }
+.flp-building--error { background: rgba(178, 58, 72, 0.88); }
 .flp-photo-gate {
   position: absolute;
   inset: 0;
