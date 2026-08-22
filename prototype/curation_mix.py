@@ -681,6 +681,97 @@ def style_suggestions_for(
     return items
 
 
+def companion_top_for(
+    hero: dict,
+    catalog: Iterable[dict],
+    *,
+    shopper: str = "women",
+    exclude_ids: set[str] | None = None,
+) -> dict | None:
+    """The top to pin on the left of Shop the Look — the hero itself when it is a top."""
+    cat = (hero.get("category") or "").lower()
+    if cat in ("tops", "outerwear"):
+        return _tag(dict(hero), "pinned_top")
+    exclude = set(exclude_ids or set())
+    hid = hero.get("id")
+    if hid:
+        exclude.add(hid)
+    cands = [
+        p for p in catalog
+        if p.get("id") and p["id"] not in exclude
+        and (p.get("category") or "").lower() in ("tops", "outerwear")
+        and photo_quality(p) > 0
+    ]
+    cands = _filter_gender(cands, shopper, min_keep=1)
+    if not cands:
+        return None
+    hero_color = (hero.get("color") or "").strip().lower()
+    if hero_color in _UNKNOWN_COLOR_VALUES:
+        hero_color = None
+    hero_price = _as_price(hero)
+
+    def _score(p: dict) -> tuple:
+        s = photo_quality(p) * 10
+        s += gender_rank(p, shopper) * 4
+        if hero_color and _color_matches(p, hero_color):
+            s += 3
+        if has_shopper_signal(p):
+            s += 2
+        pp = _as_price(p)
+        if hero_price and pp:
+            ratio = pp / hero_price
+            if 0.4 <= ratio <= 2.2:
+                s += 1
+        return (s, _review_votes(p), _review_rating(p), p.get("id") or "")
+
+    return _tag(max(cands, key=_score), "pinned_top")
+
+
+def shop_look_for(
+    hero: dict,
+    catalog: Iterable[dict],
+    *,
+    shopper: str = "women",
+    exclude_ids: set[str] | None = None,
+    bottoms_n: int = 6,
+    trending_n_each: int = 2,
+) -> dict:
+    """Shop-the-look payload: pinned top, a chooser of bottoms, trending bags/shoes."""
+    catalog = list(catalog)
+    exclude = set(exclude_ids or set())
+    hid = hero.get("id")
+    hero_cat = (hero.get("category") or "").lower()
+    pinned = companion_top_for(hero, catalog, shopper=shopper, exclude_ids=exclude)
+    if pinned and pinned.get("id"):
+        exclude.add(pinned["id"])
+    if hid:
+        exclude.add(hid)
+    bottoms: list[dict] = []
+    if pinned:
+        bottoms = bottoms_variety_for(
+            pinned, catalog, n=bottoms_n, shopper=shopper, exclude_ids=exclude,
+        )
+        exclude.update(p["id"] for p in bottoms if p.get("id"))
+    if hero_cat == "bottoms" and hid:
+        tagged = _tag(dict(hero), "bottoms_option")
+        rest = [p for p in bottoms if p.get("id") != hid]
+        bottoms = [tagged, *rest][: max(bottoms_n, 1)]
+        exclude.add(hid)
+    accents = trending_complements(
+        catalog,
+        categories=("bags", "shoes"),
+        n_each=trending_n_each,
+        shopper=shopper,
+        exclude_ids=exclude,
+    )
+    if hero_cat in ("bags", "shoes") and hid and not any(p.get("id") == hid for p in accents):
+        tagged = _tag(dict(hero), "hero")
+        same = [p for p in accents if (p.get("category") or "").lower() == hero_cat]
+        other = [p for p in accents if (p.get("category") or "").lower() != hero_cat]
+        accents = [tagged, *same, *other]
+    return {"pinned": pinned, "bottoms": bottoms, "accents": accents}
+
+
 def render_mix_prompt(products: list[dict]) -> str:
     """Compact grounding lines; curiosity picks are explicitly tagged for the LLM.
 

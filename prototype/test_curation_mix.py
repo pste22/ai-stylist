@@ -225,6 +225,46 @@ def test_card_fields_pass_trending_badge():
     assert card["mix_role"] == "trending"
 
 
+def test_companion_top_for_keeps_hero_top():
+    from curation_mix import companion_top_for
+    hero = _p("hero-top", "tops", "white", 1200)
+    pinned = companion_top_for(hero, _catalog())
+    assert pinned["id"] == "hero-top"
+    assert pinned.get("mix_role") == "pinned_top"
+
+
+def test_companion_top_for_shoe_picks_a_top():
+    from curation_mix import companion_top_for
+    hero = _p("hero-shoe", "shoes", "black", 3000)
+    pinned = companion_top_for(hero, _catalog())
+    assert pinned is not None
+    assert pinned["category"] == "tops"
+    assert pinned["id"] != "hero-shoe"
+
+
+def test_shop_look_for_top_offers_several_bottoms():
+    from curation_mix import shop_look_for
+    cat = _catalog() + [
+        _p("b-jean", "bottoms", "blue", 1800, name="Blue Skinny Jeans",
+           image_url="https://m.media-amazon.com/jean.jpg"),
+        _p("b-skirt", "bottoms", "black", 1600, name="Black Midi Skirt",
+           image_url="https://m.media-amazon.com/skirt.jpg"),
+        _p("b-trouser", "bottoms", "beige", 2200, name="Beige Wide Trousers",
+           image_url="https://m.media-amazon.com/trouser.jpg"),
+        _p("bag-hot", "bags", "tan", 2200, rating=4.7, ratings_total=1200,
+           image_url="https://m.media-amazon.com/bag.jpg"),
+        _p("shoe-hot", "shoes", "nude", 2800, rating=4.5, ratings_total=640,
+           image_url="https://m.media-amazon.com/shoe.jpg"),
+    ]
+    hero = _p("hero-top", "tops", "white", 1200)
+    look = shop_look_for(hero, cat, bottoms_n=4, trending_n_each=2)
+    assert look["pinned"]["id"] == "hero-top"
+    assert len(look["bottoms"]) >= 3
+    assert all(p["category"] == "bottoms" for p in look["bottoms"])
+    assert {p["category"] for p in look["accents"]} <= {"bags", "shoes"}
+    assert all(p["id"] != "hero-top" for p in look["bottoms"])
+
+
 def test_render_tags_curiosity():
     mix = build_curation_mix(_catalog(), "purple tops", n=3)
     text = render_mix_prompt(mix)
