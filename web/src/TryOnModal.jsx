@@ -26,6 +26,25 @@ const VIDEO_KINDS = [
 ];
 const VIDEO_KEYS = VIDEO_KINDS.map((k) => k.key);
 
+/** Native file picker via <label> — iOS ignores programmatic clicks on display:none inputs. */
+function PhotoPickLabel({ className, children, onFile, capture, disabled }) {
+  return (
+    <label className={className} aria-disabled={disabled || undefined}>
+      {children}
+      <input
+        type="file"
+        accept="image/*"
+        capture={capture || undefined}
+        className="tryon-file-input"
+        disabled={disabled}
+        onChange={(e) => {
+          onFile?.(e);
+        }}
+      />
+    </label>
+  );
+}
+
 const BUFFER_PHASES = [
   { after: 0,  text: "Setting the scene" },
   { after: 10, text: "Lighting the shot" },
@@ -349,9 +368,9 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                                      savedPhoto, onSavePhoto, onClearPhoto,
                                      savedTryOn, savedStale, userPrefs, onSetSize,
                                      onCompleteLook, lookItems, onShopLookItem, onTryLookItem, onOpenLookItem,
-                                     lookProgress, loved, onLikeLookItem, onUnpinLookItem, layering, layerHint }) {
+                                     lookProgress, loved, onLikeLookItem, onUnpinLookItem, layering, layerHint,
+                                     assemblingLook, connected }) {
   const overlayRef = useRef(null);
-  const fileRef = useRef(null);
   const [userPhoto, setUserPhoto] = useState(null); // data URL preview of uploaded photo
   const [selectedView, setSelectedView] = useState("front");
   const [zoom, setZoom] = useState(false); // fullscreen magnified result
@@ -583,7 +602,9 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
           <span className="tryon-badge">✨ AI</span>
           <h2 className="tryon-title">Virtual Try-On</h2>
           <p className="tryon-subtitle">
-            See how the {product.name?.split(" ").slice(0, 4).join(" ")} looks on you.
+            {assemblingLook
+              ? "See this whole look on you — top, bottom, shoes and bag."
+              : `See how the ${product.name?.split(" ").slice(0, 4).join(" ")} looks on you.`}
           </p>
           <p className="tryon-preview-note">✨ AI style preview — shows the look, not exact fit</p>
         </div>
@@ -959,30 +980,33 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
             <p className="tryon-desc" style={{ color: "#c0103a" }}>{error}</p>
           ) : savedPhoto?.image && !userPhoto ? (
             <p className="tryon-desc">
-              See it on you in one tap — or upload a new photo. Your photo stays on your device.
+              {assemblingLook
+                ? "One tap puts the top on you, then Mira adds the bottom, shoes and bag."
+                : "See it on you in one tap — or upload a new photo."}
             </p>
           ) : (
             <p className="tryon-desc">
-              Upload a clear, front-facing full-body photo and Mira will show this
-              piece styled on you. Your photo stays on your device — never uploaded to our servers.
+              {assemblingLook
+                ? "Upload one clear, front-facing full-body photo. Mira will put this look on you — top, then bottom, shoes and bag."
+                : "Upload a clear, front-facing full-body photo and Mira will show this piece styled on you."}
+              {" "}
+              {connected === false
+                ? "Mira is connecting — pick a photo and we’ll start as soon as she’s ready."
+                : "Your photo is saved on this phone for the next try-on."}
             </p>
           )}
 
           {anyDone && savedStale && (
             <p className="tryon-stale-nudge">
-              Made with your old photo — <button className="tryon-stale-link" onClick={() => fileRef.current?.click()}>refresh with your current one?</button>
+              Made with your old photo —{" "}
+              <PhotoPickLabel className="tryon-stale-link" onFile={handleFile}>
+                refresh with your current one?
+              </PhotoPickLabel>
             </p>
           )}
 
           <SizeAdvice product={product} prefs={userPrefs} onSetSize={onSetSize} />
 
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={handleFile}
-          />
           <div className="tryon-actions">
             {/* One-tap try-on with the saved photo (pre-upload only) */}
             {!loading && !anyDone && savedPhoto?.image && !userPhoto && (
@@ -990,16 +1014,20 @@ export default function TryOnModal({ product, onClose, onTryOn, result, loading,
                 ✨ Try it on me
               </button>
             )}
+            {!loading && !anyDone && !savedPhoto?.image && (
+              <PhotoPickLabel className="tryon-notify-btn" onFile={handleFile} capture="user">
+                Take a photo 📷
+              </PhotoPickLabel>
+            )}
             {!loading && (
-              <button
-                className={(!anyDone && savedPhoto?.image && !userPhoto) ? "tryon-share-btn" : "tryon-notify-btn"}
-                type="button"
-                onClick={() => fileRef.current?.click()}
+              <PhotoPickLabel
+                className={(!anyDone && savedPhoto?.image && !userPhoto) || (!anyDone && !savedPhoto?.image) ? "tryon-share-btn" : "tryon-notify-btn"}
+                onFile={handleFile}
               >
                 {anyDone || error || userPhoto
-                  ? "Try another photo"
-                  : (savedPhoto?.image ? "Upload a different photo" : "Upload your photo")} 📷
-              </button>
+                  ? "Try another photo 📷"
+                  : (savedPhoto?.image ? "Upload a different photo 📷" : "Choose from library 📷")}
+              </PhotoPickLabel>
             )}
             {canShare && (
               <button className="tryon-share-btn" type="button" onClick={handleShare} disabled={sharing}>
