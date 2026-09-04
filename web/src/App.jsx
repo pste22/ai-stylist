@@ -31,6 +31,7 @@ import {
 } from "./lookProgress.js";
 
 import TrendingHome from "./TrendingHome.jsx";
+const CatalogFilters = lazy(() => import("./CatalogFilters.jsx"));
 const ForBrands = lazy(() => import("./ForBrands.jsx"));
 
 // Modal / rare flows — keep off the critical path so first paint stays light.

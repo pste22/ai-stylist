@@ -53,6 +53,8 @@ export default function LoginScreen({
   const [showBrands, setShowBrands] = useState(false);
   const [prompt, setPrompt] = useState("");
   const [trendFeed, setTrendFeed] = useState(null);
+  const [heroIdx, setHeroIdx] = useState(0);
+  const [trendTab, setTrendTab] = useState("clothes");
 
   useEffect(() => {
     let alive = true;
@@ -70,7 +72,30 @@ export default function LoginScreen({
     onGuest();
   };
 
-  const heroImage = trendFeed?.rails?.clothes?.[0]?.image_url || "/hero-home.jpg";
+  const heroLooks = [
+    ...(trendFeed?.rails?.clothes || []),
+    ...(trendFeed?.rails?.shoes || []),
+    ...(trendFeed?.rails?.bags || []),
+  ];
+  const heroProduct = heroLooks.length ? heroLooks[heroIdx % heroLooks.length] : null;
+  const heroImage = heroProduct?.image_url || "/hero-home.jpg";
+  const cycleHero = (dir) => {
+    if (heroLooks.length < 2) return;
+    setHeroIdx((i) => (i + dir + heroLooks.length) % heroLooks.length);
+  };
+  const jumpToRail = (tab) => {
+    setTrendTab(tab);
+    requestAnimationFrame(() => {
+      document.getElementById("mira-recommendations")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+  const navTab = (category) => {
+    const key = String(category || "").toLowerCase();
+    if (key === "clothes" || key === "dresses" || key === "tops") return jumpToRail("clothes");
+    if (key === "shoes") return jumpToRail("shoes");
+    if (key === "bags") return jumpToRail("bags");
+    onGuest();
+  };
 
   // An error only makes sense next to the buttons that produced it.
   useEffect(() => { if (authError) setShowAuth(true); }, [authError]);
@@ -104,9 +129,14 @@ export default function LoginScreen({
       </header>
 
       <nav className="mira-category-nav" aria-label="Shop categories">
-        {['Clothes', 'Shoes', 'Bags', 'Dresses', 'Tops'].map((category, index) => (
-          <button key={category} type="button" className={index === 0 ? 'is-active' : ''} onClick={onGuest}>{category}</button>
-        ))}
+        {['Clothes', 'Shoes', 'Bags', 'Dresses', 'Tops'].map((category) => {
+          const active = (category === 'Clothes' && trendTab === 'clothes')
+            || (category === 'Shoes' && trendTab === 'shoes')
+            || (category === 'Bags' && trendTab === 'bags');
+          return (
+            <button key={category} type="button" className={active ? 'is-active' : ''} onClick={() => navTab(category)}>{category}</button>
+          );
+        })}
         <span className="mira-category-spacer" />
         <button type="button" onClick={onGuest}>Filters</button>
         <button type="button" onClick={() => setShowBrands(true)}>Brands</button>
@@ -115,15 +145,19 @@ export default function LoginScreen({
       <main className="mira-dashboard-main">
         <section className="mira-dashboard-grid" aria-label="Mira styling studio">
           <article className="mira-style-hero">
-            <img src={hdProductImageUrl(heroImage, { longest: 1600 }) || heroImage} alt="Trending look" />
+            <img src={hdProductImageUrl(heroImage, { longest: 1600 }) || heroImage} alt={heroProduct?.name || "Trending look"} />
             <div className="mira-style-hero-shade" />
             <div className="mira-style-hero-top"><span>MIRA</span><b>✦ Trending now</b></div>
-            <button type="button" className="mira-hero-arrow mira-hero-arrow--left" aria-label="Browse looks" onClick={onGuest}>‹</button>
-            <button type="button" className="mira-hero-arrow" aria-label="Browse looks" onClick={onGuest}>›</button>
+            <button type="button" className="mira-hero-arrow mira-hero-arrow--left" aria-label="Previous look" onClick={() => cycleHero(-1)}>‹</button>
+            <button type="button" className="mira-hero-arrow" aria-label="Next look" onClick={() => cycleHero(1)}>›</button>
             <div className="mira-style-hero-copy">
               <p>From social this week</p>
               <h1>Clothes, shoes,<br />bags — what’s hot.</h1>
-              <button type="button" onClick={onGuest}>Shop the trends <span>→</span></button>
+              {heroProduct ? (
+                <button type="button" onClick={() => openTrending(heroProduct)}>Shop this look <span>→</span></button>
+              ) : (
+                <button type="button" onClick={onGuest}>Shop the trends <span>→</span></button>
+              )}
             </div>
           </article>
 
@@ -134,13 +168,15 @@ export default function LoginScreen({
           </article>
         </section>
 
-        <section className="mira-recommendations" aria-labelledby="mira-recommendations-title">
+        <section className="mira-recommendations" id="mira-recommendations" aria-labelledby="mira-recommendations-title">
           {trendFeed ? (
             <TrendingHome
               rails={trendFeed.rails}
               items={trendFeed.items}
               headline={trendFeed.headline}
               subhead={trendFeed.subhead}
+              tab={trendTab}
+              onTab={setTrendTab}
               onSelect={openTrending}
               onBuy={openTrending}
             />

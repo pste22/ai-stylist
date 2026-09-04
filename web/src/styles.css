@@ -702,12 +702,13 @@ h1, h2, h3,
   --dash-line: rgba(32, 35, 38, .12);
   --dash-lilac: #eee8f7;
   min-height: 100dvh;
-  height: 100%;
+  height: auto;
   overflow: auto;
   background: linear-gradient(135deg, #f8fbfa 0%, #f3f7f6 54%, #f1eafa 100%);
   color: var(--dash-ink);
   font-family: var(--font-ui);
 }
+.mira-home::after { content: none; display: none; }
 .mira-dashboard-header {
   min-height: 4.3rem;
   display: grid;
@@ -5841,13 +5842,21 @@ label.tryon-stale-link { display: inline; }
 .trend-rail { padding: .65rem 0 .2rem; }
 .trend-rail-head {
   display: flex; align-items: baseline; justify-content: space-between;
-  padding: 0 1rem .45rem;
+  padding: 0 1rem .45rem; gap: .5rem;
 }
 .trend-rail-title {
   margin: 0; font-size: .78rem; font-weight: 800; letter-spacing: .06em;
   text-transform: uppercase; color: var(--ink);
+  flex: 1;
 }
 .trend-rail-count { font-size: .68rem; color: var(--ink-3); }
+.trend-rail-nav { display: flex; gap: .25rem; }
+.trend-rail-nav button {
+  width: 1.85rem; height: 1.85rem; border: 1px solid var(--border);
+  border-radius: 50%; background: var(--surface); color: var(--ink);
+  cursor: pointer; font-size: 1.15rem; line-height: 1;
+}
+.trend-rail-nav button:hover { background: var(--surface-2, #f7f4ef); }
 .trend-rail-scroll {
   display: flex; gap: .7rem; overflow-x: auto; padding: 0 1rem .45rem;
   scrollbar-width: none; scroll-snap-type: x mandatory;
