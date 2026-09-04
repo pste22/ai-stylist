@@ -858,7 +858,12 @@ def _shop_gemini_ctx(shop: dict, batch: list[dict]) -> str:
     )
     note = (shop.get("notes") or [None])[0]
     if note:
-        ctx += f"IMPORTANT: {note} Be honest briefly, then style what IS shown. "
+        ctx += (
+            f"IMPORTANT: The shopper already sees this on screen: \"{note}\" "
+            f"Your FIRST spoken sentence must be that honesty. "
+            f"Do not say you like these on them as if they matched the ask. "
+            f"Then style what IS shown in one short line. "
+        )
     elif shop["mode"] == "recommend":
         ctx += (
             "These are personal picks from their history — "
@@ -870,9 +875,18 @@ def _shop_gemini_ctx(shop: dict, batch: list[dict]) -> str:
 
 
 def _shop_ack_text(shop: dict) -> str:
-    note = (shop.get("notes") or [None])[0]
-    if note:
-        return note + " Here are the closest picks."
+    notes = [n for n in (shop.get("notes") or []) if n]
+    if notes:
+        # Honesty first (color/brand miss), then any typo/price extra in the same breath.
+        lead = next(
+            (n for n in notes if n.lower().startswith("i don't") or n.lower().startswith("no ")),
+            notes[0],
+        )
+        rest = [n for n in notes if n != lead]
+        text = lead
+        if rest:
+            text += " " + rest[0]
+        return text
     if shop["mode"] == "recommend":
         return "Based on what you've loved so far — these feel very you."
     return "Here are some picks that match what you asked."
@@ -1038,6 +1052,7 @@ async def handle(ws) -> None:
             await _send_json(
                 ws, type="products", items=_boot_batch, show_more=True,
                 label=_boot_shop.get("label"), paged=True,
+                note=_shop_ack_text(_boot_shop),
             )
             boot_shop_ctx = _shop_gemini_ctx(_boot_shop, _boot_batch)
             print(
@@ -2471,6 +2486,7 @@ async def handle(ws) -> None:
                                 any(w in _tl for w in ("show", "see", "view", "list", "what", "display", "bring", "tell"))
                             )
                             shop_ctx = ""
+                            catalog_spoken = False
                             # Echo user text first so the thread order stays natural
                             await _send_json(ws, type="transcript", who="you", text=text)
                             look_filled = await _maybe_complete_look(text)
@@ -2532,6 +2548,7 @@ async def handle(ws) -> None:
                                     await _send_json(
                                         ws, type="products", items=batch, show_more=True,
                                         label=_shop.get("label"), paged=True,
+                                        note=_shop_ack_text(_shop),
                                     )
                                     print(
                                         f"  shop_agent → mode={_shop['mode']} "
@@ -2543,10 +2560,16 @@ async def handle(ws) -> None:
                                         f"notes={_shop.get('notes')}"
                                     )
                                     shop_ctx = _shop_gemini_ctx(_shop, batch)
-                                    await _send_json(
-                                        ws, type="transcript", who="mira",
-                                        text=_shop_ack_text(_shop),
-                                    )
+                                    # Honesty + cards are already on screen. Don't add a
+                                    # second Mira bubble that arrives after the grid.
+                                    if text_mode:
+                                        catalog_spoken = True
+                                        await _send_json(ws, type="state", state="idle", mood="neutral")
+                                    else:
+                                        await _send_json(
+                                            ws, type="transcript", who="mira",
+                                            text=_shop_ack_text(_shop),
+                                        )
                                 elif _shop.get("message"):
                                     await _send_json(
                                         ws, type="transcript", who="mira",
@@ -2557,7 +2580,7 @@ async def handle(ws) -> None:
                                         f"Ask what else they'd like.\n"
                                     )
                             sess = current["session"]
-                            if sess is not None:
+                            if sess is not None and not catalog_spoken:
                                 # Always prepend saved items context so Mira knows
                                 # which products the user has saved this session
                                 if session_saved:

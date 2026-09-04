@@ -164,6 +164,16 @@ def test_label_never_claims_relaxed_facets():
     assert "Tommy" in (hit["label"] or "")
 
 
+def test_missing_color_leads_with_i_dont_have():
+    hit = answer(_catalog(), "show me some yellow tops")
+    assert hit["category"] == "tops"
+    assert hit["color"] == "yellow"
+    assert hit["mode"] == "category"
+    assert hit["products"]
+    assert all(p["category"] == "tops" for p in hit["products"])
+    assert any(n.lower().startswith("i don't have any yellow tops") for n in hit["notes"])
+
+
 def test_show_me_some_tops_is_tops_category():
     """The first typed ask 'show me some tops' must resolve to tops, not bags/dresses."""
     hit = answer(_catalog(), "show me some tops")

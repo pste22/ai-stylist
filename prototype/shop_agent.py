@@ -680,23 +680,40 @@ def answer(
             )
         if brand and color and "color" not in mode:
             notes.append(
-                f"No {color} {category or 'pieces'} from {brand} in the catalog right now — "
+                f"I don't have any {color} {category or 'pieces'} from {brand} right now — "
                 f"showing {brand} {category or 'picks'} instead."
             )
         elif color and category and mode == "category":
-            notes.append(f"No {color} {category} right now — showing our {category}.")
+            notes.append(
+                f"I don't have any {color} {category} right now — "
+                f"here are some other {category} that are close."
+            )
         elif pattern and category and "pattern" not in mode:
-            notes.append(f"No {pattern} {category} right now — showing our {category}.")
+            notes.append(
+                f"I don't have any {pattern} {category} right now — "
+                f"here are some other {category} that are close."
+            )
         elif pattern and "pattern" not in mode:
-            notes.append(f"No {pattern} pieces right now — showing the closest matches.")
+            notes.append(
+                f"I don't have any {pattern} pieces right now — "
+                f"here are the closest picks."
+            )
         elif occasion and category and "occ" not in mode:
-            notes.append(f"No {occasion} {category} right now — showing our {category}.")
+            notes.append(
+                f"I don't have any {occasion} {category} right now — "
+                f"here are some other {category} that are close."
+            )
         elif occasion and "occ" not in mode and mode != "occasion":
-            notes.append(f"No {occasion} pieces right now — showing the closest matches.")
+            notes.append(
+                f"I don't have any {occasion} pieces right now — "
+                f"here are the closest picks."
+            )
         elif color and mode == "name_match" and not any(
             _color_matches(p, color) for p in matched[:20]
         ):
-            notes.append(f"No {color} ones right now — showing what we have.")
+            notes.append(
+                f"I don't have any {color} ones right now — here are the closest picks."
+            )
         elif brand and "brand" not in mode:
             notes.append(f"I don't carry {brand} yet — showing close alternatives.")
         if price_relaxed:
