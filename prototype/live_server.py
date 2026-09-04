@@ -395,7 +395,7 @@ def _client_product(p: dict) -> dict:
 
 def _homepage_trending_payload() -> dict:
     """Clothes / shoes / bags for the launch homepage (WS + REST)."""
-    feed = homepage_trending_rails(_CATALOG, n_each=8)
+    feed = homepage_trending_rails(_CATALOG, n_each=12)
     def _cards(items: list) -> list:
         return [_mix_card(p, _affiliate_url(p)) for p in items]
     rails = {k: _cards(v) for k, v in (feed.get("rails") or {}).items()}

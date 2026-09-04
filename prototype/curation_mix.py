@@ -957,7 +957,7 @@ def _social_heat_score(item: dict) -> int:
 def homepage_trending_rails(
     catalog: Iterable[dict],
     *,
-    n_each: int = 8,
+    n_each: int = 12,
     shopper: str = "women",
 ) -> dict[str, Any]:
     """Ranked clothes / shoes / bags for the launch homepage.

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ForBrands from "./ForBrands.jsx";
 import TrendingHome from "./TrendingHome.jsx";
 import { hdProductImageUrl } from "./imageUrl.js";
@@ -55,6 +55,7 @@ export default function LoginScreen({
   const [trendFeed, setTrendFeed] = useState(null);
   const [heroIdx, setHeroIdx] = useState(0);
   const [trendTab, setTrendTab] = useState("clothes");
+  const swipeX = useRef(null);
 
   useEffect(() => {
     let alive = true;
@@ -72,17 +73,32 @@ export default function LoginScreen({
     onGuest();
   };
 
-  const heroLooks = [
-    ...(trendFeed?.rails?.clothes || []),
-    ...(trendFeed?.rails?.shoes || []),
-    ...(trendFeed?.rails?.bags || []),
-  ];
-  const heroProduct = heroLooks.length ? heroLooks[heroIdx % heroLooks.length] : null;
+  const heroLooks = (trendFeed?.rails?.[trendTab] || []).filter((p) => p?.image_url);
+  const heroCount = heroLooks.length;
+  const heroProduct = heroCount ? heroLooks[((heroIdx % heroCount) + heroCount) % heroCount] : null;
   const heroImage = heroProduct?.image_url || "/hero-home.jpg";
   const cycleHero = (dir) => {
-    if (heroLooks.length < 2) return;
-    setHeroIdx((i) => (i + dir + heroLooks.length) % heroLooks.length);
+    if (heroCount < 2) return;
+    setHeroIdx((i) => ((i + dir) % heroCount + heroCount) % heroCount);
   };
+  const onHeroPointerDown = (e) => {
+    if (e.target.closest?.("button, a, input")) {
+      swipeX.current = null;
+      return;
+    }
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    swipeX.current = e.clientX;
+  };
+  const onHeroPointerUp = (e) => {
+    const start = swipeX.current;
+    swipeX.current = null;
+    if (start == null || heroCount < 2) return;
+    const dx = e.clientX - start;
+    if (Math.abs(dx) < 48) return;
+    cycleHero(dx < 0 ? 1 : -1);
+  };
+
+  useEffect(() => { setHeroIdx(0); }, [trendTab]);
   const jumpToRail = (tab) => {
     setTrendTab(tab);
     requestAnimationFrame(() => {
@@ -144,12 +160,25 @@ export default function LoginScreen({
 
       <main className="mira-dashboard-main">
         <section className="mira-dashboard-grid" aria-label="Mira styling studio">
-          <article className="mira-style-hero">
+          <article
+            className="mira-style-hero"
+            onPointerDown={onHeroPointerDown}
+            onPointerUp={onHeroPointerUp}
+            onPointerCancel={() => { swipeX.current = null; }}
+          >
             <img src={hdProductImageUrl(heroImage, { longest: 1600 }) || heroImage} alt={heroProduct?.name || "Trending look"} />
             <div className="mira-style-hero-shade" />
-            <div className="mira-style-hero-top"><span>MIRA</span><b>✦ Trending now</b></div>
-            <button type="button" className="mira-hero-arrow mira-hero-arrow--left" aria-label="Previous look" onClick={() => cycleHero(-1)}>‹</button>
-            <button type="button" className="mira-hero-arrow" aria-label="Next look" onClick={() => cycleHero(1)}>›</button>
+            <div className="mira-style-hero-top">
+              <span>MIRA</span>
+              <b>✦ Trending now{heroCount > 1 ? ` · ${(heroIdx % heroCount) + 1}/${heroCount}` : ""}</b>
+            </div>
+            {heroCount > 1 && (
+              <>
+                <button type="button" className="mira-hero-arrow mira-hero-arrow--left" aria-label="Previous look" onClick={() => cycleHero(-1)}>‹</button>
+                <button type="button" className="mira-hero-arrow" aria-label="Next look" onClick={() => cycleHero(1)}>›</button>
+                <p className="mira-hero-count">{(heroIdx % heroCount) + 1} / {heroCount}</p>
+              </>
+            )}
             <div className="mira-style-hero-copy">
               <p>From social this week</p>
               <h1>Clothes, shoes,<br />bags — what’s hot.</h1>

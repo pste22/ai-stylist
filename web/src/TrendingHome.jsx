@@ -67,13 +67,7 @@ function TrendCard({ p, loved, onLove, onBuy, onSelect }) {
 }
 
 function Rail({ id, label, products, loved, onLove, onBuy, onSelect, active }) {
-  const scroller = useRef(null);
   if (!products?.length) return null;
-  const scrollBy = (dir) => {
-    const el = scroller.current;
-    if (!el) return;
-    el.scrollBy({ left: dir * Math.min(el.clientWidth * 0.9, 520), behavior: "smooth" });
-  };
   return (
     <section
       className={`trend-rail${active ? " is-active" : ""}`}
@@ -84,14 +78,8 @@ function Rail({ id, label, products, loved, onLove, onBuy, onSelect, active }) {
       <div className="trend-rail-head">
         <h3 className="trend-rail-title">{label}</h3>
         <span className="trend-rail-count">{products.length}</span>
-        {products.length > 3 && (
-          <div className="trend-rail-nav">
-            <button type="button" aria-label="Previous looks" onClick={() => scrollBy(-1)}>‹</button>
-            <button type="button" aria-label="Next looks" onClick={() => scrollBy(1)}>›</button>
-          </div>
-        )}
       </div>
-      <div className="trend-rail-scroll" ref={scroller}>
+      <div className="trend-rail-scroll">
         {products.map((p) => (
           <TrendCard
             key={p.id}
