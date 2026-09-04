@@ -43,14 +43,22 @@ from collections.abc import Iterable
 from math import log1p
 from typing import Any
 
+from product_facets import OCCASIONS
 from curation_mix import (
     _CATEGORY_SYNONYMS,
     _COLOR_ALIASES,
+    _FUZZY_SKIP,
+    _LEAD_IN_WORDS,
     _alias_re,
     _color_matches,
+    _in_vocab,
+    _static_shop_vocab,
+    brand_spell_words,
+    correct_shop_typos,
     detect_brand,
     detect_category,
     detect_color_key,
+    detect_occasion,
     detect_pattern,
     pattern_matches,
     photo_quality,
@@ -58,8 +66,8 @@ from curation_mix import (
 
 __all__ = ["answer", "parse_query", "popularity_score", "warm_index"]
 
-DEFAULT_N = 6
-MAX_N = 12
+DEFAULT_N = 12
+MAX_N = 24
 
 # ---------------------------------------------------------------------------
 # Popularity — proxy for "highly selling"
@@ -67,6 +75,16 @@ MAX_N = 12
 
 _RATING_PRIOR = 3.6   # neutral rating for unrated items
 _PRIOR_WEIGHT = 12.0  # pseudo-reviews pulling small samples toward the prior
+
+
+def _occasion_matches(product: dict, occasion_key: str | None) -> bool:
+    if not occasion_key:
+        return False
+    occ = {str(o).lower() for o in ((product.get("facets") or {}).get("occasion") or [])}
+    if occasion_key in occ:
+        return True
+    blob = f"{product.get('name') or ''} {' '.join(product.get('style') or [])}".lower()
+    return any(alias in blob for alias in OCCASIONS.get(occasion_key, ()))
 
 
 def popularity_score(p: dict) -> float:
@@ -136,6 +154,8 @@ _BRAND_ASK_BREAK = {
 _BRAND_ASK_STOP = {
     "my", "me", "the", "your", "our", "their", "this", "a", "an", "you",
     "wardrobe", "amazon", "india", "silk", "cotton", "linen", "denim", "leather",
+    "women", "womens", "woman", "men", "mens", "ladies", "kids", "girls", "boys",
+    "summer", "winter", "spring", "autumn", "fall", "more", "some", "any",
 }
 
 
@@ -143,22 +163,41 @@ def detect_unknown_brand(text: str, known_brand: str | None) -> str | None:
     """Name the brand the user asked for when it's not in the catalog."""
     if known_brand:
         return None
-    m = _BRAND_ASK_RE.search((text or "").lower())
-    if not m:
-        return None
-    words: list[str] = []
-    for w in m.group(1).split():
-        if w in _BRAND_ASK_BREAK or any(ch.isdigit() for ch in w):
-            break
-        words.append(w)
-        if len(words) >= 2:
-            break
-    if not words:
-        return None
-    first = words[0]
-    if first in _BRAND_ASK_STOP or detect_category(first) or detect_color_key(first):
-        return None
-    return " ".join(words)
+    t = (text or "").lower()
+    m = _BRAND_ASK_RE.search(t)
+    if m:
+        words: list[str] = []
+        for w in m.group(1).split():
+            if w in _BRAND_ASK_BREAK or any(ch.isdigit() for ch in w):
+                break
+            words.append(w)
+            if len(words) >= 2:
+                break
+        if words:
+            first = words[0]
+            if not (first in _BRAND_ASK_STOP or detect_category(first)
+                    or detect_color_key(first)):
+                return " ".join(words)
+    # "show me gucci bags" — brand sits immediately before the category word.
+    shop_vocab = set(_static_shop_vocab())
+    for _cat, words in _CATEGORY_SYNONYMS.items():
+        for word in words:
+            cm = _alias_re(word).search(t)
+            if not cm:
+                continue
+            prev = (t[:cm.start()].rstrip().split() or [""])[-1].strip(".,!?\"'")
+            if len(prev) < 4:
+                continue
+            if (prev in _BRAND_ASK_STOP or prev in _FUZZY_SKIP
+                    or prev in _LEAD_IN_WORDS):
+                continue
+            if (detect_category(prev) or detect_color_key(prev)
+                    or detect_pattern(prev) or detect_occasion(prev)):
+                continue
+            if _in_vocab(prev, shop_vocab):
+                continue
+            return prev
+    return None
 
 
 _RECOMMEND_PATTERNS = (
@@ -471,6 +510,9 @@ def answer(
     """
     t0 = time.perf_counter()
     exclude = exclude_ids or set()
+    text, typo_subs = correct_shop_typos(
+        text or "", extra_words=brand_spell_words(catalog)
+    )
 
     parsed = parse_query(text)
     n = parsed["count"] or default_n
@@ -489,23 +531,34 @@ def answer(
     category = detect_category(text)
     color = detect_color_key(text)
     pattern = detect_pattern(text)
+    occasion = detect_occasion(text)
     # "floral"/"striped" are also multicolor cues, and that bucket matches any
     # print — so a striped ask returned floral items. The pattern is the real ask.
     if pattern and color == "multicolor":
         color = None
 
     has_price = price_min is not None or price_max is not None
-    actionable = bool(brand or category or color or pattern or sort_explicit
+    actionable = bool(brand or category or color or pattern or occasion or sort_explicit
                       or parsed["count"] or has_price or parsed["recommend"])
 
     result: dict[str, Any] = {
         "brand": brand, "category": category, "color": color, "pattern": pattern,
+        "occasion": occasion,
         "count": n, "sort": sort, "price_min": price_min, "price_max": price_max,
         "recommend": parsed["recommend"],
         "mode": "none", "notes": [], "message": None, "label": None,
         "products": [],
     }
     if not actionable:
+        t_low = (text or "").lower()
+        shop_lead = any(
+            _alias_re(w).search(t_low)
+            for w in ("show", "find", "get", "browse", "search", "want")
+        )
+        if shop_lead:
+            result["message"] = (
+                "I didn't catch which pieces you want — try tops, dresses, shoes, or bags."
+            )
         result["elapsed_ms"] = (time.perf_counter() - t0) * 1000.0
         return result
 
@@ -535,6 +588,8 @@ def answer(
                 continue
             if want.get("pattern") and not pattern_matches(p, want["pattern"]):
                 continue
+            if want.get("occasion") and not _occasion_matches(p, want["occasion"]):
+                continue
             out.append(p)
         return out
 
@@ -543,6 +598,10 @@ def answer(
         attempts.append(("brand_cat_color", {"brand": brand, "category": category, "color": color}))
     if brand and category:
         attempts.append(("brand_cat", {"brand": brand, "category": category}))
+    if category and occasion and color:
+        attempts.append(("cat_color_occ", {"category": category, "color": color, "occasion": occasion}))
+    if category and occasion:
+        attempts.append(("cat_occ", {"category": category, "occasion": occasion}))
     if category and color and pattern:
         attempts.append(("cat_color_pattern", {"category": category, "color": color, "pattern": pattern}))
     if category and pattern:
@@ -555,6 +614,8 @@ def answer(
         attempts.append(("brand_pattern", {"brand": brand, "pattern": pattern}))
     if pattern:
         attempts.append(("pattern", {"pattern": pattern}))
+    if occasion:
+        attempts.append(("occasion", {"occasion": occasion}))
     if category:
         attempts.append(("category", {"category": category}))
     if brand:
@@ -610,6 +671,8 @@ def answer(
     unknown_brand = detect_unknown_brand(text, brand)
     notes: list[str] = []
     if matched:
+        if typo_subs:
+            notes.append("Showing closest matches for what you typed.")
         if unknown_brand:
             notes.append(
                 f"I don't carry {unknown_brand.title()} yet — "
@@ -626,6 +689,10 @@ def answer(
             notes.append(f"No {pattern} {category} right now — showing our {category}.")
         elif pattern and "pattern" not in mode:
             notes.append(f"No {pattern} pieces right now — showing the closest matches.")
+        elif occasion and category and "occ" not in mode:
+            notes.append(f"No {occasion} {category} right now — showing our {category}.")
+        elif occasion and "occ" not in mode and mode != "occasion":
+            notes.append(f"No {occasion} pieces right now — showing the closest matches.")
         elif color and mode == "name_match" and not any(
             _color_matches(p, color) for p in matched[:20]
         ):

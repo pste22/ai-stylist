@@ -70,6 +70,8 @@ from curation_mix import (  # noqa: E402
     look_slots_for,
     style_suggestions_for,
     shop_look_for,
+    homepage_trending_rails,
+    detect_category,
     card_fields as _mix_card,
     photo_quality,
 )
@@ -391,6 +393,20 @@ def _client_product(p: dict) -> dict:
     }
 
 
+def _homepage_trending_payload() -> dict:
+    """Clothes / shoes / bags for the launch homepage (WS + REST)."""
+    feed = homepage_trending_rails(_CATALOG, n_each=8)
+    def _cards(items: list) -> list:
+        return [_mix_card(p, _affiliate_url(p)) for p in items]
+    rails = {k: _cards(v) for k, v in (feed.get("rails") or {}).items()}
+    return {
+        "headline": feed.get("headline") or "Trending now",
+        "subhead": feed.get("subhead") or "",
+        "rails": rails,
+        "items": _cards(feed.get("items") or []),
+    }
+
+
 _MODEL = os.environ.get("GEMINI_LIVE_MODEL", "gemini-3.1-flash-live-preview")
 _VISION_MODEL = os.environ.get("GEMINI_VISION_MODEL", "gemini-2.5-pro")
 # Image-generation model for virtual try-on. recontext_image is Vertex-only, so on
@@ -591,29 +607,9 @@ def _mood_of(text: str) -> str:
     return "neutral"
 
 
-# Maps user-facing keywords → catalog category names
-_INTENT_CATEGORY_MAP = [
-    ({"bottoms", "bottom", "jeans", "denim", "skinny jeans", "slim jeans", "bootcut", "straight leg",
-      "pants", "trousers", "chinos", "palazzos", "culottes",
-      "skirt", "skirts", "mini skirt", "midi skirt", "maxi skirt", "pleated skirt",
-      "shorts", "short pants", "leggings", "tights", "yoga pants"}, "bottoms"),
-    ({"dress", "dresses", "gown", "sundress", "bodycon", "midi dress", "maxi dress", "mini dress"}, "dresses"),
-    ({"tops", "blouse", "shirt", "tee", "t-shirt", "camisole", "crop top", "sweater"}, "tops"),
-    ({"bag", "bags", "handbag", "purse", "tote", "clutch", "satchel", "crossbody"}, "bags"),
-    ({"shoes", "heels", "sneakers", "boots", "loafers", "sandals", "flats", "footwear"}, "shoes"),
-    ({"jacket", "coat", "blazer", "cardigan", "outerwear", "hoodie", "windbreaker"}, "outerwear"),
-    ({"activewear", "sportswear", "athleisure", "gym wear", "workout"}, "activewear"),
-    ({"accessories", "accessory", "jewellery", "jewelry", "earrings", "necklace", "bracelet"}, "accessories"),
-]
-
-
 def _detect_category_intent(text: str) -> str | None:
     """Return the catalog category a user is asking about, or None."""
-    low = text.lower()
-    for keywords, cat in _INTENT_CATEGORY_MAP:
-        if any(kw in low for kw in keywords):
-            return cat
-    return None
+    return detect_category(text)
 
 
 def _match_products(transcript: str) -> list[dict]:
@@ -1076,27 +1072,9 @@ async def handle(ws) -> None:
     if _editorial_looks:
         await _send_json(ws, type="editorial_looks", items=_editorial_looks)
 
-    # Send trending strip — 8 products with real images spread across categories
-    _trend_cats = ["dresses", "bags", "shoes", "outerwear", "tops", "bottoms", "dresses", "bags"]
-    _trend_seen_cats: dict[str, int] = {}
-    _trending = []
-    for p in _CATALOG:
-        if not p.get("image_url"):
-            continue
-        cat = p.get("category", "")
-        cap = 2 if cat in ("dresses", "bags") else 1
-        if _trend_seen_cats.get(cat, 0) >= cap:
-            continue
-        _trending.append({
-            "id": p["id"], "name": p["name"], "category": p["category"],
-            "color": p["color"], "price": p["price"],
-            "image_url": p["image_url"], "affiliate_url": _affiliate_url(p),
-        })
-        _trend_seen_cats[cat] = _trend_seen_cats.get(cat, 0) + 1
-        if len(_trending) >= 8:
-            break
-    if _trending:
-        await _send_json(ws, type="trending", items=_trending)
+    _trend_feed = _homepage_trending_payload()
+    if _trend_feed["items"] or any(_trend_feed["rails"].values()):
+        await _send_json(ws, type="trending", **_trend_feed)
 
     # Phase 2 — the slower I/O (PIN-code lookup + user memory/loved items).
     # These feed the Gemini system prompt and the loved-item state, NOT the
@@ -3660,6 +3638,14 @@ async def process_request(connection, request):
         resp.headers["Cache-Control"] = "public, max-age=3600"
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["X-Content-Type-Options"] = "nosniff"
+        return resp
+
+    if request.path.startswith("/api/trending"):
+        body = json.dumps(_homepage_trending_payload())
+        resp = connection.respond(200, body)
+        resp.headers["Content-Type"] = "application/json"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Cache-Control"] = "public, max-age=120"
         return resp
 
     if request.path.startswith("/api/browse") or request.path.startswith("/api/filters"):

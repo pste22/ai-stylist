@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import ForBrands from "./ForBrands.jsx";
+import TrendingHome from "./TrendingHome.jsx";
+import { hdProductImageUrl } from "./imageUrl.js";
 import { fetchEnabledProviders } from "./supabaseClient.js";
 
 /** OAuth buttons shared by the home sheet and in-app prompts (VTO). */
@@ -50,6 +52,25 @@ export default function LoginScreen({
   const [showAuth, setShowAuth] = useState(autoOpen);
   const [showBrands, setShowBrands] = useState(false);
   const [prompt, setPrompt] = useState("");
+  const [trendFeed, setTrendFeed] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/trending")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => { if (alive && data) setTrendFeed(data); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
+
+  const openTrending = (product) => {
+    if (product?.id) {
+      try { sessionStorage.setItem("mira:openProduct", JSON.stringify(product)); } catch { /* */ }
+    }
+    onGuest();
+  };
+
+  const heroImage = trendFeed?.rails?.clothes?.[0]?.image_url || "/hero-home.jpg";
 
   // An error only makes sense next to the buttons that produced it.
   useEffect(() => { if (authError) setShowAuth(true); }, [authError]);
@@ -83,7 +104,7 @@ export default function LoginScreen({
       </header>
 
       <nav className="mira-category-nav" aria-label="Shop categories">
-        {['Dresses', 'Tops', 'Bottoms', 'Bags', 'Shoes', 'Outerwear'].map((category, index) => (
+        {['Clothes', 'Shoes', 'Bags', 'Dresses', 'Tops'].map((category, index) => (
           <button key={category} type="button" className={index === 0 ? 'is-active' : ''} onClick={onGuest}>{category}</button>
         ))}
         <span className="mira-category-spacer" />
@@ -94,15 +115,15 @@ export default function LoginScreen({
       <main className="mira-dashboard-main">
         <section className="mira-dashboard-grid" aria-label="Mira styling studio">
           <article className="mira-style-hero">
-            <img src="/hero-home.jpg" alt="A woman relaxing in a cream outfit" />
+            <img src={hdProductImageUrl(heroImage, { longest: 1600 }) || heroImage} alt="Trending look" />
             <div className="mira-style-hero-shade" />
-            <div className="mira-style-hero-top"><span>MIRA</span><b>✦ Featured</b></div>
-            <button type="button" className="mira-hero-arrow mira-hero-arrow--left" aria-label="Previous look" onClick={onGuest}>‹</button>
-            <button type="button" className="mira-hero-arrow" aria-label="Next look" onClick={onGuest}>›</button>
+            <div className="mira-style-hero-top"><span>MIRA</span><b>✦ Trending now</b></div>
+            <button type="button" className="mira-hero-arrow mira-hero-arrow--left" aria-label="Browse looks" onClick={onGuest}>‹</button>
+            <button type="button" className="mira-hero-arrow" aria-label="Browse looks" onClick={onGuest}>›</button>
             <div className="mira-style-hero-copy">
-              <p>Today’s edit</p>
-              <h1>Soft tailoring,<br />made personal.</h1>
-              <button type="button" onClick={onGuest}>Explore the look <span>→</span></button>
+              <p>From social this week</p>
+              <h1>Clothes, shoes,<br />bags — what’s hot.</h1>
+              <button type="button" onClick={onGuest}>Shop the trends <span>→</span></button>
             </div>
           </article>
 
@@ -114,15 +135,28 @@ export default function LoginScreen({
         </section>
 
         <section className="mira-recommendations" aria-labelledby="mira-recommendations-title">
-          <div className="mira-section-heading"><div><p>Curated for you</p><h2 id="mira-recommendations-title">Fresh looks to explore</h2></div><button type="button" onClick={onGuest}>See all <span>→</span></button></div>
-          <div className="mira-look-row">
-            {['The polished set', 'Weekend ease', 'A little after-dark', 'Finishing touches'].map((look, index) => (
-              <button type="button" className={`mira-look-card mira-look-card--${index + 1}`} key={look} onClick={onGuest}>
-                <span className="mira-look-card-image"><img src={index === 2 ? '/hero-home-sm.jpg' : '/hero-home.jpg'} alt="" /></span>
-                <span><b>{look}</b><small>{['4 pieces', '5 pieces', '3 pieces', 'Accessories'][index]}</small></span>
-              </button>
-            ))}
-          </div>
+          {trendFeed ? (
+            <TrendingHome
+              rails={trendFeed.rails}
+              items={trendFeed.items}
+              headline={trendFeed.headline}
+              subhead={trendFeed.subhead}
+              onSelect={openTrending}
+              onBuy={openTrending}
+            />
+          ) : (
+            <>
+              <div className="mira-section-heading"><div><p>From social this week</p><h2 id="mira-recommendations-title">Trending clothes, shoes & bags</h2></div><button type="button" onClick={onGuest}>See all <span>→</span></button></div>
+              <div className="mira-look-row">
+                {['The polished set', 'Weekend ease', 'A little after-dark', 'Finishing touches'].map((look, index) => (
+                  <button type="button" className={`mira-look-card mira-look-card--${index + 1}`} key={look} onClick={onGuest}>
+                    <span className="mira-look-card-image"><img src={index === 2 ? '/hero-home-sm.jpg' : '/hero-home.jpg'} alt="" /></span>
+                    <span><b>{look}</b><small>{['4 pieces', '5 pieces', '3 pieces', 'Accessories'][index]}</small></span>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
         </section>
       </main>
 

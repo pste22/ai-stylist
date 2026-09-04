@@ -10,7 +10,7 @@ from collections.abc import Iterable
 from functools import lru_cache
 from typing import Any
 
-from product_facets import PATTERNS
+from product_facets import COLLARS, FITS, MATERIALS, OCCASIONS, PATTERNS, SHAPES
 
 
 # Everyday words → catalog category (aligned with stylist / live_server intent).
@@ -86,13 +86,281 @@ _COMPLEMENTS: dict[str, tuple[str, ...]] = {
 }
 
 
+_FUZZY_SKIP = frozenset(_LEAD_IN_WORDS) | {
+    "please", "something", "stuff", "items", "pieces", "options", "ones",
+    "outfit", "look", "wear", "today", "tonight", "really", "just",
+    "with", "from", "that", "this", "have", "what", "when", "which",
+    "about", "around", "there", "here", "very", "more", "also",
+    "whats", "dont", "cant", "wont",
+    # Short English that would otherwise snap onto catalog words (had→hat, let→Lee).
+    "had", "has", "his", "her", "hey", "how", "who", "why", "did", "does",
+    "are", "was", "can", "let", "see", "you", "she", "him", "they", "them",
+    "our", "all", "not", "but", "new", "old", "too", "two", "way", "yes",
+    "yet", "put", "say", "use", "now", "out", "its", "may", "been", "like",
+    "make", "made", "well", "still", "even", "much", "such", "only", "back",
+    "over", "into", "than", "then", "these", "those", "your", "their",
+    "would", "could", "should", "might", "will", "going", "hello", "thanks",
+    "the", "and", "for", "to", "of", "in", "on", "at", "by", "or", "as",
+    "if", "it", "be", "we", "us", "so", "no", "an", "my",
+    # Ranking / sort language must never snap onto product words (best→belt).
+    "best", "selling", "seller", "sellers", "rated", "popular", "expensive",
+    "affordable", "luxury", "latest", "recent", "hottest",
+}
+_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z']*")
+_SKIP_VOCAB = frozenset({
+    "a", "an", "the", "in", "on", "of", "or", "and", "for", "to", "me", "my",
+    "off", "one", "dot", "fit", "line", "multi", "print", "con", "cut",
+})
+# High-frequency fashion misspellings that edit-distance alone can miss.
+_COMMON_TYPOS: dict[str, str] = {
+    "topas": "tops", "topps": "tops", "tosp": "tops", "tpos": "tops",
+    "shos": "shoes", "shose": "shoes", "shoos": "shoes", "sheos": "shoes",
+    "drsses": "dresses", "dreses": "dresses", "dresss": "dresses",
+    "jens": "jeans", "jeens": "jeans",
+    "pents": "pants", "pantss": "pants",
+    "baggs": "bags",
+    "jaket": "jacket", "jackt": "jacket", "blzer": "blazer",
+    "sandles": "sandals", "sandels": "sandals",
+    "snekers": "sneakers", "sneekers": "sneakers", "sneker": "sneakers",
+    "heals": "heels", "hels": "heels",
+    "kurtie": "kurti", "kurtha": "kurta", "kurti's": "kurti",
+    "sarree": "saree", "sari": "saree",
+    "lehnga": "lehenga",
+    "tshirt": "shirt", "tshrt": "shirt",
+    "blose": "blouse", "bloues": "blouse",
+    "skrit": "skirt", "skrits": "skirt",
+    "trosers": "trousers", "trouser": "trousers",
+    "sweter": "sweater", "sweatr": "sweater",
+    "hoodi": "hoodie", "hoody": "hoodie",
+    "cardigen": "cardigan", "cardgan": "cardigan",
+    "leggins": "leggings", "legings": "leggings",
+    "palazo": "palazzo", "palazoos": "palazzo",
+    "anarkli": "anarkali", "anarkalli": "anarkali",
+    "skiny": "skinny",
+    "oversizd": "oversized", "overzised": "oversized",
+    "denem": "denim", "dnim": "denim",
+    "lether": "leather", "leathr": "leather",
+    "coton": "cotton",
+    "florals": "floral",
+    "wedng": "wedding", "weding": "wedding",
+    "partty": "party",
+    "casul": "casual", "casusal": "casual",
+    "forml": "formal",
+    "chepest": "cheapest",
+    "sugest": "suggest", "suggst": "suggest",
+    "purpel": "purple", "purpal": "purple", "purle": "purple", "purpl": "purple",
+    "blew": "blue", "blu": "blue",
+    "blak": "black", "blk": "black", "balck": "black",
+    "whyte": "white", "wite": "white", "whie": "white",
+    "yelow": "yellow", "yello": "yellow", "yllow": "yellow",
+    "grean": "green", "gren": "green", "grene": "green",
+    "organge": "orange", "oragne": "orange", "ornage": "orange",
+    "pinck": "pink", "pikn": "pink",
+    "navi": "navy",
+    "gry": "grey", "graey": "grey", "grayy": "grey",
+    "brwn": "brown", "bown": "brown",
+    "burgandy": "burgundy", "burdundy": "burgundy",
+    "marron": "maroon", "marroon": "maroon",
+    "lavendar": "lavender",
+    "ivroy": "ivory",
+    "florl": "floral", "florel": "floral",
+    "stripedd": "striped", "stripes": "striped",
+    "cheep": "cheap", "cheepest": "cheapest",
+    "trendng": "trending", "trnding": "trending",
+    "premum": "premium",
+    "newst": "newest",
+    "undr": "under", "belo": "below",
+    "recomend": "recommend", "reccomend": "recommend",
+    "ofice": "office",
+}
+
+
+def _levenshtein(a: str, b: str) -> int:
+    """Edit distance for short tokens. Rejects far-apart lengths early."""
+    if a == b:
+        return 0
+    if abs(len(a) - len(b)) > 2:
+        return 99
+    prev = list(range(len(b) + 1))
+    for i, ca in enumerate(a, 1):
+        cur = [i]
+        for j, cb in enumerate(b, 1):
+            cur.append(min(cur[-1] + 1, prev[j] + 1, prev[j - 1] + (ca != cb)))
+        prev = cur
+    return prev[-1]
+
+
+def _vocab_from_groups(*groups: dict) -> set[str]:
+    words: set[str] = set()
+    for group in groups:
+        for aliases in group.values():
+            for alias in aliases:
+                for part in re.split(r"[^a-z]+", alias.lower()):
+                    if len(part) >= 3 and part not in _SKIP_VOCAB:
+                        words.add(part)
+    return words
+
+
+@lru_cache(maxsize=1)
+def _static_shop_vocab() -> frozenset[str]:
+    words = _vocab_from_groups(
+        _CATEGORY_SYNONYMS, _COLOR_ALIASES, PATTERNS, FITS, SHAPES, COLLARS, OCCASIONS,
+    )
+    words.update({
+        "under", "below", "between", "budget", "cheapest", "cheap", "premium",
+        "newest", "trending", "recommend", "suggest", "surprise", "office",
+        "casual",
+    })
+    words.update(m.lower() for m in MATERIALS if len(m) >= 3)
+    words.update(_COMMON_TYPOS.values())
+    return frozenset(w for w in words if len(w) >= 3)
+
+
+def _is_subsequence(short: str, long: str) -> bool:
+    it = iter(long)
+    return all(ch in it for ch in short)
+
+
+def _brand_typo_ok(token: str, brand: str) -> bool:
+    """Allow zra→zara; block let→Lee / had→hat-style snaps onto short brands."""
+    if len(token) >= 4:
+        return True
+    return len(brand) > len(token) and _is_subsequence(token, brand)
+
+
+def brand_spell_words(catalog: Iterable[dict] | None) -> tuple[str, ...]:
+    """Brand tokens safe to fuzzy-match (never invent a brand we don't carry)."""
+    words: list[str] = []
+    for b in _brand_index(catalog or []):
+        bl = b.lower()
+        words.append(bl)
+        for part in re.split(r"[^a-z0-9]+", bl):
+            if len(part) >= 3:
+                words.append(part)
+    return tuple(words)
+
+
+def _in_vocab(token: str, vocab: set[str]) -> bool:
+    if token in vocab:
+        return True
+    if token.endswith("s") and token[:-1] in vocab:
+        return True
+    if (token + "s") in vocab:
+        return True
+    return False
+
+
+def _nearest_vocab(token: str, vocab: Iterable[str]) -> str | None:
+    max_dist = 1 if len(token) <= 5 else 2
+    best: tuple[int, int, str] | None = None
+    for word in vocab:
+        if not word or word[0] != token[0]:
+            continue
+        if len(token) == 3 and not (3 <= len(word) <= 4):
+            continue
+        if abs(len(word) - len(token)) > 2:
+            continue
+        dist = _levenshtein(token, word)
+        if dist == 0 or dist > max_dist:
+            continue
+        cand = (dist, -len(word), word)
+        if best is None or cand < best:
+            best = cand
+    return best[2] if best else None
+
+
+def correct_shop_typos(
+    text: str,
+    *,
+    extra_words: Iterable[str] = (),
+) -> tuple[str, list[tuple[str, str]]]:
+    """Rewrite chat typos onto catalog language. Returns (text, substitutions)."""
+    if not text:
+        return text, []
+    static = _static_shop_vocab()
+    vocab = set(static)
+    brand_only = {
+        w.lower() for w in extra_words
+        if w and len(w) >= 3 and w.lower() not in static
+    }
+    vocab.update(w.lower() for w in extra_words if w and len(w) >= 3)
+    subs: list[tuple[str, str]] = []
+
+    def replace(match: re.Match[str]) -> str:
+        tok = match.group(0)
+        low = tok.lower().replace("'", "")
+        if len(low) < 3 or low in _FUZZY_SKIP or low.isdigit():
+            return tok
+        mapped = _COMMON_TYPOS.get(low)
+        if mapped and mapped != low:
+            subs.append((low, mapped))
+            return mapped
+        if _in_vocab(low, vocab):
+            return tok
+        # 3-letter tokens are too collision-prone for general fuzzy
+        # matching (the→tee, had→hat). Only known maps and dropped-letter
+        # brand typos (zra→zara) are allowed.
+        search = brand_only if len(low) <= 3 else vocab
+        nearest = _nearest_vocab(low, search) if search else None
+        if nearest and nearest != low:
+            if nearest in brand_only and not _brand_typo_ok(low, nearest):
+                return tok
+            if len(low) <= 3 and nearest not in brand_only:
+                return tok
+            subs.append((low, nearest))
+            return nearest
+        return tok
+
+    return _TOKEN_RE.sub(replace, text), subs
+
+
+@lru_cache(maxsize=1)
+def _synonym_vocab() -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (word, cat)
+        for cat, words in _CATEGORY_SYNONYMS.items()
+        for word in words
+        if len(word) >= 3
+    )
+
+
+def _fuzzy_category(text: str) -> str | None:
+    """Nearest catalog category for a typo'd product word ('topas' → tops)."""
+    tokens = [
+        w.replace("'", "") for w in _TOKEN_RE.findall(text.lower())
+        if w.replace("'", "") not in _FUZZY_SKIP and len(w.replace("'", "")) >= 4
+    ]
+    best: tuple[int, int, str] | None = None  # (dist, -syn_len, cat)
+    for tok in tokens:
+        max_dist = 1 if len(tok) <= 5 else 2
+        for word, cat in _synonym_vocab():
+            if word[0] != tok[0] or abs(len(word) - len(tok)) > 2:
+                continue
+            dist = _levenshtein(tok, word)
+            if dist == 0 or dist > max_dist:
+                continue
+            cand = (dist, -len(word), cat)
+            if best is None or cand < best:
+                best = cand
+    return best[2] if best else None
+
+
+_RANK_PHRASE_RE = re.compile(
+    r"\b(?:top|best)\s+(?:rated|selling|sell|seller|sellers)\b",
+    re.I,
+)
+
+
 def detect_category(text: str) -> str | None:
     """Map free text onto a catalog category using whole-word synonyms.
 
     Substring matching is unsafe: ``hat`` sits inside ``what's``, so
     "Complete the look — fill what's missing" used to return accessories.
+    Typos ('topas', 'shos', 'drsses') are rewritten, then matched.
+    Ranking phrases ('top rated shoes') must not steal the 'top' synonym.
     """
-    t = (text or "").lower()
+    t, _ = correct_shop_typos(text or "")
+    t = _RANK_PHRASE_RE.sub(" ", t.lower())
     matches = [
         (m.start(), len(word), cat)
         for cat, words in _CATEGORY_SYNONYMS.items()
@@ -100,7 +368,7 @@ def detect_category(text: str) -> str | None:
         if (m := _alias_re(word).search(t))
     ]
     if not matches:
-        return None
+        return _fuzzy_category(t)
     # A typo can drop a category word inside the command phrase ("shoe mw some
     # tops" for "show me some tops"), so prefer what is asked for after it.
     lead_end = 0
@@ -114,8 +382,19 @@ def detect_category(text: str) -> str | None:
 
 def detect_pattern(text: str) -> str | None:
     """Map free text onto a print/pattern facet ("floral", "striped")."""
-    t = (text or "").lower()
+    t, _ = correct_shop_typos(text or "")
+    t = t.lower()
     for key, aliases in PATTERNS.items():
+        if _mentions(t, aliases):
+            return key
+    return None
+
+
+def detect_occasion(text: str) -> str | None:
+    """Map free text onto an occasion facet (office / party / wedding / …)."""
+    t, _ = correct_shop_typos(text or "")
+    t = t.lower()
+    for key, aliases in OCCASIONS.items():
         if _mentions(t, aliases):
             return key
     return None
@@ -145,7 +424,8 @@ def _mentions(text: str, aliases: Iterable[str]) -> bool:
 
 
 def detect_color_key(text: str) -> str | None:
-    t = (text or "").lower()
+    t, _ = correct_shop_typos(text or "")
+    t = t.lower()
     for key, aliases in _COLOR_ALIASES.items():
         if _mentions(t, aliases):
             return key
@@ -646,6 +926,102 @@ def trending_complements(
     return out
 
 
+# Homepage rails — clothes / shoes / bags. Tokens are Mira's read of what is
+# moving on social (Reels, Pinterest, search), not a scrape of Instagram.
+_CLOTHES_CATS = ("dresses", "tops", "bottoms", "outerwear", "ethnic", "activewear")
+_HOMEPAGE_RAILS: dict[str, tuple[str, ...]] = {
+    "clothes": _CLOTHES_CATS,
+    "shoes": ("shoes",),
+    "bags": ("bags",),
+}
+_BAG_HINTS = ("bag", "tote", "clutch", "purse", "handbag", "backpack", "sling", "bucket")
+_SOCIAL_HEAT: tuple[str, ...] = (
+    "trendy", "cargo", "linen", "co-ord", "coord", "corset", "mesh",
+    "platform", "chunky", "mini bag", "shoulder bag", "bucket",
+    "jutti", "juttis", "kolhapuri", "festive", "embroidered", "satin",
+    "ballet", "sling", "tote", "bodycon", "wrap",
+)
+
+
+def _style_blob(item: dict) -> str:
+    styles = item.get("style") or item.get("style_tags") or []
+    style_s = " ".join(styles) if isinstance(styles, list) else str(styles)
+    return f"{item.get('name') or ''} {style_s} {item.get('color') or ''} {item.get('category') or ''}".lower()
+
+
+def _social_heat_score(item: dict) -> int:
+    blob = _style_blob(item)
+    return sum(1 for tok in _SOCIAL_HEAT if tok in blob)
+
+
+def homepage_trending_rails(
+    catalog: Iterable[dict],
+    *,
+    n_each: int = 8,
+    shopper: str = "women",
+) -> dict[str, Any]:
+    """Ranked clothes / shoes / bags for the launch homepage.
+
+    Products stay catalog-grounded and buyable. Ranking uses social-heat
+    tokens, shopper ratings, and real product photos — never scraped Reels.
+    """
+    pool = [p for p in catalog if p.get("id")]
+    rails: dict[str, list[dict]] = {}
+    for rail, cats in _HOMEPAGE_RAILS.items():
+        cands = [p for p in pool if (p.get("category") or "").lower() in cats]
+        if rail == "bags" and len(cands) < n_each:
+            extra = [
+                p for p in pool
+                if (p.get("category") or "").lower() == "accessories"
+                and p["id"] not in {x["id"] for x in cands}
+                and any(h in _style_blob(p) for h in _BAG_HINTS)
+            ]
+            cands = cands + extra
+        pictured = [p for p in cands if p.get("image_url")]
+        cands = pictured or cands
+        cands = _filter_gender(cands, shopper, min_keep=max(n_each, 3))
+        cands.sort(
+            key=lambda p: (
+                photo_quality(p),
+                _social_heat_score(p),
+                1 if has_shopper_signal(p) else 0,
+                _review_votes(p),
+                _review_rating(p),
+            ),
+            reverse=True,
+        )
+        picked: list[dict] = []
+        seen: set[str] = set()
+        for p in cands:
+            pid = p["id"]
+            if pid in seen:
+                continue
+            tagged = _tag(p, "trending")
+            if has_shopper_signal(p) or _social_heat_score(p) > 0:
+                tagged["badge"] = "trending"
+            picked.append(tagged)
+            seen.add(pid)
+            if len(picked) >= n_each:
+                break
+        rails[rail] = picked
+
+    flat: list[dict] = []
+    seen_flat: set[str] = set()
+    for rail in ("clothes", "shoes", "bags"):
+        for p in rails.get(rail, [])[:4]:
+            if p["id"] in seen_flat:
+                continue
+            flat.append(p)
+            seen_flat.add(p["id"])
+
+    return {
+        "headline": "Trending now",
+        "subhead": "Clothes, shoes, and bags moving on social this week",
+        "rails": rails,
+        "items": flat,
+    }
+
+
 def style_suggestions_for(
     hero: dict,
     catalog: Iterable[dict],
@@ -894,9 +1270,8 @@ def detect_brand(text: str, catalog: Iterable[dict] | None = None) -> str | None
     Whole-word matching only — substring matching made one-letter brands like
     "W" (W for Woman) hijack every sentence containing that letter.
     """
-    t = (text or "").lower()
-    if not t:
-        return None
+    t, _ = correct_shop_typos(text or "", extra_words=brand_spell_words(catalog))
+    t = t.lower()
     brands = _brand_index(catalog or [])
     for b in brands:
         bl = b.lower()
@@ -928,6 +1303,7 @@ def resolve_shop_query(
     """
     exclude = exclude_ids or set()
     products = [p for p in catalog if p.get("id") and p["id"] not in exclude]
+    query, _ = correct_shop_typos(query, extra_words=brand_spell_words(products))
     brand = detect_brand(query, products)
     category = detect_category(query)
     color = detect_color_key(query)

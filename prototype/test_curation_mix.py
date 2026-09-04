@@ -4,8 +4,11 @@ from __future__ import annotations
 from curation_mix import (
     build_curation_mix,
     complements_for,
+    correct_shop_typos,
+    detect_brand,
     detect_category,
     detect_color_key,
+    detect_pattern,
     majority_color_ok,
     render_mix_prompt,
 )
@@ -53,6 +56,50 @@ def test_whats_missing_is_not_accessories():
     assert detect_category("show me some tops") == "tops"
     assert detect_category("baseball cap") == "accessories"
     assert detect_category("show me some hats") == "accessories"
+
+
+def test_typo_topas_means_tops():
+    assert detect_category("show me some topas") == "tops"
+    assert detect_category("show me some shos") == "shoes"
+    assert detect_category("show me some drsses") == "dresses"
+    assert detect_category("fill what's missing") is None
+
+
+def test_ranking_phrases_are_not_product_words():
+    assert detect_category("best selling shoes") == "shoes"
+    assert detect_category("top rated shoes") == "shoes"
+    fixed, subs = correct_shop_typos("best selling shoes")
+    assert "belt" not in fixed.lower()
+    assert not any(dst == "belt" for _, dst in subs)
+
+
+def test_chat_typos_colors_patterns_and_brands():
+    """Typed chat should survive the usual fat-finger spellings."""
+    assert detect_color_key("show me purpel tops") == "purple"
+    assert detect_color_key("blak dress") == "black"
+    assert detect_color_key("whyte shirt") == "white"
+    assert detect_pattern("florl kurti") == "floral"
+    cat = [
+        {**_p("t1", "tops", "red"), "brand": "Zara"},
+        {**_p("td1", "dresses", "navy"), "brand": "Tommy Hilfiger"},
+        {**_p("s1", "shoes", "black"), "brand": "Aldo"},
+    ]
+    assert detect_brand("from zra", cat) == "Zara"
+    assert detect_brand("tomy dresses", cat) == "Tommy Hilfiger"
+    corrected, subs = correct_shop_typos(
+        "show me purpel topas from zra", extra_words=("zara", "tommy")
+    )
+    assert "purple" in corrected.lower()
+    assert "tops" in corrected.lower()
+    assert "zara" in corrected.lower()
+    assert {src for src, _ in subs} >= {"purpel", "topas", "zra"}
+    # Everyday English must not snap onto catalog/brand tokens.
+    still, still_subs = correct_shop_typos("let me see some tops", extra_words=("lee",))
+    assert "let" in still.lower()
+    assert not any(src == "let" for src, _ in still_subs)
+    missing, missing_subs = correct_shop_typos("fill what's missing")
+    assert detect_category(missing) is None
+    assert not any(dst == "tee" for _, dst in missing_subs)
 
 
 def test_photo_quality_amazon_beats_pexels():
@@ -168,6 +215,38 @@ def test_bottoms_variety_skips_mens_when_womens_exist():
     ids = {p["id"] for p in bottoms_variety_for(hero, cat, n=6)}
     assert "mb1" not in ids
     assert ids & {"wb1", "wb2", "wb3"}
+
+
+def test_homepage_trending_rails_fills_without_images():
+    from curation_mix import homepage_trending_rails
+    cat = _catalog()  # no image_url on these rows
+    feed = homepage_trending_rails(cat, n_each=2)
+    assert feed["rails"]["clothes"]
+    assert feed["rails"]["shoes"]
+    assert feed["rails"]["bags"]  # Structured Tote from accessories via bag hint
+
+
+def test_homepage_trending_rails_split_clothes_shoes_bags():
+    from curation_mix import homepage_trending_rails
+    cat = _catalog() + [
+        _p("d-hot", "dresses", "yellow", 2200, style=["trendy", "linen"],
+           image_url="https://m.media-amazon.com/d.jpg", rating=4.6, ratings_total=400),
+        _p("d-cold", "dresses", "grey", 1800,
+           image_url="https://images.pexels.com/photos/1.jpeg"),
+        _p("sh-hot", "shoes", "black", 2800, style=["platform", "trendy"],
+           image_url="https://m.media-amazon.com/s.jpg", rating=4.5, ratings_total=200),
+        _p("bg-hot", "bags", "tan", 1900, name="Mini Shoulder Bag Chain Strap",
+           style=["trendy"], image_url="https://m.media-amazon.com/b.jpg",
+           rating=4.7, ratings_total=900),
+    ]
+    feed = homepage_trending_rails(cat, n_each=3)
+    assert set(feed["rails"]) == {"clothes", "shoes", "bags"}
+    assert feed["rails"]["clothes"][0]["id"] == "d-hot"
+    assert feed["rails"]["shoes"][0]["id"] == "sh-hot"
+    assert feed["rails"]["bags"][0]["id"] == "bg-hot"
+    assert feed["rails"]["clothes"][0].get("badge") == "trending"
+    ids = {p["id"] for p in feed["items"]}
+    assert {"d-hot", "sh-hot", "bg-hot"} <= ids
 
 
 def test_trending_badges_need_real_reviews():

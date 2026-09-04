@@ -30,7 +30,7 @@ import {
   shouldShowFinishNudge,
 } from "./lookProgress.js";
 
-const CatalogFilters = lazy(() => import("./CatalogFilters.jsx"));
+import TrendingHome from "./TrendingHome.jsx";
 const ForBrands = lazy(() => import("./ForBrands.jsx"));
 
 // Modal / rare flows — keep off the critical path so first paint stays light.
@@ -1387,46 +1387,6 @@ function ShopTheLookStrip({ looks, onShopLook, onLove, loved, onAddToCart, inCar
   );
 }
 
-function TrendingStrip({ products, onBuy, onLove, loved, inCart, onAddToCart, onSelect }) {
-  if (!products?.length) return null;
-  return (
-    <div className="trending-strip">
-      <div className="trending-strip-header">
-        <span className="trending-strip-title">✦ From Mira's edit</span>
-      </div>
-      <div className="trending-strip-scroll">
-        {products.map(p => (
-          <div key={p.id} className="trending-card" onClick={() => onSelect?.(p)}>
-            <div className="trending-card-img-wrap">
-              {p.image_url
-                ? <img className="trending-card-img" src={p.image_url} alt={p.name} loading="lazy" />
-                : <div className="trending-card-img trending-card-img--placeholder">{p.category}</div>
-              }
-              <button
-                className={`trending-card-heart${loved?.has(p.id) ? " is-loved" : ""}`}
-                onClick={(e) => { e.stopPropagation(); onLove?.(p); }}
-              >{loved?.has(p.id) ? "♥" : "♡"}</button>
-            </div>
-            <p className="trending-card-name">{p.name}</p>
-            <div className="trending-card-footer">
-              <span className="trending-card-price">
-                ₹{Number(p.price).toLocaleString("en-IN")}
-              </span>
-              <a
-                className="trending-card-shop"
-                href={trackedAffiliateUrl(p)}
-                target="_blank"
-                rel="noopener noreferrer nofollow sponsored"
-                onClick={(e) => { e.stopPropagation(); onBuy?.(p); }}
-              >{shopLabel(p, { short: true })}</a>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const OCCASION_CHIPS = [
   { emoji: "💍", label: "Wedding guest",    prompt: "I need an outfit for a wedding — suggest something elegant and appropriate." },
   { emoji: "🍷", label: "Date night",       prompt: "I have a date tonight — suggest something stylish and flattering." },
@@ -1460,7 +1420,7 @@ function ChatWelcome({ onOccasion, onEventBrief, textMode }) {
 
       <div className="hero-content hero-content--over">
         <h1 className="hero-brand-mark" aria-label="Mira">MIRA</h1>
-        <p className="hero-sub hero-sub--light">Tell Mira your occasion</p>
+        <p className="hero-sub hero-sub--light">Or tell Mira an occasion</p>
 
         <div className="occasion-chips occasion-chips--editorial">
           {chips.map(({ label, prompt }) => (
@@ -1800,7 +1760,7 @@ export default function App() {
 
   const {
     connected, state, mood, captions, messages,
-    products, looks, editorialLooks, trendingProducts, youMightLike, setYouMightLike,
+    products, looks, editorialLooks, trendingProducts, trendingRails, trendingMeta, youMightLike, setYouMightLike,
     savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
@@ -1824,10 +1784,11 @@ export default function App() {
       products,
       vsResults,
       trendingProducts,
+      trendingRails ? Object.values(trendingRails).flat() : [],
       savedProducts,
       fromMessages,
     ]);
-  }, [quickViewProduct, filterResults, products, vsResults, trendingProducts, savedProducts, messages]);
+  }, [quickViewProduct, filterResults, products, vsResults, trendingProducts, trendingRails, savedProducts, messages]);
 
   // Auto-scroll thread to bottom on new messages/products
   useEffect(() => {
@@ -2091,6 +2052,25 @@ export default function App() {
     if (lookPieces.length) startAssembledLook(pending, lookPieces);
     else openTryOn(pending);
   }, [user, needsOnboarding]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After guest/sign-in from the landing page, reopen the trending piece they tapped.
+  const resumedTrendRef = useRef(false);
+  useEffect(() => {
+    if (needsOnboarding !== false || resumedTrendRef.current) return;
+    if (!user && !isGuest) return;
+    try {
+      const raw = sessionStorage.getItem("mira:openProduct");
+      if (!raw) return;
+      sessionStorage.removeItem("mira:openProduct");
+      const p = JSON.parse(raw);
+      if (p?.id) {
+        resumedTrendRef.current = true;
+        setQuickViewProduct(p);
+      }
+    } catch {
+      /* ignore bad stash */
+    }
+  }, [user, isGuest, needsOnboarding]);
 
   // Layer chosen bottoms / shoes / bag onto the hero try-on, one piece at a time.
   // Wait for the look still — not side/back angles — before starting the next piece.
@@ -2534,6 +2514,21 @@ export default function App() {
               onAddToCart={toggleCart} inCart={inCart} />
           )}
 
+          {messages.length === 0 && (trendingRails || trendingProducts.length > 0) && (
+            <TrendingHome
+              rails={trendingRails}
+              items={trendingProducts}
+              headline={trendingMeta?.headline}
+              subhead={trendingMeta?.subhead}
+              loved={loved}
+              onLove={handleLove}
+              onBuy={buyClick}
+              onSelect={setQuickViewProduct}
+              onVisualSearch={(b64, mime) => { savePhoto(b64, mime); sendVisualSearch(b64, mime); }}
+              onOutfitUrl={sendOutfitUrl}
+              vsLoading={vsLoading}
+            />
+          )}
           {messages.length === 0 && (
             <ChatWelcome
               onEventBrief={() => setShowEventBrief(true)}
@@ -2562,9 +2557,6 @@ export default function App() {
               onSelectBrand={(brand) => setBrandFocus(brand)}
               onOpenAll={() => setBrandsSheetOpen(true)}
             />
-          )}
-          {messages.length === 0 && showDiscovery && trendingProducts.length > 0 && (
-            <TrendingStrip products={trendingProducts} loved={loved} onLove={handleLove} onBuy={buyClick} inCart={inCart} onAddToCart={toggleCart} onSelect={setQuickViewProduct} />
           )}
           {messages.length === 0 && showDiscovery && editorialLooks.length > 0 && (
             <ShopTheLookStrip

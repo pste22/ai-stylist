@@ -106,6 +106,35 @@ def test_unknown_brand_honesty_note():
     assert any("gucci" in n.lower() for n in hit["notes"])
 
 
+def test_show_me_gucci_bags_is_honest():
+    hit = answer(_catalog(), "show me gucci bags")
+    assert hit["category"] == "bags"
+    assert hit["products"]
+    assert any("gucci" in n.lower() for n in hit["notes"])
+
+
+def test_best_selling_and_top_rated_keep_the_item():
+    hit = answer(_catalog(), "best selling shoes")
+    assert hit["category"] == "shoes"
+    assert hit["sort"] == "popular"
+    assert hit["products"]
+    assert all(p["category"] == "shoes" for p in hit["products"])
+    hit = answer(_catalog(), "top rated shoes")
+    assert hit["category"] == "shoes"
+    assert all(p["category"] == "shoes" for p in hit["products"])
+
+
+def test_office_look_is_an_occasion_search():
+    cat = _catalog() + [
+        _p("off1", "tops", "navy", 1800, brand="Zara",
+           facets={"occasion": ["office"]}),
+    ]
+    hit = answer(cat, "office look")
+    assert hit["occasion"] == "office"
+    assert hit["products"]
+    assert hit["products"][0]["id"] == "off1"
+
+
 def test_unknown_brand_sorry():
     hit = answer(_catalog(), "show me gucci belts")
     # No gucci, no belts ("belt" maps to accessories which is empty here)
@@ -143,6 +172,35 @@ def test_show_me_some_tops_is_tops_category():
     assert hit["products"]
     assert all(p["category"] == "tops" for p in hit["products"])
     assert hit["label"] and "Top" in hit["label"]
+
+
+def test_typo_topas_returns_tops():
+    hit = answer(_catalog(), "show me some topas")
+    assert hit["category"] == "tops"
+    assert hit["products"]
+    assert all(p["category"] == "tops" for p in hit["products"])
+    assert any("closest" in n.lower() or "showing tops" in n.lower() for n in hit["notes"])
+
+
+def test_mixed_typos_color_category_brand():
+    cat = _catalog() + [
+        _p("t2", "tops", "purple", 1100, brand="Zara", rating=4.0, votes=200),
+    ]
+    hit = answer(cat, "show me purpel topas from zra")
+    assert hit["category"] == "tops"
+    assert hit["color"] == "purple"
+    assert hit["brand"] == "Zara"
+    assert hit["products"]
+    assert all(p["brand"] == "Zara" and p["category"] == "tops" for p in hit["products"])
+    assert any("closest" in n.lower() for n in hit["notes"])
+
+
+def test_typo_recommend_and_cheapest_still_parse():
+    hit = answer(_catalog(), "recomend picks")
+    assert hit["recommend"] is True
+    hit = answer(_catalog(), "cheepest tops")
+    assert hit["category"] == "tops"
+    assert hit["sort"] == "price_asc"
 
 
 def test_chitchat_is_not_a_shop_ask():

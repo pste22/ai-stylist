@@ -5773,6 +5773,136 @@ label.tryon-stale-link { display: inline; }
 }
 .trending-card-shop:hover { text-decoration: underline; }
 
+/* ── Homepage trending rails (clothes / shoes / bags) ──────────────────────── */
+.trend-home {
+  padding: .35rem 0 1.1rem;
+  animation: heroFadeUp .4s ease both;
+}
+.trend-home-header { padding: .35rem 1rem .55rem; }
+.trend-home-eyebrow {
+  margin: 0 0 .2rem;
+  font-size: .62rem; font-weight: 800; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--ink-3);
+}
+.trend-home-title {
+  margin: 0;
+  font-family: var(--font-display, inherit);
+  font-size: 1.45rem; font-weight: 600; letter-spacing: 0; color: var(--ink);
+}
+.trend-home-sub {
+  margin: .25rem 0 0;
+  font-size: .78rem; color: var(--ink-2); line-height: 1.4;
+}
+.trend-drop {
+  margin: .15rem 1rem .7rem;
+  padding: .7rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+.trend-drop-copy {
+  margin: 0 0 .5rem;
+  font-size: .75rem; color: var(--ink-2); line-height: 1.4;
+}
+.trend-drop-row { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
+.trend-drop-btn {
+  border: 1px solid var(--ink);
+  background: var(--ink); color: var(--surface, #fff);
+  border-radius: 99px; padding: .4rem .8rem;
+  font-size: .72rem; font-weight: 700; cursor: pointer;
+}
+.trend-drop-btn:disabled { opacity: .55; cursor: wait; }
+.trend-drop-form { display: flex; flex: 1 1 180px; gap: .35rem; min-width: 0; }
+.trend-drop-form input {
+  flex: 1; min-width: 0;
+  border: 1px solid var(--border); border-radius: 99px;
+  padding: .4rem .75rem; font-size: .72rem; background: var(--surface-2, #f7f4ef);
+}
+.trend-drop-form button {
+  border: 0; background: transparent; color: var(--ink);
+  font-size: .72rem; font-weight: 800; cursor: pointer; white-space: nowrap;
+}
+.trend-tabs {
+  display: flex; gap: .15rem; padding: 0 1rem .55rem;
+  border-bottom: 1px solid var(--border);
+}
+.trend-tabs button {
+  border: 0; background: transparent; color: var(--ink-3);
+  padding: .45rem .7rem .55rem;
+  font-size: .72rem; font-weight: 800; letter-spacing: .08em;
+  text-transform: uppercase; cursor: pointer; position: relative;
+}
+.trend-tabs button.is-active { color: var(--ink); }
+.trend-tabs button.is-active::after {
+  content: ""; position: absolute; left: .55rem; right: .55rem; bottom: 0;
+  height: 2px; background: var(--ink);
+}
+.trend-tabs button:disabled { opacity: .35; cursor: default; }
+.trend-rail { padding: .65rem 0 .2rem; }
+.trend-rail-head {
+  display: flex; align-items: baseline; justify-content: space-between;
+  padding: 0 1rem .45rem;
+}
+.trend-rail-title {
+  margin: 0; font-size: .78rem; font-weight: 800; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--ink);
+}
+.trend-rail-count { font-size: .68rem; color: var(--ink-3); }
+.trend-rail-scroll {
+  display: flex; gap: .7rem; overflow-x: auto; padding: 0 1rem .45rem;
+  scrollbar-width: none; scroll-snap-type: x mandatory;
+}
+.trend-rail-scroll::-webkit-scrollbar { display: none; }
+.trend-card {
+  flex: 0 0 148px; cursor: pointer; scroll-snap-align: start;
+  background: var(--surface); overflow: hidden;
+}
+.trend-card-img-wrap {
+  position: relative; width: 100%; aspect-ratio: 3 / 4;
+  overflow: hidden; border-radius: .85rem; background: #efe8df;
+}
+.trend-card-img {
+  width: 100%; height: 100%; object-fit: cover; object-position: center top; display: block;
+}
+.trend-card-img--placeholder {
+  display: flex; align-items: center; justify-content: center;
+  font-size: .65rem; color: var(--ink-3);
+}
+.trend-card-badge {
+  position: absolute; top: 8px; left: 8px;
+  padding: .18rem .45rem; border-radius: 99px;
+  background: #fff; color: var(--ink);
+  font-size: .58rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+}
+.trend-card-heart {
+  position: absolute; top: 8px; right: 8px;
+  background: rgba(255,255,255,.9); border: none; border-radius: 50%;
+  width: 26px; height: 26px; font-size: .9rem;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.trend-card-heart.is-loved { color: #e53; }
+.trend-card-name {
+  font-size: .68rem; font-weight: 600; color: var(--ink);
+  padding: .4rem .1rem .1rem; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.trend-card-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: .15rem .1rem .2rem; gap: .35rem;
+}
+.trend-card-price { font-size: .7rem; font-weight: 700; color: var(--ink); }
+.trend-card-shop {
+  font-size: .62rem; font-weight: 700; color: var(--ink-2); text-decoration: none;
+}
+.trend-card-shop:hover { text-decoration: underline; }
+.mira-recommendations .trend-home { padding: 0; }
+.mira-recommendations .trend-home-header { padding-left: 0; padding-right: 0; }
+.mira-recommendations .trend-tabs,
+.mira-recommendations .trend-rail-head,
+.mira-recommendations .trend-rail-scroll { padding-left: 0; }
+
+/* ── Trending strip (legacy) ────────────────────────────────────────────────── */
+
 /* ── Shop the look strip ────────────────────────────────────────────────────── */
 .stl-strip {
   padding: .5rem 0 1rem; animation: heroFadeUp .4s .1s ease both;

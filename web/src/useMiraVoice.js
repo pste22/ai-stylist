@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { MicCapture, PcmPlayer } from "./audio.js";
 import { AvatarState, Mood } from "./avatarState.js";
 import { supabase } from "./supabaseClient.js";
@@ -39,7 +39,26 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
   const [looks, setLooks] = useState([]);
   const [editorialLooks, setEditorialLooks] = useState([]);
   const [trendingProducts, setTrendingProducts] = useState([]);
+  const [trendingRails, setTrendingRails] = useState(null);
+  const [trendingMeta, setTrendingMeta] = useState({ headline: "", subhead: "" });
   const [youMightLike, setYouMightLike] = useState(null); // {anchorId, items}
+
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/trending")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!alive || !data) return;
+        setTrendingProducts((prev) => (prev.length ? prev : (data.items || [])));
+        setTrendingRails((prev) => prev || data.rails || null);
+        setTrendingMeta((prev) => (prev.headline ? prev : {
+          headline: data.headline || "Trending now",
+          subhead: data.subhead || "",
+        }));
+      })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, []);
   const [fullLook, setFullLook] = useState(null); // {hero, items, all_items, total, currency, title}
 
   // Full chat history — always built regardless of voice/text mode
@@ -465,6 +484,8 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
             break;
           case "trending":
             setTrendingProducts(msg.items || []);
+            setTrendingRails(msg.rails || null);
+            setTrendingMeta({ headline: msg.headline, subhead: msg.subhead });
             break;
 
           case "editorial_looks":
@@ -930,7 +951,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
 
   return {
     connected, state, mood, captions, messages,
-    products, looks, editorialLooks, trendingProducts, youMightLike, setYouMightLike,
+    products, looks, editorialLooks, trendingProducts, trendingRails, trendingMeta, youMightLike, setYouMightLike,
     savedProducts, loved, highlightedId, error, retryCount, miraText,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
