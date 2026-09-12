@@ -173,11 +173,25 @@ export default function LoginScreen({
               <b>✦ Trending now{heroCount > 1 ? ` · ${(heroIdx % heroCount) + 1}/${heroCount}` : ""}</b>
             </div>
             {heroCount > 1 && (
-              <>
-                <button type="button" className="mira-hero-arrow mira-hero-arrow--left" aria-label="Previous look" onClick={() => cycleHero(-1)}>‹</button>
-                <button type="button" className="mira-hero-arrow" aria-label="Next look" onClick={() => cycleHero(1)}>›</button>
+              <div className="mira-hero-controls">
+                <button
+                  type="button"
+                  className="mira-hero-arrow mira-hero-arrow--left"
+                  aria-label="Previous look"
+                  onClick={(e) => { e.stopPropagation(); cycleHero(-1); }}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="mira-hero-arrow"
+                  aria-label="Next look"
+                  onClick={(e) => { e.stopPropagation(); cycleHero(1); }}
+                >
+                  ›
+                </button>
                 <p className="mira-hero-count">{(heroIdx % heroCount) + 1} / {heroCount}</p>
-              </>
+              </div>
             )}
             <div className="mira-style-hero-copy">
               <p>From social this week</p>

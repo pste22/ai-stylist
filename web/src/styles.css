@@ -739,15 +739,43 @@ h1, h2, h3,
 .mira-dashboard-main { width: min(1240px, calc(100% - 2.2rem)); margin: 1.5rem auto 8.5rem; }
 .mira-dashboard-grid { display: grid; grid-template-columns: minmax(0, 1.75fr) minmax(260px, .78fr); gap: 1.15rem; }
 .mira-style-hero, .mira-tryon-card { position: relative; min-height: 28rem; overflow: hidden; border: 1px solid rgba(255,255,255,.82); border-radius: 1.65rem; box-shadow: 0 18px 42px rgba(80,72,62,.13); }
-.mira-style-hero { background: #463326; animation: fadeUp .55s ease both; touch-action: pan-y; }
-.mira-style-hero > img { width: 100%; height: 100%; min-height: 28rem; display: block; object-fit: cover; object-position: center; transition: transform .7s ease; }
-.mira-style-hero:hover > img { transform: scale(1.025); }
+.mira-style-hero {
+  isolation: isolate;
+  height: min(62dvh, 38rem);
+  min-height: 22rem;
+  background: #463326;
+  animation: fadeUp .55s ease both;
+  touch-action: pan-y;
+}
+.mira-style-hero > img {
+  position: absolute; inset: 0; z-index: 0;
+  width: 100%; height: 100%; min-height: 0;
+  display: block; object-fit: cover; object-position: center top;
+}
+@media (hover: hover) and (pointer: fine) {
+  .mira-style-hero:hover > img { transform: scale(1.025); transition: transform .7s ease; }
+}
 .mira-style-hero-shade { position: absolute; inset: 0; pointer-events: none; z-index: 1; background: linear-gradient(180deg, rgba(20,18,18,.12), transparent 40%, rgba(20,18,18,.72)); }
 .mira-style-hero-top { position: absolute; top: 1.25rem; left: 1.45rem; right: 1.45rem; z-index: 3; display: flex; justify-content: space-between; align-items: center; color: #fff; font-family: var(--font-display); font-size: 1.15rem; letter-spacing: .08em; }
 .mira-style-hero-top b { padding: .55rem .8rem; border-radius: 99px; background: rgba(255,255,255,.88); color: var(--dash-ink); font-family: var(--font-ui); font-size: .62rem; letter-spacing: .05em; }
-.mira-hero-arrow { position: absolute; top: 46%; right: 1.15rem; z-index: 4; width: 2.75rem; height: 2.75rem; border: 1px solid rgba(32,35,38,.14); border-radius: 50%; background: #fff; color: var(--dash-ink); cursor: pointer; font-size: 1.85rem; line-height: 1; box-shadow: 0 8px 22px rgba(20,18,18,.28); }
-.mira-hero-arrow--left { left: 1.15rem; right: auto; }
-.mira-hero-count { position: absolute; right: 1.15rem; top: calc(46% + 3.05rem); z-index: 4; margin: 0; padding: .28rem .6rem; border-radius: 99px; background: rgba(255,255,255,.92); color: var(--dash-ink); font-size: .68rem; font-weight: 800; letter-spacing: .04em; }
+.mira-hero-controls { position: absolute; inset: 0; z-index: 5; pointer-events: none; }
+.mira-hero-arrow {
+  position: absolute; top: 50%; right: 1rem; transform: translateY(-50%);
+  width: 2.85rem; height: 2.85rem; padding: 0;
+  border: 2px solid #fff; border-radius: 50%;
+  background: #202326; color: #fff;
+  cursor: pointer; pointer-events: auto;
+  font-size: 1.85rem; line-height: 1;
+  box-shadow: 0 8px 22px rgba(20,18,18,.4);
+}
+.mira-hero-arrow--left { left: 1rem; right: auto; }
+.mira-hero-count {
+  position: absolute; right: 1rem; top: calc(50% + 2rem);
+  z-index: 5; margin: 0; padding: .28rem .6rem; border-radius: 99px;
+  background: #202326; color: #fff;
+  font-size: .68rem; font-weight: 800; letter-spacing: .04em;
+  box-shadow: 0 6px 16px rgba(20,18,18,.28);
+}
 .mira-style-hero-copy { position: absolute; left: 1.5rem; bottom: 1.5rem; z-index: 3; color: #fff; }
 .mira-style-hero-copy p, .mira-section-heading p { margin: 0 0 .4rem; color: #d7b9a3; font-size: .66rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
 .mira-style-hero-copy h1 { margin: 0 0 1rem; font-family: var(--font-display); font-size: clamp(2rem, 4vw, 3.4rem); font-weight: 500; line-height: .96; letter-spacing: 0; }
@@ -800,8 +828,8 @@ h1, h2, h3,
   .mira-category-spacer { display: none; }
   .mira-dashboard-main { width: min(100% - 1.2rem, 620px); margin-top: .8rem; }
   .mira-dashboard-grid { grid-template-columns: 1fr; }
-  .mira-style-hero { min-height: 24rem; }
-  .mira-style-hero > img { min-height: 24rem; }
+  .mira-style-hero { height: min(58dvh, 32rem); min-height: 20rem; }
+  .mira-style-hero > img { min-height: 0; }
   .mira-tryon-card { min-height: 27rem; }
   .mira-tryon-preview { min-height: 16rem; }
   .mira-look-row { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 1.1rem; }
