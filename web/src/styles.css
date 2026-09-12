@@ -6708,13 +6708,22 @@ html[data-mira="atelier"] .filter-chip {
   border: none;
   border-bottom: 1px solid transparent;
   background: transparent;
+  color: var(--ink-2);
   font-size: .68rem;
   letter-spacing: .08em;
   text-transform: uppercase;
   font-weight: 600;
   padding: .35rem .2rem;
 }
-html[data-mira="atelier"] .filter-chip.active {
+html[data-mira="atelier"] .filter-chip:hover,
+html[data-mira="atelier"] .filter-chip:focus,
+html[data-mira="atelier"] .filter-chip:focus-visible {
+  color: var(--ink);
+}
+html[data-mira="atelier"] .filter-chip.active,
+html[data-mira="atelier"] .filter-chip.active:hover,
+html[data-mira="atelier"] .filter-chip.active:focus,
+html[data-mira="atelier"] .filter-chip.active:focus-visible {
   border-bottom-color: var(--ink);
   box-shadow: none;
   background: transparent;
