@@ -107,6 +107,18 @@ def test_build_look_around_shoes_keeps_hero_in_shoes_slot():
     assert look["name"] == "Night-out edit"
 
 
+def test_build_look_around_prefers_real_photos_over_pexels():
+    hero = _product("dress-hero", "dresses", 90)
+    catalog = [p for p in _full_catalog() if p["category"] != "shoes"]
+    dead = _product("shoes-pexels", "shoes", 70, style=["heels"])
+    dead["image_url"] = "https://images.pexels.com/photos/dead.jpg"
+    live = _product("shoes-amazon", "shoes", 72, style=["heels"])
+    live["image_url"] = "https://m.media-amazon.com/images/I/real.jpg"
+    look = build_look_around(hero, catalog + [dead, live], occasion="casual")
+    assert look is not None
+    assert look["slots"]["shoes"]["id"] == "shoes-amazon"
+
+
 def test_build_look_around_skips_companions_without_affiliate():
     catalog = _full_catalog()
     for p in catalog[1:]:

@@ -365,6 +365,72 @@ def _affiliate_url(p: dict) -> str:
     return f"https://www.google.com/search?tbm=shop&q={query}"
 
 
+def _client_look(look: dict) -> dict:
+    """Look engine payload → shoppable WS/REST cards with live affiliate URLs."""
+    def one(p):
+        if not p or not p.get("id"):
+            return None
+        try:
+            return _mix_card(p, affiliate_url=_affiliate_url(p))
+        except Exception:
+            return None
+
+    def many(items):
+        return [card for card in (one(p) for p in (items or [])) if card]
+
+    slots = look.get("slots") or {}
+    return {
+        "id": look.get("id"),
+        "name": look.get("name"),
+        "rationale": look.get("rationale"),
+        "total_price": look.get("total_price"),
+        "occasion": look.get("occasion"),
+        "items": many(look.get("items")),
+        "slots": {
+            "outfit": many(slots.get("outfit") or []),
+            "shoes": one(slots.get("shoes")),
+            "bag": one(slots.get("bag")),
+            "accessories": one(slots.get("accessories")),
+        },
+    }
+
+
+def build_client_looks_around(
+    heroes,
+    *,
+    occasion: str | None = None,
+    vibe: str = "",
+    limit: int = 3,
+) -> list[dict]:
+    """Complete looks around catalog heroes. Never raises to the caller."""
+    occ = occasion or "casual"
+    looks: list[dict] = []
+    used: set[str] = set()
+    apparel, extras = [], []
+    for hero in heroes or []:
+        if not isinstance(hero, dict):
+            continue
+        cat = (hero.get("category") or "").lower()
+        (apparel if cat in APPAREL_CATEGORIES else extras).append(hero)
+    for hero in apparel + extras:
+        hid = hero.get("id")
+        raw = _BY_ID.get(hid) if hid else None
+        if not raw:
+            raw = hero
+        try:
+            look = build_look_around(raw, _CATALOG, occasion=occ, vibe=vibe, exclude_ids=used)
+        except Exception as exc:
+            print(f"  ! build_look_around failed: {exc}")
+            continue
+        if not look:
+            continue
+        looks.append(_client_look(look))
+        used.update(p["id"] for p in look.get("items") or [] if p.get("id"))
+        if len(looks) >= limit:
+            break
+    return looks
+
+
 def _gallery_urls(p: dict) -> list:
     urls = p.get("image_urls")
     if isinstance(urls, list) and urls:
@@ -1263,53 +1329,15 @@ async def handle(ws) -> None:
             await _send_json(ws, type="state", state="idle", mood="neutral")
         return False
 
-    def _as_client_look(look: dict) -> dict:
-        def one(p):
-            if not p:
-                return None
-            return _mix_card(p, affiliate_url=_affiliate_url(p))
-
-        def many(items):
-            return [one(p) for p in (items or []) if p]
-
-        slots = look.get("slots") or {}
-        return {
-            "id": look.get("id"),
-            "name": look.get("name"),
-            "rationale": look.get("rationale"),
-            "total_price": look.get("total_price"),
-            "occasion": look.get("occasion"),
-            "items": many(look.get("items")),
-            "slots": {
-                "outfit": many(slots.get("outfit") or []),
-                "shoes": one(slots.get("shoes")),
-                "bag": one(slots.get("bag")),
-                "accessories": one(slots.get("accessories")),
-            },
-        }
-
     async def _emit_looks_around(heroes, occasion=None):
         """Turn apparel heroes into complete, shoppable LookDeck cards."""
         occ = occasion or (event_brief.get("occasion") if event_brief else None) or "casual"
         vibe = (event_brief.get("vibe") if event_brief else "") or ""
-        looks = []
-        used: set[str] = set()
-        apparel, extras = [], []
-        for hero in heroes or []:
-            cat = (hero.get("category") or "").lower()
-            (apparel if cat in APPAREL_CATEGORIES else extras).append(hero)
-        for hero in apparel + extras:
-            hid = hero.get("id")
-            raw = _BY_ID.get(hid) if hid else None
-            if not raw:
-                raw = hero
-            look = build_look_around(raw, _CATALOG, occasion=occ, vibe=vibe, exclude_ids=used)
-            if not look:
-                continue
-            looks.append(_as_client_look(look))
-            used.update(p["id"] for p in look.get("items") or [])
-            if len(looks) >= 3:
-                break
+        try:
+            looks = build_client_looks_around(heroes, occasion=occ, vibe=vibe)
+        except Exception as exc:
+            print(f"  ! emit_looks_around failed: {exc}")
+            return []
         if looks:
             await _send_json(ws, type="looks", items=looks)
         return looks
@@ -1466,7 +1494,7 @@ async def handle(ws) -> None:
                 break
         looks = build_looks(_CATALOG, occasion=occ, vibe=event_brief.get("vibe", ""), budget_max=budget_max)
         if looks:
-            await _send_json(ws, type="looks", items=[_as_client_look(lk) for lk in looks])
+            await _send_json(ws, type="looks", items=[_client_look(lk) for lk in looks])
             label = f"₹{int(budget_max):,}" if budget_max else "any budget"
             # Speak for ourselves: Gemini may be unavailable, and a silent deck
             # reads as the bot ignoring the tap.
@@ -3728,6 +3756,29 @@ async def process_request(connection, request):
         resp.headers["Cache-Control"] = "public, max-age=3600"
         resp.headers["Access-Control-Allow-Origin"] = "*"
         resp.headers["X-Content-Type-Options"] = "nosniff"
+        return resp
+
+    if request.path.startswith("/api/looks"):
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(request.path)
+        params = parse_qs(parsed.query)
+
+        def _one(key: str, default: str = "") -> str:
+            return (params.get(key, [default])[0] or default).strip()
+
+        hero_ids = [x for x in _one("hero_ids").split(",") if x]
+        hid = _one("hero_id")
+        if hid and hid not in hero_ids:
+            hero_ids.insert(0, hid)
+        heroes = [_BY_ID[i] for i in hero_ids if i in _BY_ID]
+        looks = build_client_looks_around(
+            heroes, occasion=_one("occasion") or "casual", vibe=_one("vibe"),
+        )
+        body = json.dumps({"looks": looks, "n": len(looks)})
+        resp = connection.respond(200, body)
+        resp.headers["Content-Type"] = "application/json"
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Cache-Control"] = "public, max-age=30"
         return resp
 
     if request.path.startswith("/api/trending"):

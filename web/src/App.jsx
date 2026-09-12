@@ -454,7 +454,13 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
               src={hdProductImageUrl(p.image_url, { longest: 1000 }) || p.image_url}
               alt={p.name}
               loading="lazy"
-              onError={(e) => { e.target.style.display = "none"; }}
+              onError={(e) => {
+                if (p.image_url && e.currentTarget.src !== p.image_url) {
+                  e.currentTarget.src = p.image_url;
+                  return;
+                }
+                e.currentTarget.style.visibility = "hidden";
+              }}
             />
             <span className="look-outfit-tag">{p.category}</span>
             <span className="look-outfit-shop">Shop this piece</span>
@@ -1798,7 +1804,7 @@ export default function App() {
 
   const {
     connected, state, mood, captions, messages,
-    products, looks, editorialLooks, trendingProducts, trendingRails, trendingMeta, youMightLike, setYouMightLike,
+    products, looks, setLooks, editorialLooks, trendingProducts, trendingRails, trendingMeta, youMightLike, setYouMightLike,
     savedProducts, loved, highlightedId, error, retryCount,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
@@ -1872,6 +1878,24 @@ export default function App() {
     setTextMode(true);
     if (connected) await switchAudio(false);
     if (messages.length > 0) addSystemEvent("⌨️ Switched to text");
+  };
+
+  const loadLooksAround = async (heroes, { occasion } = {}) => {
+    const ids = (heroes || []).map((p) => p?.id).filter(Boolean).slice(0, 6);
+    if (!ids.length) return [];
+    try {
+      const qs = new URLSearchParams({ hero_ids: ids.join(",") });
+      if (occasion) qs.set("occasion", occasion);
+      const resp = await fetch(`/api/looks?${qs}`);
+      if (!resp.ok) throw new Error(`looks ${resp.status}`);
+      const data = await resp.json();
+      const next = data.looks || [];
+      if (next.length) setLooks(next);
+      return next;
+    } catch (err) {
+      console.warn("loadLooksAround failed", err);
+      return [];
+    }
   };
 
   // Silent chat entry: always surface the bubble; auto-start WS in text mode if needed.
@@ -2460,12 +2484,16 @@ export default function App() {
                   <div className="cat-strip-head">
                     <p className="cat-strip-title">Picked for your style</p>
                     <button type="button" className="cat-strip-link"
-                      onClick={() => {
-                        const hero = filterResults.products?.[0];
-                        if (filterResults) { setFilterResults(null); setActiveFilter("all"); }
-                        if (!connected || !styleFullLook(hero?.id)) {
-                          sendChat("Style a full look around these picks");
+                      onClick={async () => {
+                        const picks = filterResults.products || [];
+                        const built = await loadLooksAround(picks);
+                        if (built.length) {
+                          threadRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
+                          return;
                         }
+                        const hero = picks[0];
+                        if (connected && styleFullLook(hero?.id)) return;
+                        sendChat("Style a full look around these picks");
                       }}>
                       Style the full look →
                     </button>

@@ -191,6 +191,15 @@ def _color_key(p: dict) -> str:
     return str(p.get("color") or "").strip().lower()
 
 
+def _photo_quality(p: dict) -> int:
+    url = (p.get("image_url") or "").lower()
+    if "media-amazon.com" in url or "images-amazon.com" in url:
+        return 2
+    if "pexels.com" in url:
+        return 0
+    return 1
+
+
 def _score(
     p: dict,
     bucket: str,
@@ -221,6 +230,7 @@ def _score(
         hc = color.strip().lower()
         if pc and hc and (pc == hc or hc in pc or pc in hc):
             score += 2.2
+    score += _photo_quality(p) * 0.8
     return score
 
 
@@ -236,6 +246,9 @@ def _pick(
     prefer_neutral: bool = False,
 ) -> dict | None:
     pool = [p for p in candidates if p["id"] not in used_ids]
+    real_photos = [p for p in pool if _photo_quality(p) > 0]
+    if real_photos:
+        pool = real_photos
     if budget_max:
         affordable = [p for p in pool if _as_number(p.get("price")) <= budget_max]
         if affordable:
@@ -413,11 +426,12 @@ def build_look_around(
     Always tries for outfit + shoes + bag (+ accessory). Returns None when the
     catalog cannot finish at least two pieces around the hero.
     """
-    if not hero or not hero.get("id") or not hero.get("image_url"):
+    hid = str(hero.get("id") or "")
+    if not hid or not hero.get("image_url"):
         return None
     bucket = _occasion_bucket(occasion)
     exclude = set(exclude_ids or set())
-    exclude.add(hero["id"])
+    exclude.add(hid)
     hero_color = hero.get("color")
 
     products = [
@@ -496,7 +510,7 @@ def build_look_around(
     short = (hero.get("name") or "this piece").split(",")[0].strip()[:52]
     n = len(all_items)
     return {
-        "id": f"look-{hero['id'][:16]}",
+        "id": f"look-{hid[:16]}",
         "name": _look_name(hero_cat, bucket, name),
         "rationale": (
             f"{n} pieces styled around {short} — shoes, bag, and finishers "

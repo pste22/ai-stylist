@@ -953,7 +953,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
 
   return {
     connected, state, mood, captions, messages,
-    products, looks, editorialLooks, trendingProducts, trendingRails, trendingMeta, youMightLike, setYouMightLike,
+    products, looks, setLooks, editorialLooks, trendingProducts, trendingRails, trendingMeta, youMightLike, setYouMightLike,
     savedProducts, loved, highlightedId, error, retryCount, miraText,
     canShowMore, setCanShowMore,
     productTimeline, switchAudio, updateLocation, addSystemEvent, clearHistory,
