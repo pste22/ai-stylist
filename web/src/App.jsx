@@ -532,7 +532,7 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
 function LookDeck({ looks, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAddToCart, inCart }) {
   if (!looks?.length) return null;
   return (
-    <section className="look-deck" aria-label="Mira's complete look drafts">
+    <section className="look-deck" id="look-deck" aria-label="Mira's complete look drafts">
       <div className="look-deck-heading">
         <p className="look-deck-eyebrow">✦ Wear it together</p>
         <h2>Full outfits, ready to shop</h2>
@@ -1706,6 +1706,7 @@ export default function App() {
   const [showCart, setShowCart]           = useState(false);
   const [activeFilter, setActiveFilter]   = useState("all");
   const [filterResults, setFilterResults] = useState(null); // { products, total } from faceted browse
+  const [looksLoading, setLooksLoading] = useState(false);
   // Defer discovery shelves so the occasion CTA paints first.
   const [showDiscovery, setShowDiscovery] = useState(false);
   const [brandFocus, setBrandFocus] = useState(null); // apply Brand filter from discovery strip/sheet
@@ -2484,18 +2485,27 @@ export default function App() {
                   <div className="cat-strip-head">
                     <p className="cat-strip-title">Picked for your style</p>
                     <button type="button" className="cat-strip-link"
+                      disabled={looksLoading}
                       onClick={async () => {
                         const picks = filterResults.products || [];
-                        const built = await loadLooksAround(picks);
-                        if (built.length) {
-                          threadRef.current?.scrollTo?.({ top: 0, behavior: "smooth" });
-                          return;
+                        setLooksLoading(true);
+                        try {
+                          const built = await loadLooksAround(picks);
+                          if (built.length) {
+                            requestAnimationFrame(() => {
+                              document.getElementById("look-deck")
+                                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            });
+                            return;
+                          }
+                          const hero = picks[0];
+                          if (connected && styleFullLook(hero?.id)) return;
+                          sendChat("Style a full look around these picks");
+                        } finally {
+                          setLooksLoading(false);
                         }
-                        const hero = picks[0];
-                        if (connected && styleFullLook(hero?.id)) return;
-                        sendChat("Style a full look around these picks");
                       }}>
-                      Style the full look →
+                      {looksLoading ? "Styling your look…" : "Style the full look →"}
                     </button>
                   </div>
                   <div className="cat-strip-rail">
@@ -2508,6 +2518,12 @@ export default function App() {
                     ))}
                   </div>
                 </div>
+              )}
+
+              {looks.length > 0 && (
+                <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook}
+                  onAddAllToCart={toggleAllInCart}
+                  onAddToCart={toggleCart} inCart={inCart} />
               )}
 
               {filterResults.products.length > 0 ? (
