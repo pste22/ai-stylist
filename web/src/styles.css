@@ -5823,35 +5823,6 @@ label.tryon-stale-link { display: inline; }
   margin: .25rem 0 0;
   font-size: .78rem; color: var(--ink-2); line-height: 1.4;
 }
-.trend-drop {
-  margin: .15rem 1rem .7rem;
-  padding: .7rem .8rem;
-  border: 1px solid var(--border);
-  border-radius: var(--r-md);
-  background: var(--surface);
-}
-.trend-drop-copy {
-  margin: 0 0 .5rem;
-  font-size: .75rem; color: var(--ink-2); line-height: 1.4;
-}
-.trend-drop-row { display: flex; flex-wrap: wrap; gap: .45rem; align-items: center; }
-.trend-drop-btn {
-  border: 1px solid var(--ink);
-  background: var(--ink); color: var(--surface, #fff);
-  border-radius: 99px; padding: .4rem .8rem;
-  font-size: .72rem; font-weight: 700; cursor: pointer;
-}
-.trend-drop-btn:disabled { opacity: .55; cursor: wait; }
-.trend-drop-form { display: flex; flex: 1 1 180px; gap: .35rem; min-width: 0; }
-.trend-drop-form input {
-  flex: 1; min-width: 0;
-  border: 1px solid var(--border); border-radius: 99px;
-  padding: .4rem .75rem; font-size: .72rem; background: var(--surface-2, #f7f4ef);
-}
-.trend-drop-form button {
-  border: 0; background: transparent; color: var(--ink);
-  font-size: .72rem; font-weight: 800; cursor: pointer; white-space: nowrap;
-}
 .trend-tabs {
   display: flex; gap: .15rem; padding: 0 1rem .55rem;
   border-bottom: 1px solid var(--border);

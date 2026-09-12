@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { hdProductImageUrl } from "./imageUrl.js";
 import { shopLabel, trackedAffiliateUrl } from "./retailer.js";
 
@@ -104,15 +104,10 @@ export default function TrendingHome({
   onLove,
   onBuy,
   onSelect,
-  onVisualSearch,
-  onOutfitUrl,
-  vsLoading,
   tab: tabProp,
   onTab,
 }) {
-  const fileRef = useRef(null);
   const [tab, setTabState] = useState(tabProp || "clothes");
-  const [urlDraft, setUrlDraft] = useState("");
 
   const setTab = (id) => {
     setTabState(id);
@@ -143,23 +138,6 @@ export default function TrendingHome({
   const hasAny = RAIL_TABS.some((t) => resolved[t.id]?.length);
   if (!hasAny) return null;
 
-  const submitUrl = (e) => {
-    e.preventDefault();
-    const url = urlDraft.trim();
-    if (!url) return;
-    onOutfitUrl?.(url);
-    setUrlDraft("");
-  };
-
-  const onFile = (e) => {
-    const file = e.target.files?.[0];
-    if (!file || !onVisualSearch) return;
-    const reader = new FileReader();
-    reader.onload = () => onVisualSearch(reader.result.split(",")[1], file.type);
-    reader.readAsDataURL(file);
-    e.target.value = "";
-  };
-
   return (
     <div className="trend-home">
       <div className="trend-home-header">
@@ -167,45 +145,6 @@ export default function TrendingHome({
         <h2 className="trend-home-title">{headline}</h2>
         <p className="trend-home-sub">{subhead}</p>
       </div>
-
-      {(onVisualSearch || onOutfitUrl) && (
-        <div className="trend-drop">
-          <p className="trend-drop-copy">Saw it on Instagram or Reels? Drop a screenshot or paste the post.</p>
-          <div className="trend-drop-row">
-            {onVisualSearch && (
-              <>
-                <input
-                  ref={fileRef}
-                  type="file"
-                  accept="image/*"
-                  hidden
-                  onChange={onFile}
-                />
-                <button
-                  type="button"
-                  className="trend-drop-btn"
-                  disabled={vsLoading}
-                  onClick={() => fileRef.current?.click()}
-                >
-                  {vsLoading ? "Matching…" : "Screenshot"}
-                </button>
-              </>
-            )}
-            {onOutfitUrl && (
-              <form className="trend-drop-form" onSubmit={submitUrl}>
-                <input
-                  type="url"
-                  value={urlDraft}
-                  onChange={(e) => setUrlDraft(e.target.value)}
-                  placeholder="Paste Instagram / Pinterest link"
-                  aria-label="Paste a social post URL"
-                />
-                <button type="submit" disabled={!urlDraft.trim()}>Shop it</button>
-              </form>
-            )}
-          </div>
-        </div>
-      )}
 
       <div className="trend-tabs" role="tablist" aria-label="Trending categories">
         {RAIL_TABS.map((t) => (

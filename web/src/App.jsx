@@ -2525,9 +2525,6 @@ export default function App() {
               onLove={handleLove}
               onBuy={buyClick}
               onSelect={setQuickViewProduct}
-              onVisualSearch={(b64, mime) => { savePhoto(b64, mime); sendVisualSearch(b64, mime); }}
-              onOutfitUrl={sendOutfitUrl}
-              vsLoading={vsLoading}
             />
           )}
           {messages.length === 0 && (
