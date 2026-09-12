@@ -6718,6 +6718,7 @@ html[data-mira="atelier"] .filter-chip.active {
   border-bottom-color: var(--ink);
   box-shadow: none;
   background: transparent;
+  color: var(--ink);
 }
 html[data-mira="atelier"] .cf-pill {
   border-radius: 0;
