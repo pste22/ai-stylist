@@ -3429,7 +3429,7 @@ label.tryon-stale-link { display: inline; }
 .look-deck-eyebrow { margin-top: 0; }
 .look-deck h2 { margin: 0 0 .25rem; font-size: 1.25rem; letter-spacing: -.03em; }
 .look-deck-sub { color: var(--ink-2); font-size: .78rem; margin: 0 0 .85rem; }
-.look-grid { display: grid; gap: 1rem; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.look-grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 
 /* ── Complete Look Card v2 ─────────────────────────────────────────────────── */
 .look-card-v2 {
@@ -3450,11 +3450,13 @@ label.tryon-stale-link { display: inline; }
 .look-outfit-img-wrap {
   flex: 1; position: relative; cursor: pointer; border-radius: var(--r-sm);
   overflow: hidden; background: var(--surface-2); aspect-ratio: 3/4;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border); text-decoration: none; color: inherit;
+  display: block;
 }
+.look-outfit-img-wrap:hover { border-color: var(--accent); }
 .look-outfit-img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .look-outfit-tag {
-  position: absolute; bottom: .3rem; left: .3rem;
+  position: absolute; top: .3rem; left: .3rem;
   background: rgba(0,0,0,.55); color: #fff; font-size: .62rem;
   padding: .1rem .35rem; border-radius: 99px; text-transform: capitalize;
 }
@@ -3465,9 +3467,14 @@ label.tryon-stale-link { display: inline; }
   flex: 1; cursor: pointer; border-radius: var(--r-sm); overflow: hidden;
   background: var(--surface-2); border: 1px solid var(--border);
   display: flex; flex-direction: column; align-items: center; padding: .35rem;
-  transition: border-color .15s;
+  transition: border-color .15s; text-decoration: none; color: inherit;
+  position: relative;
 }
 .look-acc-thumb:hover { border-color: var(--accent); }
+.look-acc-shop {
+  font-size: .58rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  margin-top: .2rem; color: var(--accent);
+}
 .look-acc-thumb img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: var(--r-sm); }
 .look-acc-label { font-size: .64rem; color: var(--ink-2); margin-top: .25rem; text-align: center; }
 .look-acc-price { font-size: .68rem; font-weight: 700; color: var(--ink); }
@@ -3503,6 +3510,22 @@ label.tryon-stale-link { display: inline; }
 .look-slot-love.loved { background: var(--accent); border-color: var(--accent); color: #fff; }
 .look-slot-cart:hover { border-color: var(--accent); color: var(--accent); }
 .look-slot-cart.in-cart { background: #22c55e; border-color: #22c55e; color: #fff; }
+.look-slot-shop {
+  font-size: .58rem; font-weight: 700; letter-spacing: .02em;
+  padding: .18rem .45rem; border-radius: 99px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--ink);
+  cursor: pointer; font-family: inherit; white-space: nowrap;
+  text-decoration: none; display: inline-flex; align-items: center;
+}
+.look-slot-shop:hover { border-color: var(--accent); color: var(--accent); }
+.look-outfit-shop {
+  position: absolute; left: .35rem; bottom: .35rem; z-index: 2;
+  font-size: .58rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+  padding: .22rem .5rem; border-radius: 99px; border: none;
+  background: rgba(20,16,12,.78); color: #fff; cursor: pointer; font-family: inherit;
+  backdrop-filter: blur(6px);
+}
+.look-outfit-shop:hover { background: var(--accent); }
 
 /* Actions row */
 .look-card-v2-actions { display: flex; gap: .5rem; margin-top: .25rem; }
@@ -4824,6 +4847,11 @@ label.tryon-stale-link { display: inline; }
   cursor: pointer;
 }
 .flp-chip-btn.is-loved { color: #b23a48; border-color: #e2b4ba; background: #f8e8eb; }
+a.flp-chip-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  text-decoration: none; box-sizing: border-box;
+}
+.flp-chip-btn--shop { border-color: var(--accent); color: var(--accent); }
 .flp-summary {
   flex: 0 0 auto;
   margin-top: auto;
@@ -5918,12 +5946,13 @@ label.tryon-stale-link { display: inline; }
   padding: .5rem 0 1rem; animation: heroFadeUp .4s .1s ease both;
 }
 .stl-header {
-  display: flex; align-items: center; padding: 0 1rem .6rem;
+  display: flex; align-items: baseline; gap: .65rem; padding: 0 1rem .6rem;
 }
 .stl-title {
   font-size: .7rem; font-weight: 800; letter-spacing: .08em;
   text-transform: uppercase; color: var(--ink-2);
 }
+.stl-sub { font-size: .68rem; color: var(--ink-3); }
 .stl-scroll {
   display: flex; gap: .85rem; overflow-x: auto; padding: 0 1rem;
   scrollbar-width: none;
@@ -5940,7 +5969,7 @@ label.tryon-stale-link { display: inline; }
   display: grid; grid-template-columns: 1fr 1fr;
   grid-template-rows: 90px 90px; width: 100%; overflow: hidden;
 }
-.stl-collage-cell { overflow: hidden; }
+.stl-collage-cell { overflow: hidden; display: block; text-decoration: none; }
 .stl-collage-img { width: 100%; height: 100%; object-fit: cover; display: block; transition: transform .4s; }
 .stl-card:hover .stl-collage-img { transform: scale(1.06); }
 .stl-collage-empty {

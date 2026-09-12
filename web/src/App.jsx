@@ -364,6 +364,25 @@ const SLOT_META = {
   accessories: { label: "Accessories", emoji: "✨" },
 };
 
+function ShopPieceLink({ product, className, children, onBuy }) {
+  const href = trackedAffiliateUrl(product);
+  if (!product) return null;
+  if (!href || href === "#") {
+    return <div className={className}>{children}</div>;
+  }
+  return (
+    <a
+      className={className}
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer nofollow sponsored"
+      onClick={(e) => { e.stopPropagation(); onBuy?.(product); }}
+    >
+      {children}
+    </a>
+  );
+}
+
 function LookSlot({ slotKey, product, loved, onLove, onBuy, onAddToCart, inCart }) {
   if (!product) return null;
   const { label, emoji } = SLOT_META[slotKey] || { label: slotKey, emoji: "🛍️" };
@@ -371,7 +390,7 @@ function LookSlot({ slotKey, product, loved, onLove, onBuy, onAddToCart, inCart 
   return (
     <div className="look-slot">
       <span className="look-slot-label">{emoji} {label}</span>
-      <div className="look-slot-card" onClick={() => onBuy?.(product)}>
+      <div className="look-slot-card">
         <img
           className="look-slot-img"
           src={hdProductImageUrl(product.image_url, { longest: 1000 }) || product.image_url}
@@ -394,6 +413,9 @@ function LookSlot({ slotKey, product, loved, onLove, onBuy, onAddToCart, inCart 
             onClick={(e) => { e.stopPropagation(); onAddToCart?.(product); }}
             aria-label={inCart?.(product.id) ? "Remove from bag" : "Add to bag"}
           >{inCart?.(product.id) ? "🛒✓" : "🛒"}</button>
+          <ShopPieceLink product={product} className="look-slot-shop" onBuy={onBuy}>
+            {shopLabel(product, { short: true })}
+          </ShopPieceLink>
         </div>
       </div>
     </div>
@@ -401,7 +423,7 @@ function LookSlot({ slotKey, product, loved, onLove, onBuy, onAddToCart, inCart 
 }
 
 function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAddToCart, inCart }) {
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const slots = look.slots || {};
   const outfitItems = slots.outfit || look.items || [];
   const allItems = look.items || [];
@@ -426,16 +448,17 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
       {/* Outfit anchor — hero images */}
       <div className="look-outfit-row">
         {outfitItems.map((p) => (
-          <div className="look-outfit-img-wrap" key={p.id} onClick={() => onBuy?.(p)}>
+          <ShopPieceLink key={p.id} product={p} className="look-outfit-img-wrap" onBuy={onBuy}>
             <img
               className="look-outfit-img"
-              src={p.image_url}
+              src={hdProductImageUrl(p.image_url, { longest: 1000 }) || p.image_url}
               alt={p.name}
               loading="lazy"
               onError={(e) => { e.target.style.display = "none"; }}
             />
             <span className="look-outfit-tag">{p.category}</span>
-          </div>
+            <span className="look-outfit-shop">Shop this piece</span>
+          </ShopPieceLink>
         ))}
       </div>
 
@@ -445,16 +468,17 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
           const p = slots[key];
           if (!p) return null;
           return (
-            <div className="look-acc-thumb" key={key} onClick={() => onBuy?.(p)}>
+            <ShopPieceLink key={key} product={p} className="look-acc-thumb" onBuy={onBuy}>
               <img
-                src={p.image_url}
+                src={hdProductImageUrl(p.image_url, { longest: 600 }) || p.image_url}
                 alt={p.name}
                 loading="lazy"
                 onError={(e) => { e.target.style.display = "none"; }}
               />
               <span className="look-acc-label">{SLOT_META[key]?.emoji} {SLOT_META[key]?.label}</span>
               <span className="look-acc-price">₹{Number(p.price || 0).toLocaleString("en-IN")}</span>
-            </div>
+              <span className="look-acc-shop">Shop</span>
+            </ShopPieceLink>
           );
         })}
       </div>
@@ -493,7 +517,7 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
         <button
           className="look-cart-btn"
           onClick={() => onAddAllToCart?.(allItems)}
-        >{allInCart ? "Remove look from bag" : "🛒 Shop this look"}</button>
+        >{allInCart ? "Remove look from bag" : `Shop the look · ₹${total.toLocaleString("en-IN")}`}</button>
       </div>
     </article>
   );
@@ -504,9 +528,9 @@ function LookDeck({ looks, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onA
   return (
     <section className="look-deck" aria-label="Mira's complete look drafts">
       <div className="look-deck-heading">
-        <p className="look-deck-eyebrow">✦ Mira Event Edit</p>
-        <h2>Complete looks for your occasion</h2>
-        <p className="look-deck-sub">Each look is head-to-toe — outfit, shoes, bag, and accessories.</p>
+        <p className="look-deck-eyebrow">✦ Wear it together</p>
+        <h2>Full outfits, ready to shop</h2>
+        <p className="look-deck-sub">Tap any piece to buy just that — or take the whole look in one tap.</p>
       </div>
       <div className="look-grid">
         {looks.map((look) => (
@@ -789,7 +813,7 @@ function FlpPhotoPick({ onPick, children, capture }) {
   );
 }
 
-function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onTryOn }) {
+function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onTryOn, onBuy }) {
   const src = lookShot(p, 480);
   const isLoved = !!(loved && loved.has(p.id));
   const price = lookPrice(p);
@@ -819,6 +843,9 @@ function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onT
               {isLoved ? "Saved" : "Save"}
             </button>
           )}
+          <ShopPieceLink product={p} className="flp-chip-btn flp-chip-btn--shop" onBuy={onBuy}>
+            {shopLabel(p, { short: true })}
+          </ShopPieceLink>
         </div>
       </div>
     </article>
@@ -968,6 +995,9 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
                   {loved.has(heroProduct.id) ? "Saved" : "Save"}
                 </button>
                 <button type="button" className="flp-chip-btn" onClick={() => onSelect?.(heroProduct)}>Compare</button>
+                <ShopPieceLink product={heroProduct} className="flp-chip-btn flp-chip-btn--shop" onBuy={onBuy}>
+                  {shopLabel(heroProduct, { short: true })}
+                </ShopPieceLink>
               </div>
             </article>
           )}
@@ -1008,6 +1038,7 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
                 onSelect={onSelect}
                 onLove={onLove}
                 onTryOn={(p) => seeOnMe(p)}
+                onBuy={onBuy}
               />
             ))}
           </div>
@@ -1031,7 +1062,7 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
           </button>
         )}
         <button className="flp-shop-all" onClick={() => onAddAllToCart(outfit)} disabled={allInCart || !outfit.length}>
-          {allInCart ? "✓ In your bag" : "Add the look →"}
+          {allInCart ? "✓ Look in your bag" : `Shop the look · ${cur}${Math.round(total).toLocaleString("en-IN")}`}
         </button>
       </div>
     </aside>
@@ -1345,12 +1376,13 @@ function YouMightLike({ data, onBuy, onLove, loved, onAddToCart, inCart, onDismi
   );
 }
 
-function ShopTheLookStrip({ looks, onShopLook, onLove, loved, onAddToCart, inCart }) {
+function ShopTheLookStrip({ looks, onShopLook, onLove, loved, onAddToCart, inCart, onBuy }) {
   if (!looks?.length) return null;
   return (
     <div className="stl-strip">
       <div className="stl-header">
         <span className="stl-title">✦ Shop the look</span>
+        <span className="stl-sub">Tap a piece, or take the whole outfit</span>
       </div>
       <div className="stl-scroll">
         {looks.map((look, i) => {
@@ -1361,9 +1393,14 @@ function ShopTheLookStrip({ looks, onShopLook, onLove, loved, onAddToCart, inCar
             <div key={look.id || i} className="stl-card">
               <div className="stl-collage">
                 {images.slice(0, 4).map((p, j) => (
-                  <div key={p.id} className={`stl-collage-cell stl-cell-${j}`}>
-                    <img src={p.image_url} alt={p.name} loading="lazy" className="stl-collage-img" />
-                  </div>
+                  <ShopPieceLink
+                    key={p.id}
+                    product={p}
+                    className={`stl-collage-cell stl-cell-${j}`}
+                    onBuy={onBuy}
+                  >
+                    <img src={hdProductImageUrl(p.image_url, { longest: 600 }) || p.image_url} alt={p.name} loading="lazy" className="stl-collage-img" />
+                  </ShopPieceLink>
                 ))}
                 {images.length === 0 && (
                   <div className="stl-collage-empty">
@@ -1377,7 +1414,7 @@ function ShopTheLookStrip({ looks, onShopLook, onLove, loved, onAddToCart, inCar
                   <p className="stl-price">From ₹{totalPrice.toLocaleString("en-IN")}</p>
                 )}
                 <button className="stl-shop-btn" onClick={() => onShopLook(look)}>
-                  Shop this look →
+                  Shop the look →
                 </button>
               </div>
             </div>
@@ -2563,6 +2600,7 @@ export default function App() {
               onLove={handleLove}
               onAddToCart={toggleCart}
               inCart={inCart}
+              onBuy={buyClick}
               onShopLook={(look) => toggleAllInCart(look.items || [])}
             />
           )}

@@ -179,7 +179,27 @@ def _is_excluded(p: dict, bucket: str) -> bool:
     return any(kw in t for kw in ex)
 
 
-def _score(p: dict, bucket: str, vibe: str, term_map: dict[str, list[str]]) -> float:
+_NEUTRALS = frozenset({
+    "black", "white", "cream", "beige", "ivory", "nude", "tan", "brown",
+    "grey", "gray", "charcoal", "navy", "gold", "silver", "khaki", "camel",
+})
+APPAREL_CATEGORIES = frozenset({"dresses", "tops", "bottoms", "outerwear", "ethnic", "activewear"})
+_APPAREL = APPAREL_CATEGORIES
+
+
+def _color_key(p: dict) -> str:
+    return str(p.get("color") or "").strip().lower()
+
+
+def _score(
+    p: dict,
+    bucket: str,
+    vibe: str,
+    term_map: dict[str, list[str]],
+    *,
+    color: str | None = None,
+    prefer_neutral: bool = False,
+) -> float:
     t = _text(p)
     score = 0.0
     for term in term_map.get(bucket, []):
@@ -194,6 +214,13 @@ def _score(p: dict, bucket: str, vibe: str, term_map: dict[str, list[str]]) -> f
         score += 0.5
     if price >= 3000:
         score += 0.5
+    pc = _color_key(p)
+    if prefer_neutral and pc and (pc in _NEUTRALS or any(n in pc for n in _NEUTRALS)):
+        score += 1.4
+    if color:
+        hc = color.strip().lower()
+        if pc and hc and (pc == hc or hc in pc or pc in hc):
+            score += 2.2
     return score
 
 
@@ -204,6 +231,9 @@ def _pick(
     budget_max: float | None,
     term_map: dict[str, list[str]],
     used_ids: set[str],
+    *,
+    color: str | None = None,
+    prefer_neutral: bool = False,
 ) -> dict | None:
     pool = [p for p in candidates if p["id"] not in used_ids]
     if budget_max:
@@ -212,13 +242,19 @@ def _pick(
             pool = affordable
     if not pool:
         return None
-    scored = sorted(pool, key=lambda p: _score(p, bucket, vibe, term_map), reverse=True)
+    scored = sorted(
+        pool,
+        key=lambda p: _score(
+            p, bucket, vibe, term_map, color=color, prefer_neutral=prefer_neutral,
+        ),
+        reverse=True,
+    )
     top = scored[:max(3, len(scored) // 5)]
     return random.choice(top)
 
 
 def _card(p: dict) -> dict:
-    return {
+    card = {
         "id":            p["id"],
         "name":          p["name"],
         "category":      p.get("category", "other"),
@@ -228,6 +264,11 @@ def _card(p: dict) -> dict:
         "image_url":     p.get("image_url"),
         "affiliate_url": p.get("affiliate_url"),
     }
+    if p.get("brand"):
+        card["brand"] = p["brand"]
+    if p.get("source"):
+        card["source"] = p["source"]
+    return card
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -325,3 +366,149 @@ def build_looks(
         })
 
     return looks
+
+
+_LOOK_TITLES = {
+    "dresses": "The finished dress look",
+    "ethnic": "Festive, head to toe",
+    "tops": "The complete separates look",
+    "outerwear": "The layered edit",
+    "bottoms": "The tailored head-to-toe",
+    "activewear": "The off-duty uniform",
+    "shoes": "Styled from the shoes up",
+    "bags": "The bag that finishes it",
+}
+
+_OCCASION_LOOK_NAMES = {
+    "wedding": "Wedding-guest edit",
+    "sangeet": "Sangeet edit",
+    "festive": "Festive head-to-toe",
+    "cocktail": "Cocktail edit",
+    "party": "Night-out edit",
+    "office": "Desk-to-dinner look",
+    "date": "Date-night edit",
+    "casual": "Everyday full look",
+}
+
+
+def _look_name(hero_cat: str, bucket: str, override: str | None) -> str:
+    if override:
+        return override
+    if bucket != "casual":
+        return _OCCASION_LOOK_NAMES.get(bucket, "The full look")
+    return _LOOK_TITLES.get(hero_cat, "The full look")
+
+
+def build_look_around(
+    hero: dict,
+    catalog: Iterable[dict],
+    *,
+    occasion: str = "casual",
+    vibe: str = "",
+    exclude_ids: set[str] | None = None,
+    name: str | None = None,
+) -> dict | None:
+    """One complete, shoppable look with ``hero`` as the anchor.
+
+    Always tries for outfit + shoes + bag (+ accessory). Returns None when the
+    catalog cannot finish at least two pieces around the hero.
+    """
+    if not hero or not hero.get("id") or not hero.get("image_url"):
+        return None
+    bucket = _occasion_bucket(occasion)
+    exclude = set(exclude_ids or set())
+    exclude.add(hero["id"])
+    hero_color = hero.get("color")
+
+    products = [
+        p for p in catalog
+        if p.get("id") and p.get("image_url") and p.get("affiliate_url")
+        and p["id"] not in exclude
+        and not _is_excluded(p, bucket)
+    ]
+    by_cat: dict[str, list[dict]] = {}
+    for p in products:
+        by_cat.setdefault(p.get("category", "other"), []).append(p)
+
+    hero_cat = (hero.get("category") or "other").lower()
+    outfit_items: list[dict] = []
+    shoe = bag = accessory = None
+
+    def pick(cat: str, terms: dict[str, list[str]], *, neutral: bool = False) -> dict | None:
+        return _pick(
+            by_cat.get(cat, []), bucket, vibe, None, terms, exclude,
+            color=hero_color, prefer_neutral=neutral,
+        )
+
+    if hero_cat in ("dresses", "ethnic"):
+        outfit_items = [hero]
+    elif hero_cat in ("tops", "outerwear", "activewear"):
+        outfit_items = [hero]
+        bottom = pick("bottoms", _STYLE_TERMS)
+        if bottom:
+            outfit_items.append(bottom)
+            exclude.add(bottom["id"])
+    elif hero_cat == "bottoms":
+        top = pick("tops", _STYLE_TERMS)
+        if top:
+            outfit_items.append(top)
+            exclude.add(top["id"])
+        outfit_items.append(hero)
+    else:
+        dress = pick("dresses", _STYLE_TERMS)
+        if dress:
+            outfit_items = [dress]
+            exclude.add(dress["id"])
+        else:
+            top = pick("tops", _STYLE_TERMS)
+            bottom = pick("bottoms", _STYLE_TERMS)
+            outfit_items = [p for p in (top, bottom) if p]
+            exclude.update(p["id"] for p in outfit_items)
+        if hero_cat == "shoes":
+            shoe = hero
+        elif hero_cat == "bags":
+            bag = hero
+        else:
+            accessory = hero
+
+    if not outfit_items:
+        return None
+
+    if shoe is None:
+        shoe = pick("shoes", _SHOE_TERMS, neutral=True)
+        if shoe:
+            exclude.add(shoe["id"])
+    if bag is None:
+        bag = pick("bags", _BAG_TERMS, neutral=True)
+        if bag:
+            exclude.add(bag["id"])
+    if accessory is None:
+        accessory = pick("accessories", _ACCESSORY_TERMS)
+
+    all_items = list(outfit_items)
+    for extra in (shoe, bag, accessory):
+        if extra and extra["id"] not in {p["id"] for p in all_items}:
+            all_items.append(extra)
+    if len(all_items) < 2:
+        return None
+
+    total = round(sum(_as_number(p.get("price")) for p in all_items), 2)
+    short = (hero.get("name") or "this piece").split(",")[0].strip()[:52]
+    n = len(all_items)
+    return {
+        "id": f"look-{hero['id'][:16]}",
+        "name": _look_name(hero_cat, bucket, name),
+        "rationale": (
+            f"{n} pieces styled around {short} — shoes, bag, and finishers "
+            f"chosen to work as one look, so you can take it all."
+        ),
+        "total_price": total,
+        "occasion": occasion,
+        "items": [_card(p) for p in all_items],
+        "slots": {
+            "outfit": [_card(p) for p in outfit_items],
+            "shoes": _card(shoe) if shoe else None,
+            "bag": _card(bag) if bag else None,
+            "accessories": _card(accessory) if accessory else None,
+        },
+    }

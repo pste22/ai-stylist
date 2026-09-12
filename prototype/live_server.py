@@ -63,7 +63,7 @@ import user_store  # noqa: E402
 import chat_store  # noqa: E402
 from stylist import SYSTEM_PROMPT  # noqa: E402  (the SAME persona + grounding rules)
 from product_source import get_source  # noqa: E402
-from look_engine import build_looks  # noqa: E402
+from look_engine import APPAREL_CATEGORIES, build_look_around, build_looks  # noqa: E402
 from curation_mix import (  # noqa: E402
     build_curation_mix,
     complements_for,
@@ -1263,6 +1263,57 @@ async def handle(ws) -> None:
             await _send_json(ws, type="state", state="idle", mood="neutral")
         return False
 
+    def _as_client_look(look: dict) -> dict:
+        def one(p):
+            if not p:
+                return None
+            return _mix_card(p, affiliate_url=_affiliate_url(p))
+
+        def many(items):
+            return [one(p) for p in (items or []) if p]
+
+        slots = look.get("slots") or {}
+        return {
+            "id": look.get("id"),
+            "name": look.get("name"),
+            "rationale": look.get("rationale"),
+            "total_price": look.get("total_price"),
+            "occasion": look.get("occasion"),
+            "items": many(look.get("items")),
+            "slots": {
+                "outfit": many(slots.get("outfit") or []),
+                "shoes": one(slots.get("shoes")),
+                "bag": one(slots.get("bag")),
+                "accessories": one(slots.get("accessories")),
+            },
+        }
+
+    async def _emit_looks_around(heroes, occasion=None):
+        """Turn apparel heroes into complete, shoppable LookDeck cards."""
+        occ = occasion or (event_brief.get("occasion") if event_brief else None) or "casual"
+        vibe = (event_brief.get("vibe") if event_brief else "") or ""
+        looks = []
+        used: set[str] = set()
+        apparel, extras = [], []
+        for hero in heroes or []:
+            cat = (hero.get("category") or "").lower()
+            (apparel if cat in APPAREL_CATEGORIES else extras).append(hero)
+        for hero in apparel + extras:
+            hid = hero.get("id")
+            raw = _BY_ID.get(hid) if hid else None
+            if not raw:
+                raw = hero
+            look = build_look_around(raw, _CATALOG, occasion=occ, vibe=vibe, exclude_ids=used)
+            if not look:
+                continue
+            looks.append(_as_client_look(look))
+            used.update(p["id"] for p in look.get("items") or [])
+            if len(looks) >= 3:
+                break
+        if looks:
+            await _send_json(ws, type="looks", items=looks)
+        return looks
+
     async def _maybe_complete_look(text: str, hero_id: str | None = None) -> bool:
         """Fill empty outfit slots around the last shown/saved piece — not a random accessory dump."""
         if hero_id is None and not _COMPLETE_LOOK_RE.search(text or ""):
@@ -1358,6 +1409,7 @@ async def handle(ws) -> None:
             total=round(total, 2), currency=currency,
             title=title,
         )
+        await _emit_looks_around([hero])
         await _send_json(
             ws, type="transcript", who="mira",
             text=(
@@ -1414,15 +1466,19 @@ async def handle(ws) -> None:
                 break
         looks = build_looks(_CATALOG, occasion=occ, vibe=event_brief.get("vibe", ""), budget_max=budget_max)
         if looks:
-            await _send_json(ws, type="looks", items=looks)
+            await _send_json(ws, type="looks", items=[_as_client_look(lk) for lk in looks])
             label = f"₹{int(budget_max):,}" if budget_max else "any budget"
             # Speak for ourselves: Gemini may be unavailable, and a silent deck
             # reads as the bot ignoring the tap.
             bound = f" under ₹{int(budget_max):,}" if budget_max else ""
+            n = len(looks)
             await _send_json(
                 ws, type="transcript", who="mira",
-                text=f"Here {'is' if len(looks) == 1 else 'are'} {len(looks)} "
-                     f"{occ} look{'' if len(looks) == 1 else 's'}{bound} I'd put together ✦",
+                text=(
+                    f"Here {'is' if n == 1 else 'are'} {n} {occ} "
+                    f"look{'' if n == 1 else 's'}{bound}, finished head to toe. "
+                    f"Tap any piece to shop just that — or take the whole outfit ✦"
+                ),
             )
             await _send_json(ws, type="state", state="idle", mood="neutral")
             print(f"  💰 budget look: {occ}, {label} → {len(looks)} looks")
@@ -2550,6 +2606,10 @@ async def handle(ws) -> None:
                                         label=_shop.get("label"), paged=True,
                                         note=_shop_ack_text(_shop),
                                     )
+                                    looks = await _emit_looks_around(
+                                        _shop["products"],
+                                        occasion=_shop.get("occasion") or (event_brief or {}).get("occasion"),
+                                    )
                                     print(
                                         f"  shop_agent → mode={_shop['mode']} "
                                         f"brand={_shop.get('brand')!r} "
@@ -2560,6 +2620,13 @@ async def handle(ws) -> None:
                                         f"notes={_shop.get('notes')}"
                                     )
                                     shop_ctx = _shop_gemini_ctx(_shop, batch)
+                                    ack = _shop_ack_text(_shop)
+                                    if looks:
+                                        ack = (
+                                            ack.rstrip(". ")
+                                            + ". I styled a full outfit around the first pick — "
+                                            "shop one piece or take the whole look."
+                                        )
                                     # Honesty + cards are already on screen. Don't add a
                                     # second Mira bubble that arrives after the grid.
                                     if text_mode:
@@ -2568,7 +2635,7 @@ async def handle(ws) -> None:
                                     else:
                                         await _send_json(
                                             ws, type="transcript", who="mira",
-                                            text=_shop_ack_text(_shop),
+                                            text=ack,
                                         )
                                 elif _shop.get("message"):
                                     await _send_json(
