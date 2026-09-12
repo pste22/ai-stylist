@@ -3528,7 +3528,15 @@ label.tryon-stale-link { display: inline; }
 .look-outfit-shop:hover { background: var(--accent); }
 
 /* Actions row */
-.look-card-v2-actions { display: flex; gap: .5rem; margin-top: .25rem; }
+.look-card-v2-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .25rem; }
+.look-on-me-btn {
+  flex: 1 1 100%; padding: .55rem .75rem;
+  background: transparent; color: var(--ink);
+  border: 1px solid var(--ink); border-radius: var(--r-pill);
+  font-size: .75rem; font-weight: 700; font-family: inherit;
+  cursor: pointer; transition: background .15s, color .15s;
+}
+.look-on-me-btn:hover { background: var(--ink); color: #fff; }
 .look-card {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-card);
   padding: .9rem; box-shadow: var(--shadow-xs);

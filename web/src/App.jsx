@@ -422,7 +422,40 @@ function LookSlot({ slotKey, product, loved, onLove, onBuy, onAddToCart, inCart 
   );
 }
 
-function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAddToCart, inCart }) {
+function piecesFromLook(look) {
+  const slots = look?.slots || {};
+  const outfit = slots.outfit || [];
+  const hero = outfit[0] || look?.items?.[0] || null;
+  const pieces = [];
+  const add = (p) => {
+    if (p?.id && p.id !== hero?.id && !pieces.some((x) => x.id === p.id)) pieces.push(p);
+  };
+  outfit.forEach(add);
+  add(slots.shoes);
+  add(slots.bag);
+  add(slots.accessories);
+  (look?.items || []).forEach(add);
+  return { hero, pieces };
+}
+
+function lookToFullLook(look) {
+  const { hero, pieces } = piecesFromLook(look);
+  if (!hero) return null;
+  const outfit = look.slots?.outfit || [];
+  return {
+    hero,
+    items: look.items || [],
+    all_items: look.items || [],
+    pinned: hero,
+    bottoms: outfit.filter((p) => p.category === "bottoms" && p.id !== hero.id),
+    accents: pieces.filter((p) => p.category !== "bottoms"),
+    total: look.total_price,
+    currency: hero.currency || "INR",
+    title: look.name || "The full look",
+  };
+}
+
+function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAddToCart, inCart, onSeeOnMe }) {
   const [expanded, setExpanded] = useState(true);
   const slots = look.slots || {};
   const outfitItems = slots.outfit || look.items || [];
@@ -520,6 +553,13 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
           className={`look-save${allSaved ? " look-save--saved" : ""}`}
           onClick={() => !allSaved && onSaveLook?.(allItems)}
         >{allSaved ? "♥ Saved" : "♡ Save look"}</button>
+        {onSeeOnMe && (
+          <button
+            type="button"
+            className="look-on-me-btn"
+            onClick={() => onSeeOnMe(look)}
+          >See this look on you</button>
+        )}
         <button
           className="look-cart-btn"
           onClick={() => onAddAllToCart?.(allItems)}
@@ -529,20 +569,21 @@ function LookCard({ look, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAd
   );
 }
 
-function LookDeck({ looks, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAddToCart, inCart }) {
+function LookDeck({ looks, loved, onLove, onBuy, onSaveLook, onAddAllToCart, onAddToCart, inCart, onSeeOnMe }) {
   if (!looks?.length) return null;
   return (
     <section className="look-deck" id="look-deck" aria-label="Mira's complete look drafts">
       <div className="look-deck-heading">
         <p className="look-deck-eyebrow">✦ Wear it together</p>
         <h2>Full outfits, ready to shop</h2>
-        <p className="look-deck-sub">Tap any piece to buy just that — or take the whole look in one tap.</p>
+        <p className="look-deck-sub">Shop one piece, take the whole look, or see it on you.</p>
       </div>
       <div className="look-grid">
         {looks.map((look) => (
           <LookCard key={look.id} look={look} loved={loved}
             onLove={onLove} onBuy={onBuy} onSaveLook={onSaveLook}
-            onAddAllToCart={onAddAllToCart} onAddToCart={onAddToCart} inCart={inCart} />
+            onAddAllToCart={onAddAllToCart} onAddToCart={onAddToCart} inCart={inCart}
+            onSeeOnMe={onSeeOnMe} />
         ))}
       </div>
     </section>
@@ -2045,7 +2086,7 @@ export default function App() {
       track("signin_prompt_shown", { from: "look_on_me", product_id: hero.id });
       return;
     }
-    const inline = stayOnPage && !!fullLook;
+    const inline = stayOnPage;
     if (!savedPhoto?.image && inline) {
       setAssemblingLook(false);
       setLookLayerHint("");
@@ -2094,6 +2135,14 @@ export default function App() {
         setLookLayerHint("");
       }
     })();
+  };
+
+  const seeLookOnMe = (look) => {
+    const mapped = lookToFullLook(look);
+    const { hero, pieces } = piecesFromLook(look);
+    if (!hero) return;
+    if (mapped) setFullLook(mapped);
+    startAssembledLook(hero, pieces, { stayOnPage: true });
   };
 
   const requestAutoLook = ({ hero, pieces }) => {
@@ -2523,7 +2572,7 @@ export default function App() {
               {looks.length > 0 && (
                 <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook}
                   onAddAllToCart={toggleAllInCart}
-                  onAddToCart={toggleCart} inCart={inCart} />
+                  onAddToCart={toggleCart} inCart={inCart} onSeeOnMe={seeLookOnMe} />
               )}
 
               {filterResults.products.length > 0 ? (
@@ -2593,7 +2642,7 @@ export default function App() {
           {looks.length > 0 && (
             <LookDeck looks={looks} loved={loved} onLove={wouldBuy} onBuy={buyClick} onSaveLook={saveLook}
               onAddAllToCart={toggleAllInCart}
-              onAddToCart={toggleCart} inCart={inCart} />
+              onAddToCart={toggleCart} inCart={inCart} onSeeOnMe={seeLookOnMe} />
           )}
 
           {messages.length === 0 && (trendingRails || trendingProducts.length > 0) && (
