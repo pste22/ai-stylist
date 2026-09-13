@@ -235,8 +235,15 @@ export default function CatalogFilters({
             type="button"
             className={`filter-chip${category === key ? " active" : ""}`}
             onClick={() => {
+              if (key === "all") {
+                onCategory?.("all");
+                onResultsRef.current?.(null);
+                return;
+              }
+              if (category === key) {
+                setFilters((prev) => ({ ...prev }));
+              }
               onCategory?.(key);
-              if (key === "all") onResultsRef.current?.(null);
             }}
           >
             {label}

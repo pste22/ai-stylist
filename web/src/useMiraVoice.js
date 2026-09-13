@@ -77,6 +77,27 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
   const micRef = useRef(null);
   const playerRef = useRef(null);
   const askWatchdogRef = useRef(null);
+  const thinkWatchdogRef = useRef(null);
+
+  const clearThinkWatchdog = () => {
+    if (thinkWatchdogRef.current) {
+      clearTimeout(thinkWatchdogRef.current);
+      thinkWatchdogRef.current = null;
+    }
+  };
+
+  const markIdle = () => {
+    clearThinkWatchdog();
+    setState(AvatarState.IDLE);
+  };
+
+  const armThinkWatchdog = () => {
+    clearThinkWatchdog();
+    thinkWatchdogRef.current = setTimeout(() => {
+      thinkWatchdogRef.current = null;
+      setState((s) => (s === AvatarState.THINKING ? AvatarState.IDLE : s));
+    }, 12000);
+  };
 
   const stop = useCallback(() => {
     micRef.current?.stop();
@@ -86,6 +107,10 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     if (askWatchdogRef.current) {
       clearTimeout(askWatchdogRef.current);
       askWatchdogRef.current = null;
+    }
+    if (thinkWatchdogRef.current) {
+      clearTimeout(thinkWatchdogRef.current);
+      thinkWatchdogRef.current = null;
     }
     setConnected(false);
     setState(AvatarState.IDLE);
@@ -140,6 +165,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
       _addMsg("you", trimmed);
       pendingTextRef.current = trimmed;
       setState(AvatarState.THINKING);
+      armThinkWatchdog();
       return false;
     }
     // Optimistically add the user bubble immediately.
@@ -149,6 +175,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     _addMsg("you", trimmed);
     ws.send(JSON.stringify({ type: "text_input", text: trimmed }));
     setState(AvatarState.THINKING);
+    armThinkWatchdog();
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -338,7 +365,10 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
         if (initialText && !queued) {
           _addMsg("you", initialText);
         }
-        if (bootText) setState(AvatarState.THINKING);
+        if (bootText) {
+          setState(AvatarState.THINKING);
+          armThinkWatchdog();
+        }
         const queuedTryOn = pendingTryOnRef.current;
         pendingTryOnRef.current = null;
         if (queuedTryOn) ws.send(JSON.stringify(queuedTryOn));
@@ -361,6 +391,9 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
         const msg = JSON.parse(e.data);
         switch (msg.type) {
           case "state":
+            if (msg.state === AvatarState.IDLE || msg.state === AvatarState.REACTING) {
+              clearThinkWatchdog();
+            }
             setState(msg.state);
             setMood(msg.mood || Mood.NEUTRAL);
             if (msg.state === AvatarState.IDLE || msg.state === AvatarState.REACTING) {
@@ -464,10 +497,12 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
                 ...items.map((p) => ({ ...p, messageId: attachedBubId, ts: Date.now() })),
               ]);
             }
+            if (items.length) markIdle();
             break;
           }
           case "looks":
             setLooks(msg.items || []);
+            if (msg.items?.length) markIdle();
             break;
 
           case "full_look":
@@ -483,6 +518,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
               title: msg.title || "Shop the full look",
             });
             if (msg.hero?.id) setHighlightedId(msg.hero.id);
+            markIdle();
             break;
           case "trending":
             setTrendingProducts(msg.items || []);
@@ -612,6 +648,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
             break;
           case "error":
             setError(msg.message || "connection_failed");
+            markIdle();
             break;
         }
       };
@@ -620,6 +657,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
         console.error("[ws] onerror — connection failed", e);
         setRetryCount((c) => c + 1);
         setError("connection_failed");
+        markIdle();
       };
       ws.onclose = (e) => {
         console.warn("[ws] onclose — code:", e.code, "reason:", e.reason, "wasClean:", e.wasClean);

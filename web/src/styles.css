@@ -4074,12 +4074,22 @@ label.tryon-stale-link { display: inline; }
   border-top: 1px solid var(--border);
 }
 .chat-error { color: var(--accent); font-size: .82rem; margin: 0 0 .4rem; text-align: center; }
+.chat-composer {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .45rem;
+  padding: .55rem .75rem max(.65rem, env(safe-area-inset-bottom, 0px));
+}
 .chat-input-bar {
-  display: flex; align-items: flex-end; gap: .5rem;
+  display: flex; align-items: stretch; flex-direction: column; gap: .5rem;
   background: var(--bg); border: 1.5px solid var(--border);
   border-radius: var(--r-pill);
   padding: .55rem .55rem .55rem 1.1rem;
   transition: border-color .12s;
+  width: 100%;
+  box-sizing: border-box;
 }
 .chat-input-bar:focus-within { border-color: var(--ink); }
 .chat-input {
@@ -4472,20 +4482,21 @@ label.tryon-stale-link { display: inline; }
   .app        { gap: .75rem; padding: .75rem; }
 }
 
-/* ── Connection error card ──────────────────────────────────────────────────── */
-.conn-error-card {
-  display: flex; flex-direction: column; align-items: center; gap: .6rem;
+/* ── Connection error banner (above composer, never inside the input pill) ── */
+.conn-error-banner {
+  display: flex; align-items: center; gap: .65rem;
+  width: 100%; box-sizing: border-box;
   background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--r-card); padding: 1.25rem 1.5rem;
-  box-shadow: var(--shadow-sm); text-align: center; max-width: 320px;
-  animation: fadeUp .25s ease;
+  border-radius: var(--r-pill); padding: .45rem .75rem .45rem .85rem;
+  box-shadow: var(--shadow-xs);
 }
-.conn-error-icon { font-size: 1.8rem; }
-.conn-error-msg  { margin: 0; font-size: .9rem; color: var(--ink-2); line-height: 1.5; }
+.conn-error-icon { font-size: 1.1rem; flex-shrink: 0; line-height: 1; }
+.conn-error-msg  { margin: 0; flex: 1; font-size: .8rem; color: var(--ink-2); line-height: 1.35; }
 .conn-error-retry {
   background: var(--accent); color: #fff; border: none;
-  border-radius: var(--r-pill); padding: .45rem 1.25rem;
-  font-size: .85rem; font-weight: 700; cursor: pointer; letter-spacing: .02em;
+  border-radius: var(--r-pill); padding: .4rem 1rem;
+  font-size: .8rem; font-weight: 700; cursor: pointer; letter-spacing: .02em;
+  flex-shrink: 0;
 }
 .conn-error-retry:hover { opacity: .88; }
 
@@ -6266,13 +6277,13 @@ a.flp-chip-btn {
 
 /* ── Bottom input bar ────────────────────────────────────────────────────────── */
 .chat-input-bar {
-  flex-shrink: 0; padding: .75rem 1rem;
-  border-top: 1px solid var(--border);
+  flex-shrink: 0; padding: .55rem .75rem;
+  border-top: none;
   background: rgba(246, 244, 241, .92);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  box-shadow: 0 -6px 18px rgba(20, 20, 20, .04);
-  display: flex; flex-direction: column; gap: .5rem;
+  box-shadow: none;
+  display: flex; flex-direction: column; align-items: stretch; gap: .5rem;
 }
 .chat-canvas .voice-active-bar {
   background: rgba(255, 255, 255, .88);

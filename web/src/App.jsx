@@ -163,8 +163,8 @@ function ConnectionError({ retryCount, onRetry }) {
   const msg = CONN_MESSAGES[Math.min(retryCount - 1, CONN_MESSAGES.length - 1)];
   const isTerminal = retryCount >= 3;
   return (
-    <div className="conn-error-card">
-      <span className="conn-error-icon">{isTerminal ? "⚠️" : "📡"}</span>
+    <div className="conn-error-banner" role="status">
+      <span className="conn-error-icon" aria-hidden="true">{isTerminal ? "⚠️" : "📡"}</span>
       <p className="conn-error-msg">{msg}</p>
       {!isTerminal && (
         <button className="conn-error-retry" onClick={onRetry}>Try again</button>
@@ -2461,7 +2461,10 @@ export default function App() {
         <Suspense fallback={<div className="filter-bar" />}>
           <CatalogFilters
             category={activeFilter}
-            onCategory={setActiveFilter}
+            onCategory={(cat) => {
+              setFullLook(null);
+              setActiveFilter(cat);
+            }}
             brandFocus={brandFocus}
             onBrandFocusConsumed={() => setBrandFocus(null)}
             onBrowseBrands={() => setBrandsSheetOpen(true)}
@@ -2713,7 +2716,9 @@ export default function App() {
                   userSize={effectivePrefs?.top_size || effectivePrefs?.bottom_size || null}
                   onTryOn={openTryOn} />
           )}
-          {state === "thinking" && <ThinkingBubble />}
+          {state === "thinking" && !error && messages[messages.length - 1]?.role === "you" && (
+            <ThinkingBubble />
+          )}
           {/* Scroll anchor — always at the very bottom of thread content */}
           <div ref={msgsEndRef} style={{ height: 0 }} />
         </div>
@@ -2759,37 +2764,38 @@ export default function App() {
           </div>
         )}
 
-        <div className="chat-input-bar">
-          {!connected ? (
-            <div className="start-row start-row--stack">
-              <ModeToggle textMode={textMode} connected={connected} quality={quality}
-                onVoice={switchToVoice} onText={switchToSilent} />
-              {textMode ? (
-                <TextInputRow
-                  onSend={sendChat}
-                  onStop={stop}
-                  onSwitchVoice={switchToVoice}
-                  onVisualSearch={(b64, mime) => { savePhoto(b64, mime); sendVisualSearch(b64, mime); }}
-                  onOutfitSearch={(b64, mime) => { savePhoto(b64, mime); sendOutfitImage(b64, mime); }}
-                  onOutfitUrl={sendOutfitUrl}
-                  vsLoading={vsLoading}
-                  outfitLoading={outfitLoading}
-                  placeholder="Ask Mira anything — e.g. purple dresses"
-                />
-              ) : (
-                <button className="chat-start-btn" onClick={() => start()}>
-                  Start talking →
-                </button>
-              )}
-            </div>
-          ) : textMode ? (
-            <TextInputRow onSend={sendChat} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={(b64, mime) => { savePhoto(b64, mime); sendVisualSearch(b64, mime); }} onOutfitSearch={(b64, mime) => { savePhoto(b64, mime); sendOutfitImage(b64, mime); }} onOutfitUrl={sendOutfitUrl} vsLoading={vsLoading} outfitLoading={outfitLoading} />
-          ) : (
-            <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
-          )}
+        <div className="chat-composer">
           {error && <ConnectionError retryCount={retryCount} onRetry={retry} />}
+          <div className="chat-input-bar">
+            {!connected ? (
+              <div className="start-row start-row--stack">
+                <ModeToggle textMode={textMode} connected={connected} quality={quality}
+                  onVoice={switchToVoice} onText={switchToSilent} />
+                {textMode ? (
+                  <TextInputRow
+                    onSend={sendChat}
+                    onStop={stop}
+                    onSwitchVoice={switchToVoice}
+                    onVisualSearch={(b64, mime) => { savePhoto(b64, mime); sendVisualSearch(b64, mime); }}
+                    onOutfitSearch={(b64, mime) => { savePhoto(b64, mime); sendOutfitImage(b64, mime); }}
+                    onOutfitUrl={sendOutfitUrl}
+                    vsLoading={vsLoading}
+                    outfitLoading={outfitLoading}
+                    placeholder="Ask Mira anything — e.g. purple dresses"
+                  />
+                ) : (
+                  <button className="chat-start-btn" onClick={() => start()}>
+                    Start talking →
+                  </button>
+                )}
+              </div>
+            ) : textMode ? (
+              <TextInputRow onSend={sendChat} onStop={stop} onSwitchVoice={switchToVoice} onVisualSearch={(b64, mime) => { savePhoto(b64, mime); sendVisualSearch(b64, mime); }} onOutfitSearch={(b64, mime) => { savePhoto(b64, mime); sendOutfitImage(b64, mime); }} onOutfitUrl={sendOutfitUrl} vsLoading={vsLoading} outfitLoading={outfitLoading} />
+            ) : (
+              <VoiceActiveBar level={getLevel} onStop={stop} captions={captions} onSwitchText={switchToSilent} />
+            )}
+          </div>
         </div>
-        </div>{/* /.chat-canvas */}
         {fullLook && (
           <FullLookPanel
             look={fullLook}
@@ -2832,6 +2838,7 @@ export default function App() {
             })()}
           />
         )}
+        </div>{/* /.chat-canvas */}
       </div>
 
       {networkToast && (
