@@ -23,11 +23,16 @@ import { BrandsStrip, BrandsSheet, useBrandOptions } from "./BrandsDiscovery.jsx
 import LookProgressStrip, { FinishLookNudge } from "./LookProgressStrip.jsx";
 import {
   assignProductToSlot,
+  categoryForLookSlot,
+  finishLookPrompt,
   isLookIncomplete,
   isStripHiddenThisSession,
   loadLookProgress,
+  lookHero,
+  nextEmptySlot,
   removeProductFromSlots,
   shouldShowFinishNudge,
+  slotProductIds,
 } from "./lookProgress.js";
 
 import TrendingHome from "./TrendingHome.jsx";
@@ -1853,7 +1858,7 @@ export default function App() {
     start, stop, retry, sendText, wouldBuy, getLevel, buyClick, showMore, browseCategory, sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies, styleFullLook,
     fullLook, setFullLook,
-    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat, askAboutProduct,
+    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat, addCatalogMessage, askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
     sendTryOn, sendTryOnLayer, tryOnResult, tryOnLoading, tryOnLayering, tryOnError, clearTryOn, tryOnLookItems,
     sendTryOnVideo, tryOnVideo, tryOnVideoLoadingKind, tryOnVideoError,
@@ -1941,7 +1946,7 @@ export default function App() {
   };
 
   // Silent chat entry: always surface the bubble; auto-start WS in text mode if needed.
-  const sendChat = (text) => {
+  const sendChat = (text, extras = {}) => {
     const trimmed = (text || "").trim();
     if (!trimmed) return;
     // Catalog filter panel was hiding the thread — close it so chat is visible
@@ -1950,7 +1955,7 @@ export default function App() {
       setActiveFilter("all");
     }
     if (!connected) {
-      sendText(trimmed); // queues + shows bubble (pendingTextRef in useMiraVoice)
+      sendText(trimmed, extras); // queues + shows bubble (pendingTextRef in useMiraVoice)
       if (!textMode) {
         // Wait for textMode flip so start() opens with text_mode: true
         pendingOccasionStartRef.current = true;
@@ -1961,7 +1966,46 @@ export default function App() {
       return;
     }
     if (!textMode) setTextMode(true);
-    sendText(trimmed);
+    sendText(trimmed, extras);
+  };
+
+  const loadLookGapProducts = async (state) => {
+    const empty = nextEmptySlot(state);
+    const slotKey = empty?.key || "layer";
+    const category = categoryForLookSlot(slotKey);
+    const exclude = [...slotProductIds(state)].filter(Boolean).join(",");
+    const qs = new URLSearchParams({ category, limit: "6" });
+    if (exclude) qs.set("exclude", exclude);
+    try {
+      const resp = await fetch(`/api/browse?${qs.toString()}`);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      const items = data.products || [];
+      if (!items.length) return false;
+      const label = category.charAt(0).toUpperCase() + category.slice(1);
+      addCatalogMessage(
+        `Here are ${label.toLowerCase()} to finish your look ✦`,
+        items,
+        { label },
+      );
+      setCanShowMore(!!data.show_more);
+      return true;
+    } catch (err) {
+      console.error("[finishLook browse]", err);
+      return false;
+    }
+  };
+
+  const requestFinishLook = () => {
+    const prompt = finishLookPrompt(lookProgress);
+    const hero = lookHero(lookProgress);
+    setFinishNudgeVisible(false);
+    sendChat(prompt, {
+      heroId: hero?.id || null,
+      excludeIds: [...slotProductIds(lookProgress)],
+    });
+    // Don't wait on Gemini / a session hero — look progress is localStorage only.
+    void loadLookGapProducts(lookProgress);
   };
 
   // Network degradation — auto-switch to text
@@ -2500,10 +2544,7 @@ export default function App() {
           {finishNudgeVisible && isLookIncomplete(lookProgress) && (
             <FinishLookNudge
               state={lookProgress}
-              onFinish={() => {
-                setFinishNudgeVisible(false);
-                sendChat("Help me finish my look — suggest what's still missing");
-              }}
+              onFinish={requestFinishLook}
               onDismiss={() => setFinishNudgeVisible(false)}
             />
           )}
@@ -2745,8 +2786,8 @@ export default function App() {
         {!lookStripHidden && (
           <LookProgressStrip
             state={lookProgress}
-            onComplete={() => sendChat("Complete the look — fill what's missing")}
-            onEmptySlot={(prompt) => sendChat(prompt)}
+            onComplete={requestFinishLook}
+            onEmptySlot={requestFinishLook}
             onSelectProduct={(p) => setQuickViewProduct(p)}
             onHide={() => setLookStripHidden(true)}
           />
@@ -3081,7 +3122,10 @@ export default function App() {
             onCompleteLook={(p) => {
               addToLookProgress(p);
               const label = p?.name ? ` around the ${p.name}` : "";
-              sendText(`Complete the look${label} — tops, accessories, the works`);
+              sendText(`Complete the look${label} — tops, accessories, the works`, {
+                heroId: p?.id || lookHero(lookProgress)?.id || null,
+              });
+              void loadLookGapProducts(lookProgress);
             }}
           />
         </Suspense>

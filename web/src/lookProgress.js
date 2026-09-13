@@ -12,10 +12,14 @@ const SLOT_LABELS = {
   accent: "Accent",
   shoes: "Shoes",
   dress: "Dress",
+  layer: "Jacket",
 };
 
 function emptyState() {
-  return { slots: { top: null, bottom: null, accent: null, shoes: null }, updatedAt: Date.now() };
+  return {
+    slots: { top: null, bottom: null, accent: null, shoes: null, layer: null },
+    updatedAt: Date.now(),
+  };
 }
 
 export function loadLookProgress() {
@@ -47,7 +51,8 @@ export function clearLookProgress() {
 export function slotForCategory(category) {
   const c = (category || "").toLowerCase();
   if (c === "dresses" || c === "ethnic") return "dress";
-  if (c === "tops" || c === "outerwear") return "top";
+  if (c === "outerwear") return "layer";
+  if (c === "tops") return "top";
   if (c === "bottoms") return "bottom";
   if (c === "accessories" || c === "bags") return "accent";
   if (c === "shoes") return "shoes";
@@ -70,32 +75,39 @@ export function assignProductToSlot(state, product) {
   if (slot === "dress") {
     slots.top = { ...card, _dress: true };
     slots.bottom = null; // dress owns the silhouette
+  } else if (slot === "layer") {
+    slots.layer = card;
   } else {
     slots[slot] = card;
   }
   return saveLookProgress({ ...state, slots });
 }
 
-export function filledCount(state) {
+export function isDressLook(state) {
   const s = state?.slots || {};
-  let n = 0;
-  if (s.top) n += 1;
-  if (s.bottom) n += 1;
-  if (s.accent) n += 1;
-  if (s.shoes) n += 1;
-  return n;
+  return !!(s.top && s.top._dress && !s.bottom);
+}
+
+export function filledCount(state) {
+  return visibleSlots(state).filter((slot) => slot.product).length;
+}
+
+export function lookSlotTarget(state) {
+  return visibleSlots(state).length;
 }
 
 export function isLookIncomplete(state) {
-  const n = filledCount(state);
-  return n >= 1 && n < 4;
+  const slots = visibleSlots(state);
+  const n = slots.filter((slot) => slot.product).length;
+  return n >= 1 && n < slots.length;
 }
 
 export function progressLabel(state) {
-  const n = filledCount(state);
+  const slots = visibleSlots(state);
+  const n = slots.filter((slot) => slot.product).length;
   if (n === 0) return "";
-  if (n >= 4) return "Look complete";
-  return `${n} of 4 — looking good`;
+  if (n >= slots.length) return "Look complete";
+  return `${n} of ${slots.length} — looking good`;
 }
 
 /** VTO rail: accessory slot reads as Bag, not Accent. */
@@ -105,23 +117,30 @@ export const VTO_SLOT_LABELS = {
   accent: "Bag",
   shoes: "Shoes",
   dress: "Dress",
+  layer: "Jacket",
 };
 
 export function visibleSlots(state, labels = SLOT_LABELS) {
   const s = state?.slots || {};
   const dressMode = !!(s.top && s.top._dress && !s.bottom);
+  const labelOf = (key) => labels[key] || SLOT_LABELS[key];
   if (dressMode) {
     return [
-      { key: "dress", label: labels.dress || SLOT_LABELS.dress, product: s.top },
-      { key: "accent", label: labels.accent || SLOT_LABELS.accent, product: s.accent },
-      { key: "shoes", label: labels.shoes || SLOT_LABELS.shoes, product: s.shoes },
+      { key: "dress", label: labelOf("dress"), product: s.top },
+      { key: "accent", label: labelOf("accent"), product: s.accent },
+      { key: "shoes", label: labelOf("shoes"), product: s.shoes },
+      { key: "layer", label: labelOf("layer"), product: s.layer },
     ];
   }
-  return SLOT_ORDER.map((key) => ({
+  const slots = SLOT_ORDER.map((key) => ({
     key,
-    label: labels[key] || SLOT_LABELS[key],
+    label: labelOf(key),
     product: s[key],
   }));
+  if (s.layer) {
+    slots.splice(2, 0, { key: "layer", label: labelOf("layer"), product: s.layer });
+  }
+  return slots;
 }
 
 export function slotProductIds(state) {
@@ -154,18 +173,43 @@ export function removeProductFromSlots(state, productId) {
   return saveLookProgress({ ...state, slots });
 }
 
+export function categoryForLookSlot(slotKey) {
+  if (slotKey === "top" || slotKey === "dress") return "tops";
+  if (slotKey === "bottom") return "bottoms";
+  if (slotKey === "accent") return "bags";
+  if (slotKey === "shoes") return "shoes";
+  if (slotKey === "layer") return "outerwear";
+  return "accessories";
+}
+
+export function lookHero(state) {
+  const s = state?.slots || {};
+  return s.top || s.bottom || s.layer || s.accent || s.shoes || null;
+}
+
 export function emptySlotPrompt(slotKey, state) {
-  const hero = state?.slots?.bottom || state?.slots?.top;
+  const hero = lookHero(state);
   const withBit = hero?.name ? ` to go with my ${hero.name}` : "";
   if (slotKey === "top" || slotKey === "dress") {
     return `Show me tops${withBit}`;
   }
   if (slotKey === "bottom") return `Show me bottoms${withBit}`;
   if (slotKey === "accent") {
-    return `Show me accessories, glasses or a bag${withBit}`;
+    return `Show me bags${withBit}`;
   }
   if (slotKey === "shoes") return `Show me shoes${withBit}`;
-  return "Help me finish my look";
+  if (slotKey === "layer") return `Show me jackets${withBit}`;
+  return `Show me pieces to finish this look${withBit}`;
+}
+
+/** Concrete shop ask for the next empty slot — never the vague phrase shop_agent ignores. */
+export function finishLookPrompt(state) {
+  const empty = nextEmptySlot(state);
+  if (empty) return emptySlotPrompt(empty.key, state);
+  if (isDressLook(state) && !state?.slots?.layer) {
+    return emptySlotPrompt("layer", state);
+  }
+  return "Show me jackets to finish this look";
 }
 
 export function isStripHiddenThisSession() {
