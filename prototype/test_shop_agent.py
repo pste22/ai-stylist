@@ -62,6 +62,41 @@ def test_parse_recommend_intent():
 
 # ── search ───────────────────────────────────────────────────────────────────
 
+def test_tommy_tops_keeps_brand_instead_of_other_tops():
+    """Live catalog has Tommy dresses/jackets but no tops — keep Tommy, don't lie."""
+    hit = answer(_catalog(), "show me some tops from tommy")
+    assert hit["brand"] == "Tommy Hilfiger"
+    assert hit["category"] == "tops"
+    assert hit["mode"] == "brand"
+    assert hit["products"]
+    assert all(p["brand"] == "Tommy Hilfiger" for p in hit["products"])
+    assert not any(p["category"] == "tops" for p in hit["products"])
+    assert any("don't have any tops from tommy" in n.lower() for n in hit["notes"])
+    assert not any("don't carry" in n.lower() for n in hit["notes"])
+
+
+def test_brand_fallback_leads_with_name_near_category():
+    cat = _catalog() + [
+        _p("tj1", "outerwear", "navy", 6200, brand="Tommy Hilfiger", rating=4.9, votes=4000,
+           name="Tommy Hilfiger Puffer Jacket"),
+        _p("ts1", "dresses", "white", 3800, brand="Tommy Hilfiger", rating=3.8, votes=20,
+           name="Tommy Hilfiger Cotton Polo Shirt Dress"),
+    ]
+    hit = answer(cat, "show me some tops from tommy")
+    assert hit["mode"] == "brand"
+    assert hit["products"][0]["id"] == "ts1"
+
+
+def test_detect_brand_reads_facets_only_brand():
+    from curation_mix import detect_brand
+    cat = [
+        _p("x1", "dresses", "navy", 4000, brand=None,
+           name="Tommy Hilfiger Polo Dress",
+           facets={"brand": "Tommy Hilfiger"}),
+    ]
+    assert detect_brand("show me some tops from tommy", cat) == "Tommy Hilfiger"
+
+
 def test_tommy_red_dresses_relaxes_color_with_note():
     hit = answer(_catalog(), "show me 5 red dresses of tommy")
     assert hit["brand"] == "Tommy Hilfiger"
