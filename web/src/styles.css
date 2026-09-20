@@ -2574,6 +2574,51 @@ button.primary.stop { background: var(--accent); }
   touch-action: pan-y;
 }
 
+.qv-gallery-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.qv-browse-controls {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  pointer-events: none;
+}
+.qv-browse-arrow {
+  position: absolute;
+  top: 50%;
+  right: .7rem;
+  transform: translateY(-50%);
+  width: 2.55rem;
+  height: 2.55rem;
+  padding: 0;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #202326;
+  color: #fff;
+  cursor: pointer;
+  pointer-events: auto;
+  font-size: 1.7rem;
+  line-height: 1;
+  box-shadow: 0 8px 22px rgba(20,18,18,.4);
+}
+.qv-browse-arrow--left { left: .7rem; right: auto; }
+.qv-browse-count {
+  position: absolute;
+  right: .7rem;
+  top: calc(50% + 1.85rem);
+  z-index: 4;
+  margin: 0;
+  padding: .22rem .55rem;
+  border-radius: 99px;
+  background: #202326;
+  color: #fff;
+  font-size: .64rem;
+  font-weight: 800;
+  letter-spacing: .04em;
+  box-shadow: 0 6px 16px rgba(20,18,18,.28);
+}
+
 .qv-gallery {
   display: flex;
   overflow-x: auto;

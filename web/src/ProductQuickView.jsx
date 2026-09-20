@@ -87,16 +87,20 @@ function productGallery(product) {
 
 export default function ProductQuickView({
   product, loved, inCart, onLove, onBuy, onAddToCart, onClose, prefs, onSetSize, onAskMira,
-  related = [], onSelectRelated, onTryOn,
+  related = [], browseQueue = [], onSelectRelated, onTryOn,
 }) {
   const [imgIdx, setImgIdx] = useState(0);
   const [writingReview, setWritingReview] = useState(false);
   const panelRef = useRef(null);
   const galleryRef = useRef(null);
+  const scrollRef = useRef(null);
   const gallery = productGallery(product);
   const activeUrl = gallery[Math.min(imgIdx, Math.max(gallery.length - 1, 0))] || product.image_url;
   const hasPhoto = isRealPhoto(activeUrl);
   const emoji = CATEGORY_EMOJI[product.category] || "🛍️";
+  const queue = (browseQueue?.length ? browseQueue : related).filter((p) => p?.id);
+  const queueIdx = Math.max(0, queue.findIndex((p) => p.id === product.id));
+  const canBrowse = queue.length > 1 && queue.some((p) => p.id === product.id);
 
   const amazonRating = Number(product.rating) || 0;
   const amazonCount  = Number(product.ratings_total) || 0;
@@ -106,21 +110,8 @@ export default function ProductQuickView({
     setImgIdx(0);
     setWritingReview(false);
     galleryRef.current?.scrollTo({ left: 0 });
+    scrollRef.current?.scrollTo?.({ top: 0 });
   }, [product.id]);
-
-  useEffect(() => {
-    function onKey(e) {
-      if (e.key === "Escape") { onClose(); return; }
-      if (e.key === "ArrowRight") goTo(imgIdx + 1);
-      if (e.key === "ArrowLeft") goTo(imgIdx - 1);
-    }
-    document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
-  }, [onClose, imgIdx, gallery.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function goTo(i) {
     const next = Math.max(0, Math.min(gallery.length - 1, i));
@@ -128,6 +119,34 @@ export default function ProductQuickView({
     const el = galleryRef.current;
     if (el) el.scrollTo({ left: next * el.clientWidth, behavior: "smooth" });
   }
+
+  function goBrowse(dir) {
+    if (!canBrowse || !onSelectRelated) return;
+    const next = queue[(queueIdx + dir + queue.length) % queue.length];
+    if (next && next.id !== product.id) onSelectRelated(next);
+  }
+
+  useEffect(() => {
+    function onKey(e) {
+      if (e.key === "Escape") { onClose(); return; }
+      if (e.target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        goBrowse(1);
+        return;
+      }
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        goBrowse(-1);
+      }
+    }
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [onClose, product.id, queueIdx, queue.length, canBrowse]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onGalleryScroll() {
     const el = galleryRef.current;
@@ -159,30 +178,53 @@ export default function ProductQuickView({
           <button className="qv-topbar-btn" type="button" onClick={onClose} aria-label="Close">✕</button>
         </header>
 
-        <div className="qv-scroll">
-          <div
-            className="qv-gallery"
-            ref={galleryRef}
-            onScroll={onGalleryScroll}
-            role="region"
-            aria-label="Product photos"
-          >
-            {gallery.length && hasPhoto ? gallery.map((url, i) => (
-              <div className="qv-slide" key={`${url}-${i}`}>
-                {isRealPhoto(url) ? (
-                  <img
-                    className="qv-img"
-                    src={hiResUrl(url)}
-                    alt={`${product.name}${gallery.length > 1 ? ` — photo ${i + 1}` : ""}`}
-                    draggable={false}
-                  />
-                ) : (
+        <div className="qv-scroll" ref={scrollRef}>
+          <div className="qv-gallery-wrap">
+            <div
+              className="qv-gallery"
+              ref={galleryRef}
+              onScroll={onGalleryScroll}
+              role="region"
+              aria-label="Product photos"
+            >
+              {gallery.length && hasPhoto ? gallery.map((url, i) => (
+                <div className="qv-slide" key={`${url}-${i}`}>
+                  {isRealPhoto(url) ? (
+                    <img
+                      className="qv-img"
+                      src={hiResUrl(url)}
+                      alt={`${product.name}${gallery.length > 1 ? ` — photo ${i + 1}` : ""}`}
+                      draggable={false}
+                    />
+                  ) : (
+                    <div className="qv-img-fallback"><span>{emoji}</span></div>
+                  )}
+                </div>
+              )) : (
+                <div className="qv-slide">
                   <div className="qv-img-fallback"><span>{emoji}</span></div>
-                )}
-              </div>
-            )) : (
-              <div className="qv-slide">
-                <div className="qv-img-fallback"><span>{emoji}</span></div>
+                </div>
+              )}
+            </div>
+            {canBrowse && (
+              <div className="qv-browse-controls">
+                <button
+                  type="button"
+                  className="qv-browse-arrow qv-browse-arrow--left"
+                  aria-label="Previous item"
+                  onClick={(e) => { e.stopPropagation(); goBrowse(-1); }}
+                >
+                  ‹
+                </button>
+                <button
+                  type="button"
+                  className="qv-browse-arrow"
+                  aria-label="Next item"
+                  onClick={(e) => { e.stopPropagation(); goBrowse(1); }}
+                >
+                  ›
+                </button>
+                <p className="qv-browse-count">{queueIdx + 1} / {queue.length}</p>
               </div>
             )}
           </div>
