@@ -13,8 +13,11 @@ globalThis.localStorage = {
 const {
   assignProductToSlot,
   clearLookProgress,
+  finishLookPrompt,
+  isLookIncomplete,
   matchesLookSlot,
   nextEmptySlot,
+  progressLabel,
   removeProductFromSlots,
   slotForCategory,
   slotProductIds,
@@ -58,5 +61,25 @@ state = removeProductFromSlots(state, "b1");
 assert(!state.slots.bottom, "unpin clears the bottom slot");
 assert(!slotProductIds(state).has("b1"), "unpinned id leaves the set");
 assert(nextEmptySlot(state, VTO_SLOT_LABELS)?.key === "bottom", "bottom is next again after unpin");
+
+clearLookProgress();
+const dress = { id: "d1", name: "Green slip dress", category: "dresses", price: 3200 };
+const jacket = { id: "j1", name: "Crop jacket", category: "outerwear", price: 4100 };
+let dressLook = assignProductToSlot(clearLookProgress(), dress);
+dressLook = assignProductToSlot(dressLook, bag);
+dressLook = assignProductToSlot(dressLook, shoes);
+assert(slotForCategory("outerwear") === "layer", "jacket is its own slot — must not overwrite the dress");
+assert(dressLook.slots.top.id === "d1", "dress stays pinned");
+assert(dressLook.slots.top._dress, "dress mode flag");
+const dressVisible = visibleSlots(dressLook);
+assert(dressVisible.map((s) => s.key).join(",") === "dress,accent,shoes,layer", "dress look shows jacket as 4th");
+assert(isLookIncomplete(dressLook), "dress + bag + shoes still needs a jacket");
+assert(progressLabel(dressLook).startsWith("3 of 4"), `progress should be 3 of 4, got ${progressLabel(dressLook)}`);
+assert(nextEmptySlot(dressLook)?.key === "layer", "empty slot is the jacket");
+assert(finishLookPrompt(dressLook).toLowerCase().includes("jacket"), "finish prompt asks for jackets, not a vague missing line");
+dressLook = assignProductToSlot(dressLook, jacket);
+assert(dressLook.slots.top.id === "d1", "adding a jacket does not replace the dress");
+assert(dressLook.slots.layer.id === "j1", "jacket lands on layer");
+assert(!isLookIncomplete(dressLook), "dress + bag + shoes + jacket is complete");
 
 console.log("look-progress.spec.mjs ok");

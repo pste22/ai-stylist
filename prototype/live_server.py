@@ -1365,12 +1365,9 @@ async def handle(ws) -> None:
                     hero = cand
                     break
         if not hero:
-            catalog_fulfilled_ids.add("complete_look")
-            await _send_json(
-                ws, type="transcript", who="mira",
-                text="Tap a piece you like first — then I'll fill in the rest of the look.",
-            )
-            return True
+            # Look progress lives on the client — don't swallow the turn or the
+            # chat canvas stays empty. Let shop_agent / the client browse run.
+            return False
         look = shop_look_for(hero, _CATALOG, shopper="women", exclude_ids=session_shown_ids)
         pinned = look.get("pinned")
         bottoms = look.get("bottoms") or []
@@ -1438,6 +1435,13 @@ async def handle(ws) -> None:
             title=title,
         )
         await _emit_looks_around([hero])
+        # Cards in the chat thread — full_look alone left the console blank.
+        if slot_cards:
+            await _send_json(
+                ws, type="products", items=slot_cards, show_more=True,
+                label=title, paged=True,
+                note=f"Pieces to finish the look around {hero_name}.",
+            )
         await _send_json(
             ws, type="transcript", who="mira",
             text=(
@@ -2557,6 +2561,10 @@ async def handle(ws) -> None:
                         if text:
                             session_last_user_text = text
                             catalog_fulfilled_ids.clear()
+                            _look_hero_id = (data.get("hero_id") or "").strip() or None
+                            for _xid in data.get("exclude_ids") or []:
+                                if _xid:
+                                    session_shown_ids.add(_xid)
                             # Detect cart-add intent — handle before passing to Gemini.
                             if await _maybe_add_to_cart(text):
                                 # Still pass to Gemini so Mira can confirm verbally
@@ -2573,7 +2581,7 @@ async def handle(ws) -> None:
                             catalog_spoken = False
                             # Echo user text first so the thread order stays natural
                             await _send_json(ws, type="transcript", who="you", text=text)
-                            look_filled = await _maybe_complete_look(text)
+                            look_filled = await _maybe_complete_look(text, hero_id=_look_hero_id)
                             if not look_filled and await _maybe_budget_look(text):
                                 pass  # handled — let Mira still respond verbally
                             if _show_saved_intent:

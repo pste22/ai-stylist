@@ -146,10 +146,11 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
 
   // If sendText is called before the WS is open, queue it and flush on connect.
   const pendingTextRef = useRef(null);
+  const pendingTextExtrasRef = useRef(null);
   const pendingTryOnRef = useRef(null);
 
   // Send a typed message (silent / text chat). Always shows the bubble when possible.
-  const sendText = useCallback((text) => {
+  const sendText = useCallback((text, extras = {}) => {
     const trimmed = (text || "").trim();
     if (!trimmed) return;
     // New conversation input — clear filter-chip browse context so show_more
@@ -159,11 +160,16 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     setQuickReplies([]);
     if (quickReplyTimerRef.current) { clearTimeout(quickReplyTimerRef.current); quickReplyTimerRef.current = null; }
 
+    const packet = { type: "text_input", text: trimmed };
+    if (extras.heroId) packet.hero_id = extras.heroId;
+    if (extras.excludeIds?.length) packet.exclude_ids = extras.excludeIds;
+
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN) {
       // Not connected yet — show the bubble and queue; caller/App should start().
       _addMsg("you", trimmed);
       pendingTextRef.current = trimmed;
+      pendingTextExtrasRef.current = extras;
       setState(AvatarState.THINKING);
       armThinkWatchdog();
       return false;
@@ -173,7 +179,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     // append behind the first 3 welcome cards (silent-mode cap bug).
     miraBubbleId.current = null;
     _addMsg("you", trimmed);
-    ws.send(JSON.stringify({ type: "text_input", text: trimmed }));
+    ws.send(JSON.stringify(packet));
     setState(AvatarState.THINKING);
     armThinkWatchdog();
     return true;
@@ -342,6 +348,8 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
         // Queued sendText (bubble already on screen) or start(initialText)
         const queued = pendingTextRef.current;
         pendingTextRef.current = null;
+        const queuedExtras = pendingTextExtrasRef.current;
+        pendingTextExtrasRef.current = null;
         const bootText = initialText || queued || null;
 
         ws.send(JSON.stringify({
@@ -358,6 +366,8 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
           text_mode:        textMode,
           event_brief:      eventBrief,
           initial_request:  bootText,
+          hero_id:          queuedExtras?.heroId || null,
+          exclude_ids:      queuedExtras?.excludeIds || null,
         }));
         setConnected(true);
         setCanShowMore(true); // always show browse button once connected (1000+ products available)
@@ -886,6 +896,27 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     }]);
   }, []);
 
+  /** Put catalog cards on the chat canvas immediately (don't wait on Gemini). */
+  const addCatalogMessage = useCallback((text, products, { label } = {}) => {
+    if (!products?.length) return null;
+    const id = mkId();
+    setMessages((prev) => [...prev, {
+      id,
+      role: "mira",
+      text: text || "Here are pieces to finish your look ✦",
+      products,
+      label: label || null,
+      showAll: true,
+      ts: new Date(),
+    }]);
+    setProducts((prev) => {
+      const seen = new Set(prev.map((p) => p.id));
+      return [...prev, ...products.filter((p) => p?.id && !seen.has(p.id))];
+    });
+    markIdle();
+    return id;
+  }, []);
+
   const ASK_PROMPTS = {
     suit: "Does this suit me?",
     wear: "When would I wear this?",
@@ -999,7 +1030,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     sendVisualSearch, vsLoading, setVsLoading,
     sendLikeReason, quickReplies, dismissQuickReplies, styleFullLook,
     fullLook, setFullLook,
-    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat,
+    sendOutfitImage, sendOutfitUrl, sendOutfitAssembled, addAssembledLookToChat, addCatalogMessage,
     askAboutProduct,
     outfitAnatomy, setOutfitAnatomy, outfitLoading, outfitError, setOutfitError,
     sendTryOn, sendTryOnLayer, tryOnResult, tryOnLoading, tryOnLayering, tryOnError, clearTryOn, tryOnLookItems,
