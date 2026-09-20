@@ -98,9 +98,12 @@ export default function ProductQuickView({
   const activeUrl = gallery[Math.min(imgIdx, Math.max(gallery.length - 1, 0))] || product.image_url;
   const hasPhoto = isRealPhoto(activeUrl);
   const emoji = CATEGORY_EMOJI[product.category] || "🛍️";
-  const queue = (browseQueue?.length ? browseQueue : related).filter((p) => p?.id);
+  const rawQueue = (browseQueue?.length ? browseQueue : related).filter((p) => p?.id);
+  const queue = rawQueue.some((p) => p.id === product.id)
+    ? rawQueue
+    : [product, ...rawQueue];
   const queueIdx = Math.max(0, queue.findIndex((p) => p.id === product.id));
-  const canBrowse = queue.length > 1 && queue.some((p) => p.id === product.id);
+  const canBrowse = queue.length > 1;
 
   const amazonRating = Number(product.rating) || 0;
   const amazonCount  = Number(product.ratings_total) || 0;
