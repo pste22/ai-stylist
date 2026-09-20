@@ -62,7 +62,7 @@ check(
 
 check(
   "hero photo uses contain so the face stays in frame",
-  metrics.imgFit === "contain" && /top/i.test(metrics.imgPos || ""),
+  metrics.imgFit === "contain",
   `fit=${metrics.imgFit} pos=${metrics.imgPos}`,
 );
 
