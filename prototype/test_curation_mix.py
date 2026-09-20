@@ -385,3 +385,18 @@ def test_resolve_tommy_red_dresses_falls_back_to_brand_cat():
     assert hit["mode"] == "brand_cat"  # no red Tommy — relax color
     assert all(p["brand"] == "Tommy Hilfiger" for p in hit["products"])
     assert hit["notes"]
+
+
+def test_resolve_tommy_tops_keeps_brand():
+    from curation_mix import resolve_shop_query
+    cat = [
+        {**_p("td1", "dresses", "navy", 4000), "brand": "Tommy Hilfiger",
+         "name": "Tommy Hilfiger Polo Shirt Dress"},
+        {**_p("t1", "tops", "white", 900), "brand": "Zara", "name": "Zara White Top"},
+    ]
+    hit = resolve_shop_query(cat, "show me some tops from tommy", n=4)
+    assert hit["brand"] == "Tommy Hilfiger"
+    assert hit["mode"] == "brand"
+    assert hit["products"]
+    assert all(p["brand"] == "Tommy Hilfiger" for p in hit["products"])
+    assert any("tops from" in n.lower() for n in hit["notes"])

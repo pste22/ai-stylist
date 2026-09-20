@@ -546,7 +546,7 @@ h1, h2, h3,
   height: 100%;
   display: block;
   object-fit: cover;
-  object-position: 50% 22%;   /* keep garments in frame instead of cropping to chins */
+  object-position: center top;   /* keep the model's face in frame */
   transition: transform .55s ease;
 }
 .pc:hover .pc-media .card-img { transform: scale(1.045); }
@@ -2586,7 +2586,7 @@ button.primary.stop { background: var(--accent); }
 .qv-img {
   width: 100%; height: 100%;
   object-fit: contain;
-  object-position: center center;
+  object-position: center top;
   user-select: none;
   -webkit-user-drag: none;
 }
@@ -6214,23 +6214,23 @@ a.flp-chip-btn {
 .card:hover { transform: none; box-shadow: none; border-color: transparent; }
 .card.loved, .card.highlighted { background: transparent; border: none; box-shadow: none; transform: none; }
 
-/* Image → full-bleed; height is capped so a 3-up row + Mira stay on screen */
+/* Image → full-bleed; pin to the top so model faces aren't cropped off */
 .card-thumb { aspect-ratio: 4 / 5; border-radius: 0; background: var(--bg-alt); }
 .card:hover .card-img { transform: scale(1.03); transform-origin: center top; }
 .card:hover .card-img--contain { transform: scale(1.02); transform-origin: center center; }
-.card-img { object-position: center 18%; }
+.card-img { object-position: center top; }
 .card-img--contain { object-position: center center; }
 .card.loved .card-thumb, .card.highlighted .card-thumb {
   outline: 1.5px solid var(--ink); outline-offset: -1.5px;
 }
 
-/* Desktop: don't let 1/3 of a 1280px panel become a 500px-tall poster */
+/* Desktop: keep a portrait frame so heads stay in, without 500px posters */
 @media (min-width: 900px) {
   .product-rail > .card .card-thumb,
   .product-grid > .card .card-thumb {
-    aspect-ratio: auto;
-    height: min(32vh, 260px);
-    max-height: min(32vh, 260px);
+    aspect-ratio: 3 / 4;
+    height: auto;
+    max-height: min(42vh, 360px);
   }
 }
 

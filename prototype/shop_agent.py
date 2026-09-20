@@ -29,9 +29,11 @@ on the LLM. This is what guarantees the sub-3-second chat answer:
 
   Availability honesty
   --------------------
-  Facets relax progressively (brand+cat+color → brand+cat → …) with a note
-  explaining what was missing. When nothing matches at all — or paging has
-  exhausted the pool — `message` carries the shopper-facing apology:
+  Facets relax progressively, keeping an explicit brand when we stock it
+  (brand+cat+color → brand+cat → brand → category). Notes say what was
+  missing — never "I don't carry X" when X is on the rack in another
+  category. When nothing matches at all — or paging has exhausted the
+  pool — `message` carries the shopper-facing apology:
   "Sorry — we don't have any more … right now."
 """
 from __future__ import annotations
@@ -62,6 +64,7 @@ from curation_mix import (
     detect_pattern,
     pattern_matches,
     photo_quality,
+    product_brand,
 )
 
 __all__ = ["answer", "parse_query", "popularity_score", "warm_index"]
@@ -356,6 +359,23 @@ def _matched_category_terms(text: str) -> list[str]:
     return sorted(terms, key=len, reverse=True)
 
 
+def _near_category_name(product: dict, category: str | None) -> bool:
+    """True when the title uses a synonym of the asked category (shirt dress → tops)."""
+    if not category:
+        return False
+    name = (product.get("name") or "").lower()
+    return any(_alias_re(w).search(name) for w in _CATEGORY_SYNONYMS.get(category, ()))
+
+
+def _prefer_near_category(products: list[dict], category: str | None) -> list[dict]:
+    if not category or not products:
+        return products
+    near, rest = [], []
+    for p in products:
+        (near if _near_category_name(p, category) else rest).append(p)
+    return near + rest if near else products
+
+
 def _label(brand, color, category, sort, sort_explicit, price_max, mode, term=None,
            pattern=None) -> str:
     """UI header describing what was ACTUALLY matched — never a relaxed facet."""
@@ -411,7 +431,7 @@ class _CatalogIndex:
             cat = (p.get("category") or "").lower()
             if cat:
                 self.by_category.setdefault(cat, []).append(p)
-            brand = (p.get("brand") or "").lower()
+            brand = product_brand(p).lower()
             if brand:
                 self.by_brand.setdefault(brand, []).append(p)
             for key in _COLOR_ALIASES:
@@ -580,7 +600,7 @@ def answer(
             candidates = products
         out = []
         for p in candidates:
-            if want.get("brand") and (p.get("brand") or "").lower() != want["brand"].lower():
+            if want.get("brand") and product_brand(p).lower() != want["brand"].lower():
                 continue
             if want.get("category") and (p.get("category") or "").lower() != want["category"]:
                 continue
@@ -593,11 +613,19 @@ def answer(
             out.append(p)
         return out
 
+    # Keep an explicit brand when we actually stock it. Dropping to "any tops"
+    # made Mira say she doesn't carry Tommy while showing other brands' tops.
     attempts: list[tuple[str, dict]] = []
     if brand and category and color:
         attempts.append(("brand_cat_color", {"brand": brand, "category": category, "color": color}))
     if brand and category:
         attempts.append(("brand_cat", {"brand": brand, "category": category}))
+    if brand and color:
+        attempts.append(("brand_color", {"brand": brand, "color": color}))
+    if brand and pattern:
+        attempts.append(("brand_pattern", {"brand": brand, "pattern": pattern}))
+    if brand:
+        attempts.append(("brand", {"brand": brand}))
     if category and occasion and color:
         attempts.append(("cat_color_occ", {"category": category, "color": color, "occasion": occasion}))
     if category and occasion:
@@ -608,18 +636,12 @@ def answer(
         attempts.append(("cat_pattern", {"category": category, "pattern": pattern}))
     if category and color:
         attempts.append(("cat_color", {"category": category, "color": color}))
-    if brand and color:
-        attempts.append(("brand_color", {"brand": brand, "color": color}))
-    if brand and pattern:
-        attempts.append(("brand_pattern", {"brand": brand, "pattern": pattern}))
     if pattern:
         attempts.append(("pattern", {"pattern": pattern}))
     if occasion:
         attempts.append(("occasion", {"occasion": occasion}))
     if category:
         attempts.append(("category", {"category": category}))
-    if brand:
-        attempts.append(("brand", {"brand": brand}))
     if color:
         attempts.append(("color", {"color": color}))
     if not attempts:
@@ -678,7 +700,18 @@ def answer(
                 f"I don't carry {unknown_brand.title()} yet — "
                 f"showing close alternatives from brands we do stock."
             )
-        if brand and color and "color" not in mode:
+        if brand and category and "cat" not in mode and "brand" in mode:
+            if color and "color" not in mode:
+                notes.append(
+                    f"I don't have any {color} {category} from {brand} right now — "
+                    f"showing other {brand} pieces."
+                )
+            else:
+                notes.append(
+                    f"I don't have any {category} from {brand} right now — "
+                    f"showing other {brand} pieces."
+                )
+        elif brand and color and "color" not in mode:
             notes.append(
                 f"I don't have any {color} {category or 'pieces'} from {brand} right now — "
                 f"showing {brand} {category or 'picks'} instead."
@@ -715,13 +748,19 @@ def answer(
                 f"I don't have any {color} ones right now — here are the closest picks."
             )
         elif brand and "brand" not in mode:
-            notes.append(f"I don't carry {brand} yet — showing close alternatives.")
+            notes.append(
+                f"I don't have any more {category or 'pieces'} from {brand} right now — "
+                f"showing close alternatives."
+            )
         if price_relaxed:
             bound = (f"under ₹{price_max:,.0f}" if price_max is not None
                      else f"over ₹{price_min:,.0f}")
             notes.append(f"Nothing {bound} for that ask — showing the closest matches.")
 
-    ranked = _prefer_real_photos(_dedupe(_rank(matched, sort, index.popularity)))[:n]
+    ranked = _prefer_real_photos(_dedupe(_rank(matched, sort, index.popularity)))
+    if brand and category and mode == "brand":
+        ranked = _prefer_near_category(ranked, category)
+    ranked = ranked[:n]
     products = [{**p, "mix_role": "on_brief"} for p in ranked]
 
     if not products:

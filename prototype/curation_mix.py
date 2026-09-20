@@ -1247,11 +1247,19 @@ def card_fields(p: dict, affiliate_url: str | None = None) -> dict[str, Any]:
     return out
 
 
+def product_brand(p: dict | None) -> str:
+    """Brand on the product or its facets — feeds store it in either place."""
+    if not p:
+        return ""
+    facets = p.get("facets") if isinstance(p.get("facets"), dict) else {}
+    return (p.get("brand") or facets.get("brand") or "").strip()
+
+
 def _brand_index(catalog: Iterable[dict]) -> list[str]:
     seen: set[str] = set()
     out: list[str] = []
     for p in catalog:
-        b = (p.get("brand") or "").strip()
+        b = product_brand(p)
         if not b:
             continue
         key = b.lower()
@@ -1297,8 +1305,9 @@ def resolve_shop_query(
 ) -> dict[str, Any]:
     """Deterministic catalog answer for 'show me red dresses from tommy'.
 
-    Progressive relaxation:
-      brand+category+color → brand+category → category+color → category → brand
+    Progressive relaxation keeps an explicit brand when we stock it:
+      brand+category+color → brand+category → brand+color → brand
+      → category+color → category → color
     Returns products + notes so Mira can be honest when a facet is missing.
     """
     exclude = exclude_ids or set()
@@ -1311,7 +1320,7 @@ def resolve_shop_query(
     def pool(**want) -> list[dict]:
         out = []
         for p in products:
-            if want.get("brand") and (p.get("brand") or "").lower() != want["brand"].lower():
+            if want.get("brand") and product_brand(p).lower() != want["brand"].lower():
                 continue
             if want.get("category") and (p.get("category") or "").lower() != want["category"]:
                 continue
@@ -1329,14 +1338,14 @@ def resolve_shop_query(
         attempts.append(("brand_cat_color", {"brand": brand, "category": category, "color": color}))
     if brand and category:
         attempts.append(("brand_cat", {"brand": brand, "category": category}))
-    if category and color:
-        attempts.append(("cat_color", {"category": category, "color": color}))
     if brand and color:
         attempts.append(("brand_color", {"brand": brand, "color": color}))
-    if category:
-        attempts.append(("category", {"category": category}))
     if brand:
         attempts.append(("brand", {"brand": brand}))
+    if category and color:
+        attempts.append(("cat_color", {"category": category, "color": color}))
+    if category:
+        attempts.append(("category", {"category": category}))
     if color:
         attempts.append(("color", {"color": color}))
 
@@ -1347,21 +1356,23 @@ def resolve_shop_query(
             mode = mode_name
             break
 
-    if brand and color and mode in ("brand_cat", "brand") and category:
+    if brand and color and mode == "brand_cat" and category:
         notes.append(
             f"No {color} {category} from {brand} in the catalog right now — "
             f"showing {brand} {category} instead."
         )
-    elif brand and color and mode == "brand_cat":
+    elif brand and color and mode == "brand" and category:
         notes.append(
-            f"No exact {color} pieces from {brand} tagged that way — "
-            f"showing {brand} {category or 'picks'}."
+            f"I don't have any {color} {category} from {brand} right now — "
+            f"showing other {brand} pieces."
         )
-    elif brand and mode in ("cat_color", "category") and not matched:
-        notes.append(f"I don't carry {brand} yet.")
+    elif brand and category and mode == "brand":
+        notes.append(
+            f"I don't have any {category} from {brand} right now — "
+            f"showing other {brand} pieces."
+        )
     elif brand and mode in ("cat_color", "category"):
-        # Had brand in query but fell through without brand — shouldn't happen if brand pool empty
-        pass
+        notes.append(f"I don't carry {brand} yet — showing close alternatives.")
 
     # Prefer curation mix when we have a category-ish ask
     if matched and category and mode in ("brand_cat", "brand_cat_color", "cat_color", "category"):
