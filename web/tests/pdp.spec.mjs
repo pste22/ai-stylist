@@ -16,17 +16,20 @@ const ctx = await browser.newContext({
 });
 const page = await ctx.newPage();
 await page.goto(BASE, { waitUntil: "networkidle" });
-await page.getByRole("button", { name: "Start styling" }).click();
+const shopLook = page.getByRole("button", { name: /shop this look/i });
+if (await shopLook.count()) {
+  await shopLook.click();
+} else {
+  await page.getByRole("button", { name: /filters/i }).first().click();
+}
 await page.waitForTimeout(2500);
 
-await page.locator(".filter-chip", { hasText: /^SHOES$/i }).first().click();
-await page.waitForTimeout(2800);
-
-const card = page.locator("#cf-results-panel .card").first();
-await card.waitFor({ state: "visible", timeout: 15000 });
-await card.click();
-
 const panel = page.locator(".qv-panel");
+if (!(await panel.isVisible().catch(() => false))) {
+  const card = page.locator(".trend-card, #cf-results-panel .card, .pc").first();
+  await card.waitFor({ state: "visible", timeout: 15000 });
+  await card.click();
+}
 await panel.waitFor({ state: "visible", timeout: 8000 });
 await page.waitForTimeout(450);
 
