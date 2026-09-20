@@ -61,15 +61,24 @@ const layout = await page.evaluate(() => {
   const g = document.querySelector(".qv-gallery");
   const s = document.querySelector(".qv-sticky");
   const p = document.querySelector(".qv-panel");
+  const i = document.querySelector(".qv-gallery .qv-img");
+  const gb = g?.getBoundingClientRect();
+  const ib = i?.getBoundingClientRect();
+  const midG = gb ? gb.left + gb.width / 2 : 0;
+  const midI = ib ? ib.left + ib.width / 2 : 0;
   return {
     innerH: window.innerHeight,
     panelTop: p?.getBoundingClientRect().top,
-    galleryTop: g?.getBoundingClientRect().top,
+    galleryTop: gb?.top,
     stickyBottom: s?.getBoundingClientRect().bottom,
+    imgFit: i ? getComputedStyle(i).objectFit : "",
+    imgPos: i ? getComputedStyle(i).objectPosition : "",
+    centerDelta: Math.abs(midI - midG),
   };
 });
 const stickyOnScreen = (layout.stickyBottom ?? 9999) <= layout.innerH + 12;
 const galleryAboveFold = (layout.galleryTop ?? 9999) < layout.innerH * 0.55;
+const photoCentered = (layout.centerDelta ?? 99) < 24;
 
 console.log("PDP open:", pdpOpen);
 console.log("swipe gallery:", galleryOpen);
@@ -78,6 +87,7 @@ console.log("next arrow changes product:", browsedNext, `(${nameBefore.slice(0, 
 console.log("sticky buy bar:", stickyOpen, `(bottom=${Math.round(layout.stickyBottom ?? -1)} / ${layout.innerH})`);
 console.log("sticky shop CTA:", shopOpen);
 console.log("photo object-fit:", fit, "— contain:", fit === "contain");
+console.log("photo centered:", photoCentered, `(delta=${Math.round(layout.centerDelta ?? -1)}px pos=${layout.imgPos})`);
 console.log("gallery above fold:", galleryAboveFold, `(top=${Math.round(layout.galleryTop ?? -1)})`);
 console.log("sticky bar on screen:", stickyOnScreen);
 
@@ -116,6 +126,7 @@ if (!arrowsVisible) failures.push("prev/next item arrows missing");
 if (!browsedNext) failures.push("next arrow did not change product");
 if (!stickyOpen || !shopOpen) failures.push("sticky buy bar missing");
 if (fit !== "contain") failures.push(`photo is cropped (object-fit=${fit})`);
+if (!photoCentered) failures.push(`photo is not centered (delta=${Math.round(layout.centerDelta ?? -1)}px)`);
 if (!stickyOnScreen) failures.push("sticky buy bar is off-screen");
 if (!tryOnVisible) failures.push("PDP has no Try on button");
 if (!vtoLaunched) failures.push("Try on did not open VTO or the sign-in gate");
