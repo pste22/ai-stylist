@@ -344,6 +344,17 @@ function BubbleProducts({ products, loved, onLove, onBuy, onSelect }) {
   );
 }
 
+function uniqProducts(pool) {
+  const seen = new Set();
+  const out = [];
+  for (const p of pool || []) {
+    if (!p?.id || seen.has(p.id)) continue;
+    seen.add(p.id);
+    out.push(p);
+  }
+  return out;
+}
+
 function pickRelatedProducts(product, pools) {
   if (!product?.id) return [];
   const seen = new Set([product.id]);
@@ -359,6 +370,21 @@ function pickRelatedProducts(product, pools) {
     }
   }
   return out;
+}
+
+/** The list the shopper was already looking at — used for prev/next on the PDP. */
+function pickBrowseQueue(product, pools) {
+  if (!product?.id) return [];
+  let best = [];
+  for (const pool of pools) {
+    if (!Array.isArray(pool) || pool.length < 2) continue;
+    if (!pool.some((p) => p?.id === product.id)) continue;
+    const out = uniqProducts(pool);
+    if (out.length > best.length) best = out;
+  }
+  if (best.length >= 2) return best;
+  const fallback = uniqProducts([product, ...pools.flatMap((p) => (Array.isArray(p) ? p : []))]);
+  return fallback.length >= 2 ? fallback : [product];
 }
 
 // ─── Slot label config ────────────────────────────────────────────────────────
@@ -1881,6 +1907,27 @@ export default function App() {
     ]);
   }, [quickViewProduct, filterResults, products, vsResults, trendingProducts, trendingRails, savedProducts, messages]);
 
+  const browseQueue = useMemo(() => {
+    if (!quickViewProduct) return [];
+    const fromMessages = messages.flatMap((m) => m.products || []);
+    const railOf = (cat) => {
+      const key = String(cat || "").toLowerCase();
+      if (key === "shoes") return trendingRails?.shoes;
+      if (key === "bags") return trendingRails?.bags;
+      return trendingRails?.clothes;
+    };
+    return pickBrowseQueue(quickViewProduct, [
+      filterResults?.products,
+      vsResults,
+      railOf(quickViewProduct.category),
+      trendingProducts,
+      products,
+      savedProducts,
+      fromMessages,
+      relatedProducts,
+    ]);
+  }, [quickViewProduct, filterResults, vsResults, trendingRails, trendingProducts, products, savedProducts, messages, relatedProducts]);
+
   // Auto-scroll thread to bottom on new messages/products
   useEffect(() => {
     const el = threadRef.current;
@@ -2921,6 +2968,7 @@ export default function App() {
               });
             }}
             related={relatedProducts}
+            browseQueue={browseQueue}
             onSelectRelated={setQuickViewProduct}
             onTryOn={(product) => {
               setQuickViewProduct(null);

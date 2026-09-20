@@ -16,17 +16,20 @@ const ctx = await browser.newContext({
 });
 const page = await ctx.newPage();
 await page.goto(BASE, { waitUntil: "networkidle" });
-await page.getByRole("button", { name: "Start styling" }).click();
+const shopLook = page.getByRole("button", { name: /shop this look/i });
+if (await shopLook.count()) {
+  await shopLook.click();
+} else {
+  await page.getByRole("button", { name: /filters/i }).first().click();
+}
 await page.waitForTimeout(2500);
 
-await page.locator(".filter-chip", { hasText: /^SHOES$/i }).first().click();
-await page.waitForTimeout(2800);
-
-const card = page.locator("#cf-results-panel .card").first();
-await card.waitFor({ state: "visible", timeout: 15000 });
-await card.click();
-
 const panel = page.locator(".qv-panel");
+if (!(await panel.isVisible().catch(() => false))) {
+  const card = page.locator(".trend-card, #cf-results-panel .card, .pc").first();
+  await card.waitFor({ state: "visible", timeout: 15000 });
+  await card.click();
+}
 await panel.waitFor({ state: "visible", timeout: 8000 });
 await page.waitForTimeout(450);
 
@@ -39,6 +42,20 @@ const pdpOpen = await panel.isVisible();
 const galleryOpen = await gallery.isVisible();
 const stickyOpen = await sticky.isVisible();
 const shopOpen = await shop.isVisible();
+const prevItem = page.getByRole("button", { name: "Previous item" });
+const nextItem = page.getByRole("button", { name: "Next item" });
+const arrowsVisible = (await prevItem.isVisible()) && (await nextItem.isVisible());
+const nameBefore = (await page.locator(".qv-name").textContent()) || "";
+if (arrowsVisible) {
+  await nextItem.click();
+  await page.waitForTimeout(500);
+}
+const nameAfter = (await page.locator(".qv-name").textContent()) || "";
+const browsedNext = arrowsVisible && nameAfter.trim() !== "" && nameAfter !== nameBefore;
+if (arrowsVisible && browsedNext) {
+  await prevItem.click();
+  await page.waitForTimeout(400);
+}
 const fit = await img.evaluate((el) => getComputedStyle(el).objectFit).catch(() => "");
 const layout = await page.evaluate(() => {
   const g = document.querySelector(".qv-gallery");
@@ -56,6 +73,8 @@ const galleryAboveFold = (layout.galleryTop ?? 9999) < layout.innerH * 0.55;
 
 console.log("PDP open:", pdpOpen);
 console.log("swipe gallery:", galleryOpen);
+console.log("prev/next item arrows:", arrowsVisible);
+console.log("next arrow changes product:", browsedNext, `(${nameBefore.slice(0, 28)} → ${nameAfter.slice(0, 28)})`);
 console.log("sticky buy bar:", stickyOpen, `(bottom=${Math.round(layout.stickyBottom ?? -1)} / ${layout.innerH})`);
 console.log("sticky shop CTA:", shopOpen);
 console.log("photo object-fit:", fit, "— contain:", fit === "contain");
@@ -93,6 +112,8 @@ await browser.close();
 const failures = [];
 if (!pdpOpen) failures.push("PDP did not open");
 if (!galleryOpen) failures.push("swipe gallery missing");
+if (!arrowsVisible) failures.push("prev/next item arrows missing");
+if (!browsedNext) failures.push("next arrow did not change product");
 if (!stickyOpen || !shopOpen) failures.push("sticky buy bar missing");
 if (fit !== "contain") failures.push(`photo is cropped (object-fit=${fit})`);
 if (!stickyOnScreen) failures.push("sticky buy bar is off-screen");
