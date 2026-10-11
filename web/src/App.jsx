@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import ProductCard from "./ProductCard.jsx";
 import LoginScreen, { AuthButtons } from "./LoginScreen.jsx";
 import { useMiraVoice } from "./useMiraVoice.js";
@@ -895,9 +896,14 @@ function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onT
   const src = lookShot(p, 480);
   const isLoved = !!(loved && loved.has(p.id));
   const price = lookPrice(p);
+  const pick = () => (onChoose ? onChoose(p) : onSelect?.(p));
   return (
-    <article className={`flp-row${selected ? " is-chosen" : ""}`}>
-      <button type="button" className="flp-row-thumb" onClick={() => (onChoose ? onChoose(p) : onSelect?.(p))}>
+    <article
+      className={`flp-row${selected ? " is-chosen" : ""}`}
+      onClick={pick}
+      aria-pressed={selected ? "true" : "false"}
+    >
+      <button type="button" className="flp-row-thumb" onClick={(e) => { e.stopPropagation(); pick(); }}>
         {src
           ? <img src={src} alt="" loading="lazy" decoding="async" />
           : <span className="flp-thumb-emoji" style={{ "--swatch": swatchColor(p.color) }}>{CATEGORY_EMOJI[p.category] || "🛍️"}</span>}
@@ -905,14 +911,14 @@ function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onT
       </button>
       <div className="flp-row-body">
         <div className="flp-row-top">
-          <button type="button" className="flp-row-open" onClick={() => onSelect?.(p)}>
+          <button type="button" className="flp-row-open" onClick={(e) => { e.stopPropagation(); pick(); }}>
             <p className="flp-row-name">{shortLookName(p)}</p>
             <p className="flp-row-cat">{lookCategoryLabel(p)}</p>
             {price ? <p className="flp-row-price">{price}</p> : null}
           </button>
           <span className="flp-match">{matchPct(p, index)}% match</span>
         </div>
-        <div className="flp-row-actions">
+        <div className="flp-row-actions" onClick={(e) => e.stopPropagation()}>
           {onTryOn && (
             <button type="button" className="flp-chip-btn" onClick={() => onTryOn(p)}>Try on</button>
           )}
@@ -920,6 +926,9 @@ function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onT
             <button type="button" className={`flp-chip-btn${isLoved ? " is-loved" : ""}`} onClick={() => onLove(p)}>
               {isLoved ? "Saved" : "Save"}
             </button>
+          )}
+          {onSelect && (
+            <button type="button" className="flp-chip-btn" onClick={() => onSelect(p)}>Details</button>
           )}
           <ShopPieceLink product={p} className="flp-chip-btn flp-chip-btn--shop" onBuy={onBuy}>
             {shopLabel(p, { short: true })}
@@ -930,7 +939,34 @@ function FlpRecoRow({ p, index, selected, loved, onChoose, onSelect, onLove, onT
   );
 }
 
-function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddAllToCart, onSelect, onClose, onTryOn, onSeeOnMe, onAutoLook, heroStill, hasPhoto, onPickPhoto, building, buildHint, lookError }) {
+function LookFrame({ label, product, featured, badge }) {
+  const src = lookShot(product, 1000);
+  return (
+    <figure
+      className={`flp-look-piece${featured ? " is-featured" : ""}${product ? " is-filled" : ""}`}
+      data-slot={label.toLowerCase()}
+      data-product-id={product?.id || ""}
+    >
+      <figcaption className="flp-using">{badge || label}</figcaption>
+      {src ? (
+        <img
+          key={product.id}
+          src={src}
+          alt={product.name || label}
+          onError={(e) => {
+            const raw = product.image_url;
+            if (raw && e.currentTarget.src !== raw) e.currentTarget.src = raw;
+          }}
+        />
+      ) : (
+        <span className="flp-look-empty">{product ? (CATEGORY_EMOJI[product.category] || "🛍️") : `Pick a ${label.toLowerCase()}`}</span>
+      )}
+      {product ? <p className="flp-look-name">{shortLookName(product)}</p> : null}
+    </figure>
+  );
+}
+
+export function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddAllToCart, onSelect, onClose, onTryOn, onSeeOnMe, onAutoLook, heroStill, hasPhoto, onPickPhoto, building, buildHint, lookError }) {
   const derived = look ? deriveShopLook(look) : { pinned: null, bottoms: [], accents: [], items: [] };
   const { pinned, bottoms, accents, items } = derived;
   const bottomKey = bottoms.map((p) => p.id).join(",");
@@ -958,6 +994,18 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
       pieces: [autoBottom, autoShoe, autoBag].filter((p) => p?.id && p.id !== autoHero.id),
     });
   }, [onAutoLook, autoHero?.id, autoBottom?.id, autoShoe?.id, autoBag?.id, hasPhoto, bottoms.length]); // eslint-disable-line react-hooks/exhaustive-deps
+  const showPage = !!(look && (items.length || pinned || bottoms.length));
+  useEffect(() => {
+    if (!showPage) return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [onClose, showPage]);
   if (!look) return null;
   if (!items.length && !pinned && !bottoms.length) return null;
 
@@ -1021,71 +1069,76 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
     else if (onTryOn) onTryOn(focus || heroProduct);
   };
 
-  return (
-    <aside className="full-look-panel is-page" role="dialog" aria-label="Style the Look">
+  const page = (
+    <aside className="full-look-panel is-page" role="dialog" aria-modal="true" aria-label="Complete the Look">
       <div className="flp-sheet">
         <div className="flp-col flp-col-pin">
           <div className="flp-head">
-            <p className="flp-eyebrow">Style the Look</p>
-            <button className="flp-close" aria-label="Close" onClick={onClose}>✕</button>
+            <button type="button" className="flp-back" onClick={onClose}>← Back</button>
+            <p className="flp-eyebrow">Complete the Look</p>
+          </div>
+          <div className="flp-look-stage">
+            <div className="flp-look-hero">
+              {heroStill ? (
+                <figure className="flp-look-piece flp-look-piece--onyou">
+                  <figcaption className="flp-using">On you</figcaption>
+                  <img src={heroSrc} alt="This look on you" />
+                </figure>
+              ) : (
+                <LookFrame label="Top" product={heroProduct} />
+              )}
+              {building && !lookError && (
+                <div className="flp-building" role="status">
+                  {buildHint || "Putting this look on you…"}
+                </div>
+              )}
+              {lookError && (
+                <div className="flp-building flp-building--error" role="alert">
+                  {lookError}
+                </div>
+              )}
+              {!hasPhoto && onPickPhoto && (
+                <div className="flp-photo-gate">
+                  <p>Add one full-body photo — Mira will put this top, bottom, shoes and bag on you.</p>
+                  <FlpPhotoPick onPick={onPickPhoto} capture="user">Take a photo</FlpPhotoPick>
+                  <FlpPhotoPick onPick={onPickPhoto}>Choose from library</FlpPhotoPick>
+                </div>
+              )}
+            </div>
+            <LookFrame label="Bottom" product={chosen} featured badge="Bottom" />
+            <div className="flp-look-extras">
+              <LookFrame label="Shoes" product={chosenShoe} />
+              <LookFrame label="Bag" product={chosenBag} />
+            </div>
           </div>
           {heroProduct && (
-            <article className="flp-using-card">
-              <div className="flp-using-shot">
-                <span className="flp-using">{heroStill ? "On you" : "Using this"}</span>
-                {heroSrc
-                  ? <img
-                      src={heroSrc}
-                      alt={heroProduct.name}
-                      onError={(e) => {
-                        const raw = heroProduct.image_url;
-                        if (raw && e.currentTarget.src !== raw) e.currentTarget.src = raw;
-                      }}
-                    />
-                  : <span className="flp-thumb-emoji" style={{ "--swatch": swatchColor(heroProduct.color) }}>{CATEGORY_EMOJI[heroProduct.category] || "🛍️"}</span>}
-                {building && !lookError && (
-                  <div className="flp-building" role="status">
-                    {buildHint || "Putting this look on you…"}
-                  </div>
-                )}
-                {lookError && (
-                  <div className="flp-building flp-building--error" role="alert">
-                    {lookError}
-                  </div>
-                )}
-                {!hasPhoto && onPickPhoto && (
-                  <div className="flp-photo-gate">
-                    <p>Add one full-body photo — Mira will put this top, bottom, shoes and bag on you.</p>
-                    <FlpPhotoPick onPick={onPickPhoto} capture="user">Take a photo</FlpPhotoPick>
-                    <FlpPhotoPick onPick={onPickPhoto}>Choose from library</FlpPhotoPick>
-                  </div>
-                )}
-              </div>
-              <h3 className="flp-using-name">{shortLookName(heroProduct)}</h3>
+            <div className="flp-using-actions">
               {pills.length > 0 && (
                 <div className="flp-pills">
                   {pills.map((t) => <span key={t}>{t}</span>)}
                 </div>
               )}
-              <div className="flp-using-actions">
-                {(onSeeOnMe || onTryOn) && <button type="button" className="flp-chip-btn" onClick={() => seeOnMe(heroProduct)}>Try on</button>}
-                <button type="button" className={`flp-chip-btn${loved.has(heroProduct.id) ? " is-loved" : ""}`} onClick={() => onLove(heroProduct)}>
-                  {loved.has(heroProduct.id) ? "Saved" : "Save"}
-                </button>
-                <button type="button" className="flp-chip-btn" onClick={() => onSelect?.(heroProduct)}>Compare</button>
-                <ShopPieceLink product={heroProduct} className="flp-chip-btn flp-chip-btn--shop" onBuy={onBuy}>
-                  {shopLabel(heroProduct, { short: true })}
-                </ShopPieceLink>
-              </div>
-            </article>
+              {(onSeeOnMe || onTryOn) && <button type="button" className="flp-chip-btn" onClick={() => seeOnMe(heroProduct)}>Try on</button>}
+              <button type="button" className={`flp-chip-btn${loved.has(heroProduct.id) ? " is-loved" : ""}`} onClick={() => onLove(heroProduct)}>
+                {loved.has(heroProduct.id) ? "Saved" : "Save"}
+              </button>
+              <button type="button" className="flp-chip-btn" onClick={() => onSelect?.(heroProduct)}>Details</button>
+              <ShopPieceLink product={heroProduct} className="flp-chip-btn flp-chip-btn--shop" onBuy={onBuy}>
+                {shopLabel(heroProduct, { short: true })}
+              </ShopPieceLink>
+            </div>
           )}
           <div className="flp-summary">
-            <p className="flp-summary-title">Complete the Look</p>
+            <p className="flp-summary-title">In this look</p>
             <div className="flp-slots">
               {slots.map((s) => {
                 const src = lookShot(s.product, 240);
+                const current = (s.key === "bottom" && chosen?.id === s.product?.id)
+                  || (s.key === "shoes" && chosenShoe?.id === s.product?.id)
+                  || (s.key === "bag" && chosenBag?.id === s.product?.id)
+                  || (s.key === "top" && heroProduct?.id === s.product?.id);
                 return (
-                  <button key={s.key} type="button" className={`flp-slot${s.product ? " is-filled" : ""}`} onClick={() => s.product && onSelect?.(s.product)}>
+                  <button key={s.key} type="button" className={`flp-slot${s.product ? " is-filled" : ""}${current ? " is-current" : ""}`} onClick={() => s.product && onSelect?.(s.product)}>
                     {src
                       ? <img src={src} alt="" />
                       : <span className="flp-slot-empty" />}
@@ -1100,9 +1153,9 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
         <div className="flp-col flp-col-recs">
           <h3 className="flp-recs-title">{mixMode ? "Pick bottoms, shoes & a bag" : (look.title || "Complete the Look")}</h3>
           <p className="flp-recs-sub">
-            {hasPhoto
-              ? "Mira puts the selected pieces on you automatically — tap another to swap it."
-              : "Pick the pieces, add your photo once, and Mira generates the full look on you."}
+            {mixMode
+              ? "Tap a bottom to swap it into the look. Shoes and the bag swap the same way."
+              : "Tap a piece to add it to this look."}
           </p>
           <div className="flp-rows" role="list">
             {visibleRail.map((p, i) => (
@@ -1110,9 +1163,9 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
                 key={p.id}
                 p={p}
                 index={i}
-                selected={mixMode && rowSelected(p)}
+                selected={rowSelected(p)}
                 loved={loved}
-                onChoose={mixMode ? choose : null}
+                onChoose={choose}
                 onSelect={onSelect}
                 onLove={onLove}
                 onTryOn={(p) => seeOnMe(p)}
@@ -1145,6 +1198,8 @@ function FullLookPanel({ look, loved, onLove, onBuy, inCart, onAddToCart, onAddA
       </div>
     </aside>
   );
+  if (typeof document === "undefined") return page;
+  return createPortal(page, document.body);
 }
 
 // ─── Full-screen chat view (kept for reference; not rendered in main path) ────
