@@ -99,9 +99,17 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     }, 12000);
   };
 
+  // Half-duplex: drop mic frames while Mira's audio is still playing so
+  // speaker echo can't trip server VAD and interrupt her mid-sentence.
+  const forwardMic = useCallback((bytes) => {
+    if (playerRef.current?.isOutputActive?.()) return;
+    const sock = wsRef.current;
+    if (sock && sock.readyState === WebSocket.OPEN) sock.send(bytes);
+  }, []);
+
   const stop = useCallback(() => {
     micRef.current?.stop();
-    playerRef.current?.flush();
+    playerRef.current?.close();
     wsRef.current?.close();
     micRef.current = playerRef.current = wsRef.current = null;
     if (askWatchdogRef.current) {
@@ -303,19 +311,25 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
   // Switch audio on/off mid-session without restarting the WebSocket
   const switchAudio = useCallback(async (enableAudio) => {
     if (enableAudio && !micRef.current) {
-      const mic = new MicCapture((bytes) => {
-        if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(bytes);
-      });
-      micRef.current = mic;
-      try { await mic.start(); } catch { setError("Mic permission denied"); }
+      // Unlock inside this click, before the getUserMedia await, or the
+      // playback context is created later from a websocket task and stays muted.
       if (!playerRef.current) playerRef.current = new PcmPlayer();
+      playerRef.current.unlock();
+      const mic = new MicCapture(forwardMic);
+      mic.unlock();
+      micRef.current = mic;
+      try { await mic.start(); }
+      catch {
+        micRef.current = null;
+        setError("Mic permission denied");
+      }
     } else if (!enableAudio) {
       micRef.current?.stop();
       micRef.current = null;
-      playerRef.current?.flush();
+      playerRef.current?.close();
       playerRef.current = null; // null so binary frames are silently dropped
     }
-  }, []);
+  }, [forwardMic]);
 
   const addSystemEvent = useCallback((text) => {
     _addMsg("event", text);
@@ -342,7 +356,24 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
       ws.binaryType = "arraybuffer";
       wsRef.current = ws;
 
-      if (!textMode) playerRef.current = new PcmPlayer();
+      // Voice capture + playback have to start in this click, not in onopen.
+      // onopen is a later task and no longer counts as a user gesture.
+      let micReady = null;
+      if (!textMode) {
+        if (!playerRef.current) playerRef.current = new PcmPlayer();
+        playerRef.current.unlock();
+        if (!micRef.current) {
+          const mic = new MicCapture(forwardMic);
+          mic.unlock();
+          micRef.current = mic;
+          micReady = mic.start().catch(() => {
+            if (micRef.current) {
+              setError("Mic permission denied");
+              stop();
+            }
+          });
+        }
+      }
 
       ws.onopen = async () => {
         // Queued sendText (bubble already on screen) or start(initialText)
@@ -382,20 +413,18 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
         const queuedTryOn = pendingTryOnRef.current;
         pendingTryOnRef.current = null;
         if (queuedTryOn) ws.send(JSON.stringify(queuedTryOn));
-        if (!textMode) {
-          const mic = new MicCapture((bytes) => {
-            if (ws.readyState === WebSocket.OPEN) ws.send(bytes);
-          });
-          micRef.current = mic;
-          try { await mic.start(); }
-          catch { setError("Mic permission denied"); stop(); }
+        if (micReady) {
+          try { await micReady; }
+          catch { /* permission failure already stopped the session */ }
         }
       };
 
       ws.onmessage = (e) => {
         if (e.data instanceof ArrayBuffer) {
-          // Null-safe: playerRef is nulled by switchAudio when audio is off
-          playerRef.current?.push(e.data);
+          // Null-safe: playerRef is nulled by switchAudio when audio is off.
+          // A bad chunk must not throw out of onmessage and drop the turn.
+          try { playerRef.current?.push(e.data); }
+          catch (err) { console.error("[audio] playback", err); }
           return;
         }
         const msg = JSON.parse(e.data);
@@ -655,6 +684,8 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
             setQuickReplies(msg.options || []);
             break;
           case "interrupted":
+            // Server VAD heard the shopper. Drop queued PCM immediately.
+            playerRef.current?.flush();
             break;
           case "error":
             setError(msg.message || "connection_failed");
@@ -676,7 +707,7 @@ export function useMiraVoice({ userId, userName, userEmail = null, userPrefs = n
     } catch (e) {
       setError(String(e));
     }
-  }, [stop, textMode, userId, userName, userEmail, userPrefs, eventBrief]);
+  }, [stop, textMode, userId, userName, userEmail, userPrefs, eventBrief, forwardMic]);
 
   const retry = useCallback(() => {
     setError(null);

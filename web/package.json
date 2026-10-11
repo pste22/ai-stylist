@@ -12,7 +12,8 @@
     "test:signin": "node tests/signin.spec.mjs",
     "test:chips": "node tests/category-chips.spec.mjs",
     "test:pdp": "node tests/pdp.spec.mjs",
-    "test:landing": "node tests/landing-scroll.spec.mjs"
+    "test:landing": "node tests/landing-scroll.spec.mjs",
+    "test:audio": "node tests/audio.spec.mjs"
   },
   "dependencies": {
     "@heygen/liveavatar-web-sdk": "^0.0.18",
