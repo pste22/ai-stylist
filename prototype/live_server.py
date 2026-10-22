@@ -81,6 +81,8 @@ import tryon as _tryon  # noqa: E402
 from product_store import vector_search as _vector_search  # noqa: E402
 from festival_calendar import festival_greeting_line, upcoming_festival  # noqa: E402
 import gen_spend  # noqa: E402
+import ops_metrics  # noqa: E402
+import admin_portal  # noqa: E402
 
 # Ground the voice on the ACTIVE source (env PRODUCT_SOURCE: local / curated / amazon),
 # not just the bundled demo catalog — so curated SiteStripe / PA-API items Mira can
@@ -537,6 +539,9 @@ async def _gen_run(fn, *args, **kwargs):
         _cb["open_until"] = time.time() + _CB_COOLDOWN
         _cb["fails"] = 0
         print(f"  ⚡ generation circuit OPEN for {_CB_COOLDOWN:.0f}s (upstream errors)")
+        ops_metrics.record_error(
+            "circuit_open", f"upstream errors, cooling {_CB_COOLDOWN:.0f}s"
+        )
     raise last
 
 
@@ -1019,6 +1024,7 @@ async def handle(ws) -> None:
     # system prompt can be personalised for this shopper.
     user_id: str | None = None
     user_email: str | None = None
+    session_id: str | None = None
     user_name = "there"
     text_mode: bool = False   # True → use TEXT modality (silent/typing mode)
     style_vibe: str | None = None
@@ -1242,6 +1248,10 @@ async def handle(ws) -> None:
         opened_with_ask=initial_request or None,
     )
     session_id = events.new_session_id()
+    ops_metrics.session_open(session_id, user_id=user_id, name=user_name)
+    events.log_event(
+        "session_start", session_id=session_id, user_id=user_id, name=user_name,
+    )
     if event_brief.get("occasion"):
         await asyncio.to_thread(user_store.save_event_brief, user_id, session_id, event_brief)
     current = {"session": None}  # the live session pump_mic forwards audio into
@@ -2359,6 +2369,7 @@ async def handle(ws) -> None:
                         prod = _BY_ID.get(pid, {})
                         events.log_would_buy(
                             pid, session_id=session_id,
+                            user_id=user_id,
                             product_name=prod.get("name"),
                         )
                         if user_id:
@@ -2715,9 +2726,10 @@ async def handle(ws) -> None:
                     elif data.get("type") == "buy_click":
                         pid = data.get("product_id", "")
                         prod = _BY_ID.get(pid, {})
-                        events.log_event(
-                            "buy_click", session_id=session_id,
-                            product_id=pid, product_name=prod.get("name"),
+                        events.log_buy_click(
+                            pid, session_id=session_id,
+                            user_id=user_id,
+                            product_name=prod.get("name"),
                         )
                         if user_id and prod:
                             await asyncio.to_thread(
@@ -3431,6 +3443,7 @@ async def handle(ws) -> None:
                     f"  ! Live session dropped after {dur:.1f}s ({exc})"
                     + (" — not retrying" if fatal else " — reconnecting")
                 )
+                ops_metrics.record_error("live_session", str(exc)[:300])
                 await asyncio.to_thread(
                     _log_session_cost,
                     session_id, user_id,
@@ -3465,6 +3478,7 @@ async def handle(ws) -> None:
     except websockets.ConnectionClosed:
         pass
     finally:
+        ops_metrics.session_close(session_id)
         await _rl_release(_ip)
         print(f"  ▸ browser disconnected ({_ip})")
 
@@ -3689,29 +3703,84 @@ def _review_assist(
         return local
 
 
+def _health_fields() -> dict:
+    """Shared payload for /health, /health/live, and the admin header."""
+    healthy = time.time() >= _cb["open_until"]
+    _spend_roll()
+    metrics = ops_metrics.snapshot()
+    return {
+        "status": "ok" if healthy else "degraded",
+        # Baked in at image build time, so ship.sh can confirm the running
+        # container is the commit it just pushed rather than a cached image.
+        "commit": _GIT_SHA,
+        "gen_circuit_open": not healthy,
+        "gen_workers": _GEN_WORKERS,
+        "gen_disabled": _GEN_DISABLED,
+        "cache_items": len(_gen_cache),
+        "cache_mb": round(_gen_cache_bytes / 1024 / 1024, 1),
+        "spend_today_usd": round(_spend["total"], 2),
+        "spend_user_cap_usd": _GEN_DAILY_USER_USD,
+        "spend_global_cap_usd": _GEN_DAILY_GLOBAL_USD,
+        "uptime_s": metrics["uptime_s"],
+        "active_sessions": metrics["active_sessions"],
+        "errors_last_hour": metrics["errors_last_hour"],
+        "http_p95_ms": metrics["http_p95_ms"],
+        "http_5xx": metrics["http_5xx"],
+    }
+
+
+def _http_respond(connection, status: int, headers: dict, body: str):
+    resp = connection.respond(status, body or "")
+    for key, value in headers.items():
+        resp.headers[key] = value
+    return resp
+
+
+def _request_path(request) -> str:
+    return (request.path or "").split("?", 1)[0].rstrip("/") or "/"
+
+
 async def process_request(connection, request):
     """Serve the LiveAvatar session token over plain HTTP; everything else upgrades to WS."""
-    # Health check — for Fly.io checks / load balancers. Reports gen circuit state.
-    if request.path.rstrip("/") == "/health":
-        healthy = time.time() >= _cb["open_until"]
-        _spend_roll()
-        body = json.dumps({
-            "status": "ok" if healthy else "degraded",
-            # Baked in at image build time, so ship.sh can confirm the running
-            # container is the commit it just pushed rather than a cached image.
-            "commit": _GIT_SHA,
-            "gen_circuit_open": not healthy,
-            "gen_workers": _GEN_WORKERS,
-            "gen_disabled": _GEN_DISABLED,
-            "cache_items": len(_gen_cache),
-            "cache_mb": round(_gen_cache_bytes / 1024 / 1024, 1),
-            "spend_today_usd": round(_spend["total"], 2),
-            "spend_user_cap_usd": _GEN_DAILY_USER_USD,
-            "spend_global_cap_usd": _GEN_DAILY_GLOBAL_USD,
-        })
-        resp = connection.respond(200 if healthy else 503, body)
-        resp.headers["Content-Type"] = "application/json"
+    req_path = _request_path(request)
+    t0 = time.perf_counter()
+
+    def _note(status: int, resp):
+        ops_metrics.record_request(req_path, status, (time.perf_counter() - t0) * 1000)
+        if status >= 500:
+            ops_metrics.record_error("http_5xx", req_path[:80])
         return resp
+
+    # Liveness — process is up. Fly machine checks use this so a tripped
+    # generation circuit (503 on /health) does not bounce the only machine.
+    if req_path == "/health/live":
+        body = json.dumps({"status": "alive", "commit": _GIT_SHA})
+        resp = connection.respond(200, body)
+        resp.headers["Content-Type"] = "application/json"
+        resp.headers["Cache-Control"] = "no-store"
+        return _note(200, resp)
+
+    # Readiness — 503 when the gen circuit is open (Gemini/Veo failing).
+    # Point UptimeRobot / BetterStack here so the founder gets paged.
+    if req_path == "/health":
+        fields = _health_fields()
+        status = 200 if fields["status"] == "ok" else 503
+        body = json.dumps(fields)
+        resp = connection.respond(status, body)
+        resp.headers["Content-Type"] = "application/json"
+        resp.headers["Cache-Control"] = "no-store"
+        return _note(status, resp)
+
+    if req_path.startswith("/admin") or req_path.startswith("/api/admin"):
+        ip = _client_ip(connection, request)
+        status, headers, body = admin_portal.handle_request(
+            request.path,
+            request.headers,
+            ip,
+            health=_health_fields(),
+            catalog=_BY_ID,
+        )
+        return _note(status, _http_respond(connection, status, headers, body))
     if request.path.startswith("/api/review-assist"):
         from urllib.parse import urlparse, parse_qs
 

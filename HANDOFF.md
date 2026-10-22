@@ -62,9 +62,11 @@ PY
    `https://*.app.github.dev/**` (and `http://localhost:5173/**` for local Cursor dev)
    to Supabase → Auth → Redirect URLs.
 3. **PostHog key** — set `VITE_POSTHOG_KEY=phc_…` (no key = safe no-op).
-4. **Uptime + spend alerting** on `/health` (UptimeRobot/BetterStack).
+4. **Uptime + spend alerting** on `/health` (UptimeRobot/BetterStack) — Fly already
+   checks `/health/live`. Set `MIRA_ADMIN_PASSWORD` and open `/admin` for shopper
+   activity.
 5. **`web/public/og-cover.jpg`** (1200×630) for rich share previews.
-6. **`min_machines_running = 1`** in `fly.toml` before real traffic.
+6. **`min_machines_running = 1`** in `fly.toml` — done.
 
 ## Run locally
 ```bash

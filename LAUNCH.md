@@ -48,9 +48,24 @@ Create a free PostHog project (EU region), then set in the build env:
 `VITE_POSTHOG_KEY=phc_…` (and optional `VITE_POSTHOG_HOST`). Events are already wired
 (activation, try-on completion, click-out, share). No key = safe no-op.
 
-## 4. Observability — alerting
-Point UptimeRobot / BetterStack at `/health` (alert on non-200 + when
-`spend_today_usd` nears the cap). The Cloud budget alert (step 1) is the money backstop.
+## 4. Observability — alerting + admin
+Code is in place. Two remaining clicks on your side:
+
+1. **UptimeRobot or BetterStack** (5 min, free tier):
+   - Monitor `https://ai-stylist.fly.dev/health` — alert on non-200 (generation
+     circuit open / process down) and when JSON `spend_today_usd` nears
+     `spend_global_cap_usd`.
+   - Do **not** monitor `/` — nginx will 200 the SPA even if Python is dead.
+   - Fly already pings `/health/live` every 15s and restarts a dead machine.
+2. **Admin password** so you can watch shoppers:
+   ```
+   fly secrets set MIRA_ADMIN_PASSWORD='a long passphrase you will remember'
+   ```
+   Then open `https://ai-stylist.fly.dev/admin`. Funnel, live sessions, recent
+   users, buy-clicks, estimated commission, and in-process glitches. Cookie lasts
+   7 days. Unset password = `/admin` returns 404 (not advertised).
+
+The Cloud budget alert (step 1) is the money backstop.
 
 ## 5. Share card image
 Add `web/public/og-cover.jpg` (1200×630) so shared links render a rich preview

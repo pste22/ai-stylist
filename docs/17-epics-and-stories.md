@@ -396,12 +396,12 @@ _Last updated: July 2026. India-first MVP strategy, affiliate + subscription rev
 **So that** I know what to source more of
 
 **Acceptance criteria**
-- [ ] Password-protected `/admin` page
-- [ ] Top 10 products by: shown → saved conversion, saved → buy-click conversion
-- [ ] Bottom 10 (low engagement → remove from catalog)
-- [ ] Filter by date range and platform (Myntra / Ajio / Amazon)
+- [x] Password-protected `/admin` page
+- [x] Top 10 products by: shown → saved conversion, saved → buy-click conversion
+- [x] Bottom 10 (low engagement → remove from catalog)
+- [x] Filter by date range and platform (Myntra / Ajio / Amazon)
 
-**Priority**: 🟡 P2 · **Effort**: M · **Status**: ⬜
+**Priority**: 🟡 P2 · **Effort**: M · **Status**: ✅
 
 ---
 
@@ -411,12 +411,12 @@ _Last updated: July 2026. India-first MVP strategy, affiliate + subscription rev
 **So that** I can report progress and set targets
 
 **Acceptance criteria**
-- [ ] Funnel: Sessions → Products shown → Saves → Buy-clicks
-- [ ] Estimated revenue = buy_clicks × avg commission rate by platform
-- [ ] Free vs Pro user breakdown
-- [ ] 30-day rolling chart
+- [x] Funnel: Sessions → Products shown → Saves → Buy-clicks
+- [x] Estimated revenue = buy_clicks × avg commission rate by platform
+- [ ] Free vs Pro user breakdown (Pro/Razorpay is not live — every shopper is Free)
+- [x] 30-day rolling chart
 
-**Priority**: 🟡 P2 · **Effort**: M · **Status**: ⬜
+**Priority**: 🟡 P2 · **Effort**: M · **Status**: ✅
 
 ---
 

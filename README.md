@@ -4,9 +4,9 @@
 > style, and curates clothes for them across multiple sources — like shopping with a
 > stylish friend who actually knows you.
 
-**Status:** Pre-prototype (Phase 0 — planning)
+**Status:** Live at https://ai-stylist.fly.dev/ — product is overbuilt; launch is gated on founder ops (Gemini billing key, Supabase RLS apply, PostHog key, UptimeRobot). See `LAUNCH.md` and `BACKLOG.md`.
 **Founder:** Solo, self-funded
-**Repo:** https://github.com/pste22
+**Repo:** https://github.com/pste22/ai-stylist
 
 ---
 
@@ -35,7 +35,6 @@ This repo doubles as our planning board. Everything lives in [`/docs`](docs):
 - [x] Vision agreed
 - [x] Risks identified
 - [x] Roadmap drafted
-- [ ] Phase 1 prototype (latency spike)
-- [ ] Phase 2 persona + investor demo
-- [ ] Phase 3 real product sourcing
-- [ ] Phase 4 retention
+- [x] Phase 1–2: live voice stylist, try-on, catalog, Fly production
+- [ ] Founder launch gate (`LAUNCH.md`) — billing, RLS, analytics key, uptime monitor
+- [ ] Affiliate catalog you actually want to sell (founder-owned sourcing)

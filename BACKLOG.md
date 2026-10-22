@@ -19,22 +19,25 @@ Product magic is real and (over-)built; the *launch* isn't ready — flying blin
       via the public anon key. Fix written: `prototype/migrate_rls_policies.sql`
       (owner-scoped `auth.uid()` policies for all user + chat tables).
       **→ ACTION: apply it in Supabase SQL editor, then verify cross-account isolation.**
-- [ ] **Observability + alerting** — put an external uptime monitor + spend alert on
-      `/health` (UptimeRobot/BetterStack) + a Google Cloud billing budget alert.
-      Can't launch blind with real money.
+- [x] **Observability + alerting (in-app)** — `/health` (readiness, 503 on circuit
+      open), `/health/live` (Fly liveness), Fly HTTP checks, in-process glitch log,
+      password-gated `/admin` activity portal. **→ ACTION: point UptimeRobot /
+      BetterStack at `/health` + set `MIRA_ADMIN_PASSWORD` as a Fly secret + a
+      Google Cloud billing budget alert.** Can't launch blind with real money.
 - [ ] **Rotate Gemini key → your own billed secret** (also de-risks demos; the `AQ.…`
       token's billing isn't yours to hard-cap).
 
 **GTM P0 (before public flip-on):**
-- [x] **OG/Twitter meta tags** on `index.html` — done. **→ ACTION: add a real
-      `web/public/og-cover.jpg` (1200×630)**; per-try-on dynamic OG later.
+- [x] **OG/Twitter meta tags** on `index.html` — done. `web/public/og-cover.jpg`
+      (1200×630) is in the repo; swap the creative whenever you have a better still.
 - [ ] **Product analytics + 5 funnel events** (activation, try-on completion,
       click-out/affiliate CTR, share rate, referral-visit) — PostHog/Plausible.
       Can't learn from launch without it.
-- [ ] **Affiliate click-out tracking/attribution** — count every retailer click-out
-      (proves intent to networks, measures CTR, needed for Amazon's 3-sale unlock).
-- [ ] **Gate first PAID generation behind sign-in** + near-cap alert — anonymous
-      guest video gen is a cost-DoS vector.
+- [x] **Affiliate click-out tracking/attribution** — `buy_click` / `affiliate_click_out`
+      events (WS + PostHog). Admin funnel counts them. Still needs the PostHog key
+      to see them outside `/admin`.
+- [x] **Gate first PAID generation behind sign-in** + near-cap alert — anonymous
+      guest video gen is a cost-DoS vector. (Shipped in App.jsx; spend caps on `/health`.)
 - [ ] **Manual catalog freshness sweep** of surfaced products; confirm the "AI
       preview, not exact fit" label is on every output + the share card.
 
@@ -59,7 +62,7 @@ voice-mode polish.
 - [ ] **Verify Supabase RLS is enforced.** The anon key is public by design (it's
       in the client bundle / fly.toml build args) — Row-Level Security is the only
       guard on user data. Confirm RLS policies exist on all user tables.
-- [ ] **`fly.toml`: `min_machines_running = 0 → 1`.** Kills cold starts and gives
+- [x] **`fly.toml`: `min_machines_running = 1`.** Kills cold starts and gives
       voice sessions a stable home. Tradeoff: one always-on machine (cost).
 
 ## 🟠 Scale (when traffic grows — chief-architect Stage 1/2)
