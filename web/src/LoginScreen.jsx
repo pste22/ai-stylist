@@ -3,6 +3,7 @@ import ForBrands from "./ForBrands.jsx";
 import TrendingHome from "./TrendingHome.jsx";
 import { hdProductImageUrl } from "./imageUrl.js";
 import { fetchEnabledProviders } from "./supabaseClient.js";
+import Icon from "./Icon.jsx";
 
 /** OAuth buttons shared by the home sheet and in-app prompts (VTO). */
 export function AuthButtons({ onGoogle, onFacebook, onGithub, authError }) {
@@ -139,7 +140,9 @@ export default function LoginScreen({
         <div className="mira-location"><span>⌖</span> Sahibganj <small>· 816101</small></div>
         <nav className="mira-dashboard-actions" aria-label="Account">
           <button type="button" className="mira-atelier-btn" onClick={() => setShowBrands(true)}>Atelier</button>
-          <button type="button" className="mira-icon-btn" aria-label="Shopping bag" onClick={() => setShowAuth(true)}>▱</button>
+          <button type="button" className="mira-icon-btn" aria-label="Shopping bag" onClick={() => setShowAuth(true)}>
+            <Icon name="bag" />
+          </button>
           <button type="button" className="mira-avatar-btn" aria-label="Log in" onClick={() => setShowAuth(true)}>P</button>
         </nav>
       </header>
@@ -180,7 +183,7 @@ export default function LoginScreen({
                   aria-label="Previous look"
                   onClick={(e) => { e.stopPropagation(); cycleHero(-1); }}
                 >
-                  ‹
+                  <Icon name="chevronLeft" />
                 </button>
                 <button
                   type="button"
@@ -188,7 +191,7 @@ export default function LoginScreen({
                   aria-label="Next look"
                   onClick={(e) => { e.stopPropagation(); cycleHero(1); }}
                 >
-                  ›
+                  <Icon name="chevronRight" />
                 </button>
                 <p className="mira-hero-count">{(heroIdx % heroCount) + 1} / {heroCount}</p>
               </div>

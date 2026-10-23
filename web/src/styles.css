@@ -46,6 +46,16 @@
   /* ── Editorial display face for headings + product names ── */
   --font-display: "Fraunces", Georgia, "Times New Roman", serif;
   --font-ui: "Instrument Sans", "Inter", system-ui, -apple-system, sans-serif;
+
+  /* Phone-browser tap target. Mouse UIs can stay smaller. */
+  --tap: 44px;
+}
+
+.mira-icon {
+  width: 1.35rem;
+  height: 1.35rem;
+  display: block;
+  flex-shrink: 0;
 }
 
 /* ── Reset ─────────────────────────────────────────────── */
@@ -741,8 +751,8 @@ h1, h2, h3,
 .mira-dashboard-actions { display: flex; justify-content: flex-end; align-items: center; gap: .7rem; }
 .mira-atelier-btn, .mira-icon-btn, .mira-avatar-btn { border: 1px solid var(--dash-line); background: rgba(255,255,255,.75); color: var(--dash-ink); cursor: pointer; }
 .mira-atelier-btn { border-radius: 3px; padding: .48rem .8rem; font-size: .66rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
-.mira-icon-btn { width: 2rem; height: 2rem; border-radius: 50%; font-size: 1.1rem; }
-.mira-avatar-btn { width: 2rem; height: 2rem; border-radius: 50%; background: #efc8bb; font-size: .7rem; font-weight: 800; }
+.mira-icon-btn { width: 2rem; height: 2rem; border-radius: 50%; font-size: 1.1rem; display: inline-flex; align-items: center; justify-content: center; padding: 0; }
+.mira-avatar-btn { width: 2rem; height: 2rem; border-radius: 50%; background: #efc8bb; font-size: .7rem; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
 .mira-atelier-btn:hover, .mira-icon-btn:hover, .mira-avatar-btn:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(32,35,38,.1); }
 .mira-category-nav { display: flex; align-items: center; gap: clamp(1rem, 2.5vw, 2.2rem); padding: 0 clamp(1.1rem, 3vw, 3.2rem); min-height: 3.4rem; background: rgba(255,255,255,.58); border-bottom: 1px solid var(--dash-line); overflow-x: auto; touch-action: pan-x; }
 .mira-category-nav button { position: relative; border: 0; padding: .9rem 0 .78rem; background: transparent; color: var(--dash-muted); cursor: pointer; white-space: nowrap; font-size: .67rem; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
@@ -778,6 +788,7 @@ h1, h2, h3,
   cursor: pointer; pointer-events: auto;
   font-size: 1.85rem; line-height: 1;
   box-shadow: 0 8px 22px rgba(20,18,18,.4);
+  display: inline-flex; align-items: center; justify-content: center;
 }
 .mira-hero-arrow--left { left: 1rem; right: auto; }
 .mira-hero-count {
@@ -852,6 +863,14 @@ h1, h2, h3,
 @media (max-width: 640px) {
   .mira-home-brand { letter-spacing: -.05em; }
   .mira-home-img { object-position: center top; }
+}
+
+@media (max-width: 400px) {
+  .mira-atelier-btn { display: none; }
+  .mira-dashboard-header { gap: .5rem; padding-left: .75rem; padding-right: .75rem; }
+  .mira-prompt-chips { margin-left: 3.2rem; }
+  .location-bar-text,
+  .location-bar-prompt { max-width: 11rem; }
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -1941,7 +1960,11 @@ button.primary.stop { background: var(--accent); }
   width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
   opacity: 0; transition: opacity .12s;
 }
-.fr-tile:hover .fr-tile-del { opacity: 1; }
+.fr-tile:hover .fr-tile-del,
+.fr-tile:focus-within .fr-tile-del { opacity: 1; }
+@media (hover: none), (pointer: coarse) {
+  .fr-tile-del { opacity: 1; width: var(--tap); height: var(--tap); }
+}
 .fr-tile-info {
   position: absolute; left: 0; right: 0; bottom: 0;
   padding: 1.5rem .6rem .55rem;
@@ -2555,11 +2578,12 @@ button.primary.stop { background: var(--accent); }
   background: transparent; border: none;
   font-size: 1.05rem; color: var(--ink); cursor: pointer;
   display: flex; align-items: center; justify-content: center;
-  font-family: inherit;
+  font-family: inherit; padding: 0;
 }
 .qv-topbar-btn:hover { background: var(--bg); }
 .qv-topbar-heart { margin-left: auto; color: var(--ink-3); }
 .qv-topbar-heart.is-loved { color: var(--accent); }
+.qv-topbar-heart.is-loved .mira-icon { fill: currentColor; }
 .qv-topbar-shop {
   font-size: .72rem; font-weight: 700; letter-spacing: .06em;
   text-transform: uppercase; color: var(--ink-3);
@@ -2602,6 +2626,9 @@ button.primary.stop { background: var(--accent); }
   font-size: 1.7rem;
   line-height: 1;
   box-shadow: 0 8px 22px rgba(20,18,18,.4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 .qv-browse-arrow--left { left: .7rem; right: auto; }
 .qv-browse-count {
@@ -4513,7 +4540,7 @@ label.tryon-stale-link { display: inline; }
   .chat-input-area { padding: .6rem .75rem; }
   .chat-input-bar  { padding: .45rem .45rem .45rem .9rem; }
   .chat-input      { font-size: 16px; }
-  .chat-send-btn   { width: 32px; height: 32px; font-size: 1rem; }
+  .chat-send-btn   { width: var(--tap); height: var(--tap); font-size: 1rem; }
 
   /* Chat history */
   .ch-panel { width: 100vw; }
@@ -5239,7 +5266,6 @@ a.flp-chip-btn {
 .flp-shop-all:hover { background: var(--accent-dark, #8f2c38); }
 .flp-shop-all:disabled { background: #8a807a; cursor: default; }
 
-/* Keep the two-column pin + sliding rail on phones — do not stack. */
 @media (max-width: 720px) {
   .full-look-panel {
     inset: 0;
@@ -5269,10 +5295,20 @@ a.flp-chip-btn {
   .flp-row { gap: 0.65rem; padding: 0.6rem; border-radius: 16px; }
   .flp-row-thumb { flex: 0 0 76px; width: 76px; height: 76px; border-radius: 12px; }
   .flp-row-name { font-size: 0.84rem; }
-  .flp-chip-btn { height: 28px; padding: 0 0.55rem; font-size: 0.68rem; }
+  .flp-chip-btn { min-height: 36px; height: auto; padding: 0.35rem 0.65rem; font-size: 0.72rem; }
   .flp-slots { gap: 0.3rem; }
   .flp-foot { border-radius: 0 0 18px 18px; padding: 0.6rem 0.75rem calc(0.7rem + env(safe-area-inset-bottom, 0px)); }
   .flp-on-me, .flp-shop-all { flex: 1 1 100%; }
+}
+
+/* Narrow phones cannot keep the two-column look sheet. */
+@media (max-width: 400px) {
+  .flp-sheet {
+    grid-template-columns: 1fr;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .flp-col-pin { max-height: 38dvh; }
 }
 
 
@@ -7294,8 +7330,44 @@ html[data-mira="atelier"] .card {
   .user-pill { padding: .28rem; }
   .guest-signin-btn { padding: .32rem .7rem; font-size: .72rem; }
   .chat-header-right { gap: .18rem; min-width: 0; }
-  .mtc-btn, .cart-icon-btn, .chat-camera-btn, .mode-switch-btn, .stop-btn-sm {
-    min-width: 40px; min-height: 40px;
+  .mtc-btn, .cart-icon-btn, .chat-camera-btn, .mode-switch-btn, .stop-btn-sm,
+  .mira-icon-btn, .mira-avatar-btn, .mira-panel-heading button,
+  .cart-close, .qv-topbar-btn, .chat-send-btn, .send-btn,
+  .quick-reply-dismiss, .pin-chip-confirm {
+    min-width: var(--tap);
+    min-height: var(--tap);
+  }
+  .mira-icon-btn, .mira-avatar-btn {
+    width: var(--tap);
+    height: var(--tap);
+  }
+  .cart-icon-btn, .mtc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: .35rem;
+  }
+  .mira-category-nav button {
+    min-height: var(--tap);
+    font-size: .72rem;
+    letter-spacing: .06em;
+  }
+  .mira-prompt-chips button {
+    min-height: 36px;
+    font-size: .72rem;
+    padding: .4rem .75rem;
+  }
+  .mira-prompt-orb {
+    width: var(--tap);
+    height: var(--tap);
+  }
+  .qv-browse-arrow, .mira-hero-arrow {
+    width: var(--tap);
+    height: var(--tap);
+    font-size: 1.2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
 
   .hero-welcome {

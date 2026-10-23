@@ -6,6 +6,7 @@ import AffiliateDisclosure from "./AffiliateDisclosure.jsx";
 import { formatFitLabel, useProductReviews } from "./useProductReviews.js";
 import { shopLabel, trackedAffiliateUrl } from "./retailer.js";
 import { hdProductImageUrl, isProductPhotoUrl } from "./imageUrl.js";
+import Icon from "./Icon.jsx";
 
 const CATEGORY_EMOJI = {
   dresses: "👗", tops: "👚", bottoms: "👖", outerwear: "🧥",
@@ -168,7 +169,7 @@ export default function ProductQuickView({
     <div className="qv-backdrop" onClick={handleBackdrop} role="dialog" aria-modal="true" aria-label={product.name}>
       <div className="qv-panel" ref={panelRef}>
         <header className="qv-topbar">
-          <button className="qv-topbar-btn" type="button" onClick={onClose} aria-label="Back">←</button>
+          <button className="qv-topbar-btn" type="button" onClick={onClose} aria-label="Back"><Icon name="back" /></button>
           <span className="qv-topbar-shop">{shopLabel(product, { short: true })}</span>
           <button
             className={`qv-topbar-btn qv-topbar-heart${loved ? " is-loved" : ""}`}
@@ -176,9 +177,9 @@ export default function ProductQuickView({
             onClick={() => onLove(product)}
             aria-label={loved ? "Remove from saved" : "Save item"}
           >
-            {loved ? "♥" : "♡"}
+            <Icon name="heart" />
           </button>
-          <button className="qv-topbar-btn" type="button" onClick={onClose} aria-label="Close">✕</button>
+          <button className="qv-topbar-btn" type="button" onClick={onClose} aria-label="Close"><Icon name="close" /></button>
         </header>
 
         <div className="qv-scroll" ref={scrollRef}>
@@ -217,7 +218,7 @@ export default function ProductQuickView({
                   aria-label="Previous item"
                   onClick={(e) => { e.stopPropagation(); goBrowse(-1); }}
                 >
-                  ‹
+                  <Icon name="chevronLeft" />
                 </button>
                 <button
                   type="button"
@@ -225,7 +226,7 @@ export default function ProductQuickView({
                   aria-label="Next item"
                   onClick={(e) => { e.stopPropagation(); goBrowse(1); }}
                 >
-                  ›
+                  <Icon name="chevronRight" />
                 </button>
                 <p className="qv-browse-count">{queueIdx + 1} / {queue.length}</p>
               </div>

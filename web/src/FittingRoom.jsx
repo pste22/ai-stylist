@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { listTryOns, deleteTryOn, clearTryOns } from "./tryOnDB.js";
+import Icon from "./Icon.jsx";
 
 function timeAgo(ts) {
   if (!ts) return "";
@@ -137,7 +138,11 @@ export default function FittingRoom({ onClose, onOpenTryOn, onCountChange, onAdd
                       : <div className="fr-tile-img fr-tile-img--ph">🛍️</div>}
                     {hasVideo && <span className="fr-badge fr-badge--video">▶</span>}
                     {selectMode && <span className={`fr-tile-check${isSel ? " on" : ""}`}>{isSel ? "✓" : ""}</span>}
-                    {!selectMode && <span className="fr-tile-del" onClick={(e) => remove(e, rec.productId)} title="Remove" role="button">✕</span>}
+                    {!selectMode && (
+                      <span className="fr-tile-del" onClick={(e) => remove(e, rec.productId)} title="Remove" role="button" aria-label="Remove">
+                        <Icon name="close" size={16} />
+                      </span>
+                    )}
                     <div className="fr-tile-info">
                       <p className="fr-tile-name">{rec.product?.name}</p>
                       <div className="fr-tile-meta">
