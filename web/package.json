@@ -13,7 +13,8 @@
     "test:chips": "node tests/category-chips.spec.mjs",
     "test:pdp": "node tests/pdp.spec.mjs",
     "test:landing": "node tests/landing-scroll.spec.mjs",
-    "test:look": "node tests/complete-look.spec.mjs"
+    "test:look": "node tests/complete-look.spec.mjs",
+    "test:mobile": "node tests/mobile-browser.spec.mjs"
   },
   "dependencies": {
     "@heygen/liveavatar-web-sdk": "^0.0.18",

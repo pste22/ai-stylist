@@ -37,6 +37,7 @@ import {
 } from "./lookProgress.js";
 
 import TrendingHome from "./TrendingHome.jsx";
+import Icon from "./Icon.jsx";
 const CatalogFilters = lazy(() => import("./CatalogFilters.jsx"));
 const ForBrands = lazy(() => import("./ForBrands.jsx"));
 
@@ -1330,7 +1331,7 @@ function ChatView({ state, mood, messages, loved, savedProducts, onLove, onBuy,
                 disabled={!draft.trim()}
                 aria-label="Send"
               >
-                ↑
+                <Icon name="send" size={18} />
               </button>
             </div>
             <p className="chat-hint">Enter to send · Shift+Enter for new line</p>
@@ -1718,7 +1719,7 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitS
 
   return (
     <div className="text-input-row" style={{ position: "relative" }}>
-      <button className="mode-switch-btn" onClick={onSwitchVoice} title="Switch to voice">🎙️</button>
+      <button className="mode-switch-btn" onClick={onSwitchVoice} title="Switch to voice" aria-label="Switch to voice"><Icon name="mic" /></button>
       <input className="chat-input" value={draft} onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
         placeholder={placeholder || "Message Mira…"}
@@ -1737,10 +1738,7 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitS
         style={vsLoading ? { pointerEvents: "none", opacity: 0.5 } : {}}>
         {vsLoading
           ? <span className="vs-loading-spinner" style={{ width: 14, height: 14 }} />
-          : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
+          : <Icon name="camera" size={20} />
         }
       </label>
 
@@ -1777,11 +1775,11 @@ function TextInputRow({ onSend, onStop, onSwitchVoice, onVisualSearch, onOutfitS
       >
         {outfitLoading
           ? <span className="vs-loading-spinner" style={{ width: 14, height: 14 }} />
-          : "👗"
+          : <Icon name="hanger" />
         }
       </button>
 
-      <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
+      <button className="stop-btn-sm" onClick={onStop} title="End conversation" aria-label="End conversation"><Icon name="stop" size={16} /></button>
     </div>
   );
 }
@@ -1792,8 +1790,8 @@ function VoiceActiveBar({ level, onStop, captions, onSwitchText }) {
     <div className="voice-active-bar">
       <span className="voice-listening-dot" />
       <span className="voice-caption">{captions.you || "Listening…"}</span>
-      <button className="mode-switch-btn" onClick={onSwitchText} title="Switch to text">⌨️</button>
-      <button className="stop-btn-sm" onClick={onStop} title="End conversation">⏹</button>
+      <button className="mode-switch-btn" onClick={onSwitchText} title="Switch to text" aria-label="Switch to text"><Icon name="keyboard" /></button>
+      <button className="stop-btn-sm" onClick={onStop} title="End conversation" aria-label="End conversation"><Icon name="stop" size={16} /></button>
     </div>
   );
 }
@@ -2545,14 +2543,14 @@ export default function App() {
             </button>
             {/* Fitting Room — past try-ons ("seen on me") */}
             {fittingRoomCount > 0 && (
-              <button className="cart-icon-btn" onClick={() => setShowFittingRoom(true)} title={`Fitting Room (${fittingRoomCount})`}>
-                🪞
+              <button className="cart-icon-btn" onClick={() => setShowFittingRoom(true)} title={`Fitting Room (${fittingRoomCount})`} aria-label={`Fitting Room (${fittingRoomCount})`}>
+                <Icon name="fitting" />
                 <span className="cart-icon-badge">{fittingRoomCount}</span>
               </button>
             )}
             {/* Cart icon */}
-            <button className="cart-icon-btn" onClick={() => setShowCart(true)} title={`Cart (${cartItems.length})`}>
-              🛒
+            <button className="cart-icon-btn" onClick={() => setShowCart(true)} title={`Cart (${cartItems.length})`} aria-label={`Cart (${cartItems.length})`}>
+              <Icon name="cart" />
               {cartItems.length > 0 && (
                 <span className="cart-icon-badge">{cartItems.length}</span>
               )}
@@ -2562,13 +2560,14 @@ export default function App() {
                 className="mtc-btn"
                 onClick={() => setShowSaved((v) => !v)}
                 title={showSaved ? "Hide saved" : `Saved items (${savedProducts.length})`}
+                aria-label={`Saved items (${savedProducts.length})`}
               >
-                💜{savedProducts.length > 0 && <span style={{ fontSize: ".75rem" }}>{savedProducts.length}</span>}
+                <Icon name="heart" />{savedProducts.length > 0 && <span style={{ fontSize: ".75rem" }}>{savedProducts.length}</span>}
               </button>
             )}
             {user && (
-              <button className="mtc-btn" onClick={() => setShowHistory(true)} title="Chat history">
-                🕐
+              <button className="mtc-btn" onClick={() => setShowHistory(true)} title="Chat history" aria-label="Chat history">
+                <Icon name="history" />
               </button>
             )}
             {user ? (
