@@ -74,6 +74,14 @@ export default defineConfig({
         target: process.env.VITE_MIRA_WS_TARGET?.replace(/^ws/, "http") || "http://localhost:8765",
         changeOrigin: true,
       },
+      "/admin": {
+        target: process.env.VITE_MIRA_WS_TARGET?.replace(/^ws/, "http") || "http://localhost:8765",
+        changeOrigin: true,
+      },
+      "/health": {
+        target: process.env.VITE_MIRA_WS_TARGET?.replace(/^ws/, "http") || "http://localhost:8765",
+        changeOrigin: true,
+      },
     },
   },
 });
